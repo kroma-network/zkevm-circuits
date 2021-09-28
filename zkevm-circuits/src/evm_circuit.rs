@@ -147,6 +147,8 @@ pub(crate) enum FixedLookup {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
+    Bitslevel,
+    Pow64,
 }
 
 impl<F: FieldExt> Expr<F> for FixedLookup {
@@ -748,6 +750,82 @@ impl<F: FieldExt> EvmCircuit<F> {
                 // TODO: BitwiseOr
                 // TODO: BitwiseXor
 
+                // Bitlevel
+                for level in 0..=8 {
+                    for idx in 0..(1 << level) {
+                        region.assign_fixed(
+                            || "Bitlevel: tag",
+                            self.fixed_table[0],
+                            offset,
+                            || Ok(F::from_u64(FixedLookup::Bitslevel as u64)),
+                        )?;
+                        region.assign_fixed(
+                            || "Bitlevel: powtag",
+                            self.fixed_table[1],
+                            offset,
+                            || Ok(F::from_u64(level as u64)),
+                        )?;
+                        region.assign_fixed(
+                            || "Bitlevel: value",
+                            self.fixed_table[2],
+                            offset,
+                            || Ok(F::from_u64(idx as u64)),
+                        )?;
+                        for (idx, column) in
+                            self.fixed_table[3..].iter().enumerate()
+                        {
+                            region.assign_fixed(
+                                || format!("Bitlevel: padding {}", idx),
+                                *column,
+                                offset,
+                                || Ok(F::zero()),
+                            )?;
+                        }
+                        offset += 1;
+    
+                    }
+                }
+
+                //pow64
+                for idx in 0..64 {
+                    region.assign_fixed(
+                        || "Pow64: tag",
+                        self.fixed_table[0],
+                        offset,
+                        || Ok(F::from_u64(FixedLookup::Pow64 as u64)),
+                    )?;
+                    region.assign_fixed(
+                        || "Pow64: value",
+                        self.fixed_table[1],
+                        offset,
+                        || Ok(F::from_u64(idx as u64)),
+                    )?;
+                    region.assign_fixed(
+                        || "Pow64: value_pow",
+                        self.fixed_table[2],
+                        offset,
+                        || Ok(F::from_u64(1u64 << (idx as u64))),
+                    )?;
+                    let pow_invert = F::from_u64(1u64 << (idx as u64)).invert().unwrap_or(F::zero());
+                    let decpow_val = F::from_u64(1u64 << 63) * F::from_u64(2u64) * pow_invert;
+                    region.assign_fixed(
+                        || "Pow64: value_decpow",
+                        self.fixed_table[3],
+                        offset,
+                        || Ok(decpow_val),
+                    )?;
+                    for (idx, column) in
+                        self.fixed_table[4..].iter().enumerate()
+                    {
+                        region.assign_fixed(
+                            || format!("Bitlevel: padding {}", idx),
+                            *column,
+                            offset,
+                            || Ok(F::zero()),
+                        )?;
+                    }
+                    offset += 1;
+                }
                 Ok(())
             },
         )
