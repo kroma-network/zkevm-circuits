@@ -18,7 +18,6 @@ struct ShrSuccessAllocation<F> {
     a_slice_back: [Cell<F>; 32],
     shift_div_by_64: Cell<F>,
     shift_mod_by_64_div_by_8: Cell<F>,
-    shift_mod_by_64: Cell<F>,
     shift_mod_by_64_decpow: Cell<F>,// means 2^(8-shift_mod_by_64)
     shift_mod_by_64_pow: Cell<F>,// means 2^shift_mod_by_64
     shift_mod_by_8: Cell<F>,
@@ -38,7 +37,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
         CaseConfig {
             case: Case::Success,
             num_word: 3,
-            num_cell: 70,
+            num_cell: 69,
             will_halt: false,
         },
         CaseConfig {
@@ -78,7 +77,6 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     .unwrap(),
                 shift_div_by_64: success.cells.pop().unwrap(),
                 shift_mod_by_64_div_by_8: success.cells.pop().unwrap(),
-                shift_mod_by_64: success.cells.pop().unwrap(),
                 shift_mod_by_64_decpow: success.cells.pop().unwrap(),
                 shift_mod_by_64_pow: success.cells.pop().unwrap(),
                 shift_mod_by_8: success.cells.pop().unwrap(),
@@ -124,12 +122,12 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                 a_slice_back,
                 shift_div_by_64,
                 shift_mod_by_64_div_by_8,
-                shift_mod_by_64,
                 shift_mod_by_64_decpow,
                 shift_mod_by_64_pow,
                 shift_mod_by_8,
             } = &self.success;
-
+            
+            let shift_mod_by_64 = shift_mod_by_64_div_by_8.expr() * 8.expr() + shift_mod_by_8.expr();  
             //merge 8 8-bit cell for a 64-bit expression for a, a_slice_front, a_slice_back, b
             let mut a_digits = vec![];
             let mut a_slice_front_digits = vec![];
@@ -176,6 +174,10 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     shr_constraints[idx] = shr_constraints[idx].clone() + select_transplacement_polynomial.clone() * b_digits[idx].clone();
                 }
             }
+            
+            let shift_split_constraints = vec![
+                shift.expr() - shift_div_by_64.expr() * 64.expr() - shift_mod_by_64.clone()
+            ];
 
             //for i in [0,3]
             //we check a_slice_back_digits[i] + a_slice_front_digits * shift_mod_by_64_pow == a_digits[i]
@@ -244,7 +246,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
             let pow_lookups = vec![
                 Lookup::FixedLookup(
                     FixedLookup::Pow64,
-                    [shift_mod_by_64.expr(), shift_mod_by_64_pow.expr(), shift_mod_by_64_decpow.expr()],
+                    [shift_mod_by_64.clone(), shift_mod_by_64_pow.expr(), shift_mod_by_64_decpow.expr()],
                 )
             ];
 
@@ -308,6 +310,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                 selector: selector.expr(),
                 polys: [
                     state_transition_constraints,
+                    shift_split_constraints,
                     shift_range_constraints,
                     shr_constraints.try_into().unwrap(),
                     merge_constraints,
@@ -460,15 +463,7 @@ impl<F: FieldExt> ShrGadget<F> {
                 execution_step.values[6].to_bytes_le()[0] as u64
             ))
         )?;
-        self.success.shift_mod_by_64.assign(
-            region,
-            offset,
-            Some(F::from_u64(
-                execution_step.values[7].to_bytes_le()[0] as u64
-            ))
-        )?;
-
-        let shift_mod_by_64_decpow_digits = execution_step.values[8].to_u64_digits();
+        let shift_mod_by_64_decpow_digits = execution_step.values[7].to_u64_digits();
         let shift_mod_by_64_decpow = {
             if shift_mod_by_64_decpow_digits.is_empty() {
                 F::zero()
@@ -487,7 +482,7 @@ impl<F: FieldExt> ShrGadget<F> {
             Some(shift_mod_by_64_decpow)
         )?;
 
-        let shift_mod_by_64_pow_digits = execution_step.values[9].to_u64_digits();
+        let shift_mod_by_64_pow_digits = execution_step.values[8].to_u64_digits();
         let shift_mod_by_64_pow = F::from_u64(if shift_mod_by_64_pow_digits.is_empty() {
             0u64
         } else {
@@ -502,7 +497,7 @@ impl<F: FieldExt> ShrGadget<F> {
             region,
             offset,
             Some(F::from_u64(
-                execution_step.values[10].to_bytes_le()[0] as u64
+                execution_step.values[9].to_bytes_le()[0] as u64
             ))
         )?;
         Ok(())
@@ -530,7 +525,7 @@ mod test {
     }
 
     fn result_generate(a: &BigUint, shift: &u64) -> (
-            BigUint, BigUint, BigUint, BigUint, BigUint, BigUint, BigUint, BigUint, BigUint, u64, u64
+            BigUint, BigUint, BigUint, BigUint, BigUint, BigUint/*, BigUint*/, BigUint, BigUint, u64, u64
         ) {
         let b8s = (a >> shift).to_word();
         let shift_div_by_64 = shift / 64;
@@ -591,7 +586,6 @@ mod test {
             BigUint::from_bytes_le(&a_slice_back),
             BigUint::from(shift_div_by_64),
             BigUint::from(shift_mod_by_64_div_by_8),
-            BigUint::from(shift_mod_by_64),
             BigUint::from(shift_mod_by_64_decpow),
             BigUint::from(shift_mod_by_64_pow),
             BigUint::from(shift_mod_by_8),
@@ -632,7 +626,7 @@ mod test {
             a_slice_back,
             shift_div_by_64,
             shift_mod_by_64_div_by_8,
-            shift_mod_by_64,
+            //shift_mod_by_64,
             shift_mod_by_64_decpow,
             shift_mod_by_64_pow,
             shift_mod_by_8,
@@ -662,7 +656,6 @@ mod test {
                         a_slice_back.clone(),
                         shift_div_by_64.clone(),
                         shift_mod_by_64_div_by_8.clone(),
-                        shift_mod_by_64.clone(),
                         shift_mod_by_64_decpow.clone(),
                         shift_mod_by_64_pow.clone(),
                         shift_mod_by_8.clone(),
