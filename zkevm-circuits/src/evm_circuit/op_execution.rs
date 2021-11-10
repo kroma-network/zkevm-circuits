@@ -18,10 +18,14 @@ mod arithmetic;
 mod comparator;
 mod push;
 mod shr;
+mod shl;
+mod sar;
 
 use arithmetic::AddGadget;
 use comparator::LtGadget;
 use shr::ShrGadget;
+use shl::ShlGadget;
+use sar::SarGadget;
 use push::PushGadget;
 
 fn bool_switches_constraints<F: FieldExt>(
@@ -213,6 +217,8 @@ pub(crate) struct OpExecutionGadget<F> {
     push_gadget: PushGadget<F>,
     lt_gadget: LtGadget<F>,
     shr_gadget: ShrGadget<F>,
+    shl_gadget: ShlGadget<F>,
+    sar_gadget: SarGadget<F>,
 }
 
 impl<F: FieldExt> OpExecutionGadget<F> {
@@ -270,6 +276,8 @@ impl<F: FieldExt> OpExecutionGadget<F> {
         construct_op_gadget!(push_gadget);
         construct_op_gadget!(lt_gadget);
         construct_op_gadget!(shr_gadget);
+        construct_op_gadget!(shl_gadget);
+        construct_op_gadget!(sar_gadget);
         let _ = qs_op_idx;
 
         for constraint in constraints.into_iter() {
@@ -309,6 +317,8 @@ impl<F: FieldExt> OpExecutionGadget<F> {
             push_gadget,
             lt_gadget,
             shr_gadget,
+            shl_gadget,
+            sar_gadget,
         }
     }
 
@@ -553,6 +563,18 @@ impl<F: FieldExt> OpExecutionGadget<F> {
                     execution_step,
                 )?,
                 (_, OpcodeId::SHR) => self.shr_gadget.assign(
+                    region,
+                    offset,
+                    core_state,
+                    execution_step,
+                )?,
+                (_, OpcodeId::SHL) => self.shl_gadget.assign(
+                    region,
+                    offset,
+                    core_state,
+                    execution_step,
+                )?,
+                (_, OpcodeId::SAR) => self.sar_gadget.assign(
                     region,
                     offset,
                     core_state,

@@ -6,38 +6,42 @@ use super::{CaseAllocation, CaseConfig, OpExecutionState, OpGadget};
 use crate::util::{Expr, ToWord};
 use bus_mapping::evm::{GasCost, OpcodeId};
 use halo2::{arithmetic::FieldExt, circuit::Region, plonk::Error, plonk::Expression};
+//use std::fmt::Result;
 use std::{array, convert::TryInto};
+//use num::{BigUint, PrimInt};
 
 #[derive(Clone, Debug)]
-struct ShrSuccessAllocation<F> {
+struct ShlSuccessAllocation<F>{
     selector: Cell<F>,
     a: Word<F>,
     b: Word<F>,
     shift: Word<F>,
+    //TODO: what's meaning about these para?
     a_slice_front: [Cell<F>; 32],
-    a_slice_back: [Cell<F>; 32],
+    a_slice_back: [Cell<F>;32],
     shift_div_by_64: Cell<F>,
     shift_mod_by_64_div_by_8: Cell<F>,
-    shift_mod_by_64_decpow: Cell<F>,// means 2^(8-shift_mod_by_64) // means 2^(64-shift_mod_by_64)
-    shift_mod_by_64_pow: Cell<F>,// means 2^shift_mod_by_64
+    //shift_mod_by_64: Cell<F>,
+    shift_mod_by_64_decpow: Cell<F>,
+    shift_mod_by_64_pow: Cell<F>,
     shift_mod_by_8: Cell<F>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ShrGadget<F> {
-    success: ShrSuccessAllocation<F>,
+pub struct ShlGadget<F>{
+    success: ShlSuccessAllocation<F>,
     stack_underflow: Cell<F>,
-    out_of_gas: (Cell<F>, Cell<F>),
+    out_of_gas: (Cell<F>,Cell<F>),
 }
-impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
-    const RESPONSIBLE_OPCODES: &'static [OpcodeId] =
-        &[OpcodeId::SHR];
+impl<F: FieldExt> OpGadget<F> for ShlGadget<F>{
+    const RESPONSIBLE_OPCODES: &'static [OpcodeId] = 
+        &[OpcodeId::SHL];
 
     const CASE_CONFIGS: &'static [CaseConfig] = &[
-        CaseConfig {
+        CaseConfig{
             case: Case::Success,
             num_word: 3,
-            num_cell: 69, 
+            num_cell: 69,
             will_halt: false,
         },
         CaseConfig {
@@ -53,12 +57,12 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
             will_halt: true,
         },
     ];
-    
-    fn construct(case_allocations: Vec<CaseAllocation<F>>) -> Self {
-        let [mut success, stack_underflow, out_of_gas]: [CaseAllocation<F>; 3] =
+
+    fn construct(case_allocations: Vec<CaseAllocation<F>>) -> Self{
+        let [mut success, stack_underflow, out_of_gas]: [CaseAllocation<F>; 3] = 
             case_allocations.try_into().unwrap();
-        Self {
-            success: ShrSuccessAllocation {
+        Self{
+            success: ShlSuccessAllocation{
                 selector: success.selector,
                 a: success.words.pop().unwrap(),
                 b: success.words.pop().unwrap(),
@@ -77,6 +81,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     .unwrap(),
                 shift_div_by_64: success.cells.pop().unwrap(),
                 shift_mod_by_64_div_by_8: success.cells.pop().unwrap(),
+                //shift_mod_by_64: success.cells.pop().unwrap(),
                 shift_mod_by_64_decpow: success.cells.pop().unwrap(),
                 shift_mod_by_64_pow: success.cells.pop().unwrap(),
                 shift_mod_by_8: success.cells.pop().unwrap(),
@@ -93,15 +98,15 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
         &self,
         state_curr: &OpExecutionState<F>,
         state_next: &OpExecutionState<F>,
-    ) -> Vec<Constraint<F>> {
-        let OpExecutionState { opcode, .. } = &state_curr;
+    ) -> Vec<Constraint<F>>{
+        let OpExecutionState {opcode, .. } = &state_curr;
 
         let common_polys = vec![
-            (opcode.expr() - OpcodeId::SHR.expr()),
+            (opcode.expr() - OpcodeId::SHL.expr()),
         ];
 
         let success = {
-            // interpreter state transition constraints
+            //interpreter state transition constraints
             let state_transition_constraints = vec![
                 state_next.global_counter.expr()
                     - (state_curr.global_counter.expr() + 3.expr()),
@@ -113,7 +118,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     - (state_curr.gas_counter.expr() + GasCost::FASTEST.expr()),
             ];
 
-            let ShrSuccessAllocation {
+            let ShlSuccessAllocation {
                 selector,
                 a,
                 b,
@@ -122,22 +127,25 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                 a_slice_back,
                 shift_div_by_64,
                 shift_mod_by_64_div_by_8,
+                //shift_mod_by_64,
                 shift_mod_by_64_decpow,
                 shift_mod_by_64_pow,
                 shift_mod_by_8,
             } = &self.success;
-            
-            let shift_mod_by_64 = shift_mod_by_64_div_by_8.expr() * 8.expr() + shift_mod_by_8.expr();  
-            //merge 8 8-bit cell for a 64-bit expression for a, a_slice_front, a_slice_back, b
+
+
+            let shift_mod_by_64 = shift_mod_by_64_div_by_8.expr() * 8.expr() + shift_mod_by_8.expr();
+            //merge 8 8-bit cells for a 64-bit expression for a, a_slice_front,a_slice_back, b
             let mut a_digits = vec![];
             let mut a_slice_front_digits = vec![];
             let mut a_slice_back_digits = vec![];
             let mut b_digits = vec![];
+
             for virtual_idx in 0..4 {
                 let mut tmp_a = 0.expr();
                 let mut tmp_a_slice_front = 0.expr();
                 let mut tmp_a_slice_back = 0.expr();
-                let mut tmp_b = 0.expr();                                           
+                let mut tmp_b = 0.expr();
                 let mut radix = Expression::Constant(F::from_u64(1u64));
                 for idx in 0..8 {
                     let now_idx = (virtual_idx * 8 + idx) as usize;
@@ -147,104 +155,100 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     tmp_b = tmp_b + radix.clone() * b.cells[now_idx].expr();
                     radix = radix * (1 << 8).expr();
                 }
-                //存储每一组的数和
                 a_digits.push(tmp_a);
                 a_slice_back_digits.push(tmp_a_slice_back);
                 a_slice_front_digits.push(tmp_a_slice_front);
                 b_digits.push(tmp_b);
             }
+
             //we split shift to the equation: shift = shift_div_by_64 * 64 + shift_mod_by_64_div_by_8 * 8 + shift_mod_by_8
-            let mut shr_constraints = vec![];
+            let mut shl_constraints = vec![];
             for idx in 0..4 {
-                shr_constraints.push(0.expr());
+                shl_constraints.push(0.expr());
             }
-            /*
-            println!("a_digits: {:?}", a_digits);
-            println!("a_slice_back_digits: {:?}", a_slice_back_digits);
-            println!("a_slice_front_digits: {:?}", a_slice_front_digits);
-            println!("b_digits: {:?}", b_digits);*/
-            for transplacement in (0 as usize)..(4 as usize) {
-                //generate the polynomial depends on the shift_div_by_64
-                let select_transplacement_polynomial = generate_polynomial(shift_div_by_64.clone(), transplacement as u64, 4u64);
-                for idx in 0..(4 - transplacement) {    
-                    let tmpidx = idx + transplacement;
-                    let merge_a = if idx + transplacement == (3 as usize){
-                        a_slice_front_digits[tmpidx].clone()
-                    } else {            
-                        //b中一组结果的和?
-                        a_slice_front_digits[tmpidx].clone() + a_slice_back_digits[tmpidx + 1].clone() * shift_mod_by_64_decpow.expr()
+
+            //new shl_constrains here 
+            for transplacement in (0 as usize) .. (4 as usize){
+                let select_transplacement_polynomial = generate_polynomial(shift_div_by_64.clone(),transplacement as u64, 4u64);
+                for idx in 0..(4 - transplacement) {
+                    let tmpidx = 3 - (idx + transplacement);
+                    let merge_a = if tmpidx == (0 as usize){
+                        a_slice_back_digits[tmpidx].clone() * shift_mod_by_64_pow.expr()
+                    } else {
+                        a_slice_front_digits[tmpidx-1].clone() + a_slice_back_digits[tmpidx].clone() * shift_mod_by_64_pow.expr()
                     };
-                    shr_constraints[idx] = shr_constraints[idx].clone() + 
-                        select_transplacement_polynomial.clone() * (merge_a - b_digits[idx].clone());
+                    shl_constraints[3-idx] = shl_constraints[3-idx].clone() + 
+                        select_transplacement_polynomial.clone() * (merge_a - b_digits[3-idx].clone());
                 }
-                for idx in (4 - transplacement)..4 {
-                    shr_constraints[idx] = shr_constraints[idx].clone() + select_transplacement_polynomial.clone() * b_digits[idx].clone();
+                for idx in (4-transplacement)..4{
+                    shl_constraints[3-idx] = shl_constraints[3-idx].clone() + select_transplacement_polynomial.clone() * b_digits[3-idx].clone();
                 }
             }
-            //println!("shr_constraints: {:?}", shr_constraints);
+            
             let shift_split_constraints = vec![
                 shift.expr() - shift_div_by_64.expr() * 64.expr() - shift_mod_by_64.clone()
             ];
-
             //for i in [0,3]
             //we check a_slice_back_digits[i] + a_slice_front_digits * shift_mod_by_64_pow == a_digits[i]
             let mut merge_constraints = vec![];
-            for idx in 0..4 {
-                merge_constraints.push(a_slice_back_digits[idx].clone() + a_slice_front_digits[idx].clone() * shift_mod_by_64_pow.expr() - a_digits[idx].clone());
+            for idx in 0..4{
+                merge_constraints.push(a_slice_back_digits[idx].clone()+a_slice_front_digits[idx].clone() * shift_mod_by_64_decpow.expr() - a_digits[idx].clone());
             }
 
             //check serveral higher cells for slice_back and slice_front
             let slice_equal_to_zero_constraints = {
                 let mut slice_equal_to_zero = 0.expr();
                 for digit_transplacement in 0..8 {
-                    let select_transplacement_polynomial = generate_polynomial(shift_mod_by_64_div_by_8.clone(), digit_transplacement as u64, 8u64);
-                    for virtual_idx in 0..4 {
-                        for idx in (digit_transplacement + 1) .. 8 {
-                            let nowidx = (virtual_idx * 8 + idx) as usize;
-                            slice_equal_to_zero = 
-                                slice_equal_to_zero + (select_transplacement_polynomial.clone() * a_slice_back[nowidx].expr());
-                        }
-                        for idx in (8 - digit_transplacement) .. 8 {
+                    let select_transplacement_polynomial = generate_polynomial(shift_mod_by_64_div_by_8.clone(),digit_transplacement as u64, 8u64);
+                    for virtual_idx in 0..4{
+                        for idx in (digit_transplacement + 1)..8{
                             let nowidx = (virtual_idx * 8 + idx) as usize;
                             slice_equal_to_zero = 
                                 slice_equal_to_zero + (select_transplacement_polynomial.clone() * a_slice_front[nowidx].expr());
+                        }
+
+                        for idx in (8-digit_transplacement) .. 8{
+                            let nowidx = (virtual_idx * 8 + idx) as usize;
+                            slice_equal_to_zero = 
+                                slice_equal_to_zero + (select_transplacement_polynomial.clone() * a_slice_back[nowidx].expr());
                         }
                     }
                 }
                 vec![slice_equal_to_zero]
             };
-            
-            //i = 1..32
+
+            //i=1..32
             //check shift[i] = 0
             let shift_range_constraints = {
                 let mut sumc = 0.expr();
-                for idx in 1..32 {
+                for idx in 1..32{
                     sumc = sumc + shift.cells[idx].expr();
                 }
                 vec![sumc]
             };
-           
-            //check the specific 4 cells for shift_mod_by_8 bits and 4 cells for (8 - shift_mod_by_8) bits.
+
+            //check the specific 4 cells for shift_mod_by_8 bits and 4 cells for (8- shift_mod_by_8) bits.
             let mut slice_bits_lookups = vec![];
             for virtual_idx in 0..4 {
-                let mut slice_bits_polynomial = vec![0.expr(), 0.expr()];
-                for digit_transplacement in 0..8 {
+                let mut slice_bits_polynomial = vec![0.expr(),0.expr()];
+                for digit_transplacement in 0..8{
                     let select_transplacement_polynomial = generate_polynomial(shift_mod_by_64_div_by_8.clone(), digit_transplacement as u64, 8u64);
                     let nowidx = (virtual_idx * 8 + digit_transplacement) as usize;
-                    slice_bits_polynomial[0] = slice_bits_polynomial[0].clone() + select_transplacement_polynomial.clone() * a_slice_back[nowidx].expr();
+                    slice_bits_polynomial[0] = slice_bits_polynomial[0].clone() + select_transplacement_polynomial.clone() * a_slice_front[nowidx].expr();
                     let nowidx = (virtual_idx * 8 + 7 - digit_transplacement) as usize;
-                    slice_bits_polynomial[1] = slice_bits_polynomial[1].clone() + select_transplacement_polynomial.clone() * a_slice_front[nowidx].expr();
+                    slice_bits_polynomial[1] = slice_bits_polynomial[1].clone() + select_transplacement_polynomial.clone() * a_slice_back[nowidx].expr();
                 }
                 slice_bits_lookups.push(
                     Lookup::FixedLookup(
                         FixedLookup::Bitslevel,
-                        [shift_mod_by_8.expr(), slice_bits_polynomial[0].clone(), 0.expr()]
+                        [shift_mod_by_8.expr(),slice_bits_polynomial[0].clone(),0.expr()]
                     )
                 );
                 slice_bits_lookups.push(
                     Lookup::FixedLookup(
                         FixedLookup::Bitslevel,
-                        [(8.expr() - shift_mod_by_8.expr()), slice_bits_polynomial[1].clone(), 0.expr()]
+                        [(8.expr()-shift_mod_by_8.expr()),slice_bits_polynomial[1].clone(),0.expr()]
+
                     )
                 );
             }
@@ -253,23 +257,26 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
             let pow_lookups = vec![
                 Lookup::FixedLookup(
                     FixedLookup::Pow64,
-                    [shift_mod_by_64.clone(), shift_mod_by_64_pow.expr(), shift_mod_by_64_decpow.expr()],
+                    [shift_mod_by_64.clone(),shift_mod_by_64_pow.expr(),shift_mod_by_64_decpow.expr()],
                 )
             ];
 
             let given_value_lookups = vec![
+                //shift_div_by_64 < 2^2
                 Lookup::FixedLookup(
                     FixedLookup::Bitslevel,
-                    [2.expr(), shift_div_by_64.expr(), 0.expr()],//shift_div_by_64<2^2
+                    [2.expr(),shift_div_by_64.expr(),0.expr()],
                 ),
+                //shift_mod_by_64_div_by_8 < 2^3
                 Lookup::FixedLookup(
                     FixedLookup::Bitslevel,
-                    [3.expr(), shift_mod_by_64_div_by_8.expr(), 0.expr()],//shift_mod_by_64_div_by_8<2^3
+                    [3.expr(),shift_mod_by_64_div_by_8.expr(), 0.expr()],
                 ),
+                //shift_mod_by_8 < 2^3
                 Lookup::FixedLookup(
                     FixedLookup::Bitslevel,
-                    [3.expr(), shift_mod_by_8.expr(), 0.expr()],//shift_mod_by_8<2^3
-                ),
+                    [3.expr(),shift_mod_by_8.expr(),0.expr()],
+                )
             ];
 
             #[allow(clippy::suspicious_operation_groupings)]
@@ -290,21 +297,21 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     is_write: true,
                 }),
             ];
-            
+
             //check all cells for slice_back and slice_front are in [0,255]
-            let slice_front_range_lookups = a_slice_front
+            let slice_front_range_lookups =  a_slice_front
                 .iter()
                 .map(|cell| {
                     Lookup::FixedLookup(
                         FixedLookup::Range256,
-                        [cell.expr(), 0.expr(), 0.expr()],
+                        [cell.expr(),0.expr(),0.expr()],
                     )
                 })
                 .collect();
-
+            
             let slice_back_range_lookups = a_slice_back
                 .iter()
-                .map(|cell| {
+                .map(|cell|{
                     Lookup::FixedLookup(
                         FixedLookup::Range256,
                         [cell.expr(), 0.expr(), 0.expr()],
@@ -312,15 +319,15 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                 })
                 .collect();
 
-            Constraint {
-                name: "ShrGadget success",
+            Constraint{
+                name: "ShlGadget success",
                 selector: selector.expr(),
                 polys: [
                     state_transition_constraints,
                     shift_split_constraints,
                     shift_range_constraints,
-                    shr_constraints.try_into().unwrap(),
-                    merge_constraints,
+                    shl_constraints.try_into().unwrap(),
+                    merge_constraints,                    
                     slice_equal_to_zero_constraints,
                 ]
                 .concat(),
@@ -328,7 +335,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                     slice_bits_lookups,
                     pow_lookups,
                     given_value_lookups,
-                    bus_mapping_lookups,
+                    bus_mapping_lookups,                  
                     slice_front_range_lookups,
                     slice_back_range_lookups,
                 ].concat(),
@@ -338,7 +345,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
         let stack_underflow = {
             let stack_pointer = state_curr.stack_pointer.expr();
             Constraint {
-                name: "ShrGadget stack underflow",
+                name: "ShlGadget stack underflow",
                 selector: self.stack_underflow.expr(),
                 polys: vec![
                     (stack_pointer.clone() - 1024.expr())
@@ -354,7 +361,7 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
                 + GasCost::FASTEST.expr()
                 - gas_available.expr();
             Constraint {
-                name: "ShrGadget out of gas",
+                name: "ShlGadget out of gas",
                 selector: selector.expr(),
                 polys: vec![
                     (gas_overdemand.clone() - 1.expr())
@@ -365,9 +372,9 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
             }
         };
 
-        array::IntoIter::new([success, stack_underflow, out_of_gas])
+        array::IntoIter::new([success,stack_underflow,out_of_gas])
             .map(move |mut constraint| {
-                constraint.polys =
+                constraint.polys = 
                     [common_polys.clone(), constraint.polys].concat();
                 constraint
             })
@@ -381,9 +388,9 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
         core_state: &mut CoreStateInstance,
         execution_step: &ExecutionStep,
     ) -> Result<(), Error> {
-        match execution_step.case {
+        match execution_step.case{
             Case::Success => {
-                self.assign_success(region, offset, core_state, execution_step)
+                self.assign_success(region,offset,core_state,execution_step)
             }
             Case::StackUnderflow => {
                 unimplemented!()
@@ -395,8 +402,8 @@ impl<F: FieldExt> OpGadget<F> for ShrGadget<F> {
         }
     }
 }
-fn generate_polynomial<F:FieldExt>(now_cell: Cell<F>, now_num: u64, lim: u64) -> Expression<F> {
-    //println!("generate_polynomial!");
+
+fn generate_polynomial<F:FieldExt>(now_cell: Cell<F>, now_num: u64, lim: u64) -> Expression<F>{
     let mut now_expression = Expression::Constant(F::from_u64(1u64));
     let mut now_invert_expression = now_expression.clone();
     for not_equal_num in 0..lim {
@@ -407,20 +414,21 @@ fn generate_polynomial<F:FieldExt>(now_cell: Cell<F>, now_num: u64, lim: u64) ->
             } else {
                 F::from_u64(now_num - not_equal_num.clone() as u64).invert().unwrap_or(F::zero())
             };
+            //println!("invert: {:?}", invert);
             now_invert_expression = now_invert_expression * invert;
         }
     }
     now_expression * now_invert_expression
 }
 
-impl<F: FieldExt> ShrGadget<F> {   
+impl<F: FieldExt> ShlGadget<F>{
     fn assign_success(
         &self,
-        region: &mut Region<'_, F>,
+        region: &mut Region<'_,F>,
         offset: usize,
         core_state: &mut CoreStateInstance,
         execution_step: &ExecutionStep,
-    ) -> Result<(), Error> {
+    ) -> Result<(),Error> {
         core_state.global_counter += 3;
         core_state.program_counter += 1;
         core_state.stack_pointer += 1;
@@ -432,8 +440,8 @@ impl<F: FieldExt> ShrGadget<F> {
             Some(execution_step.values[0].to_word()),
         )?;
         self.success.b.assign(
-            region,
-            offset,
+            region, 
+            offset, 
             Some(execution_step.values[1].to_word()),
         )?;
         self.success.shift.assign(
@@ -445,7 +453,7 @@ impl<F: FieldExt> ShrGadget<F> {
             .a_slice_front
             .iter()
             .zip(execution_step.values[3].to_word().iter())
-            .map(|(alloc, value)| {
+            .map(|(alloc,value)| {
                 alloc.assign(region, offset, Some(F::from_u64(*value as u64)))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -456,12 +464,12 @@ impl<F: FieldExt> ShrGadget<F> {
             .map(|(alloc, value)| {
                 alloc.assign(region, offset, Some(F::from_u64(*value as u64)))
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>,_>>()?;
         self.success.shift_div_by_64.assign(
             region,
             offset,
             Some(F::from_u64(
-                execution_step.values[5].to_bytes_le()[0] as u64
+                execution_step.values[5].to_bytes_le()[0] as u64 
             ))
         )?;
         self.success.shift_mod_by_64_div_by_8.assign(
@@ -471,15 +479,23 @@ impl<F: FieldExt> ShrGadget<F> {
                 execution_step.values[6].to_bytes_le()[0] as u64
             ))
         )?;
+        /*self.success.shift_mod_by_64.assign(
+            region,
+            offset,
+            Some(F::from_u64(
+                execution_step.values[7].to_bytes_le()[0] as u64
+            ))
+        )?;*/
+
         let shift_mod_by_64_decpow_digits = execution_step.values[7].to_u64_digits();
         let shift_mod_by_64_decpow = {
             if shift_mod_by_64_decpow_digits.is_empty() {
                 F::zero()
             } else {
                 let sum = F::from_u64(1u64 << 63) * F::from_u64(2u64);
-                if shift_mod_by_64_decpow_digits.len() == (2 as usize) {
+                if shift_mod_by_64_decpow_digits.len() == (2 as usize){
                     sum
-                } else {
+                } else{
                     F::from_u64(shift_mod_by_64_decpow_digits[0])
                 }
             }
@@ -491,7 +507,7 @@ impl<F: FieldExt> ShrGadget<F> {
         )?;
 
         let shift_mod_by_64_pow_digits = execution_step.values[8].to_u64_digits();
-        let shift_mod_by_64_pow = F::from_u64(if shift_mod_by_64_pow_digits.is_empty() {
+        let shift_mod_by_64_pow = F::from_u64(if shift_mod_by_64_pow_digits.is_empty(){
             0u64
         } else {
             shift_mod_by_64_pow_digits[0]
@@ -500,10 +516,10 @@ impl<F: FieldExt> ShrGadget<F> {
             region,
             offset,
             Some(shift_mod_by_64_pow)
-        )?;
+        )?; 
         self.success.shift_mod_by_8.assign(
-            region,
-            offset,
+            region, 
+            offset, 
             Some(F::from_u64(
                 execution_step.values[9].to_bytes_le()[0] as u64
             ))
@@ -511,17 +527,19 @@ impl<F: FieldExt> ShrGadget<F> {
         Ok(())
     }
 }
+
 #[cfg(test)]
-mod test {
+mod test{
     use super::super::super::{
         test::TestCircuit, Case, ExecutionStep, Operation,
     };
     use crate::util::ToWord;
+    use bigint::U256;
     use bus_mapping::{evm::OpcodeId, operation::Target};
     use halo2::{arithmetic::FieldExt, dev::MockProver};
-    use num::BigUint;
-    use rand::Rng;
+    use num::{BigUint, PrimInt};
     use pasta_curves::pallas::Base;
+    use rand::Rng;
 
     macro_rules! try_test_circuit {
         ($execution_step:expr, $operations:expr, $result:expr) => {{
@@ -541,11 +559,10 @@ mod test {
             m256[idx as usize] = 255u8;
         }
         let m256 = BigUint::from_bytes_le(&m256)  + BigUint::from(1u64);
-        println!("m256: {}",m256);
-        let mut b1 = (a << shift) % m256;
-        println!("b1: {:?}",b1.to_word());
+        let b8s = ((a << shift) % m256).to_word();
            
-        let b8s = (a >> shift).to_word();
+        //let b8s = (a >> shift).to_word();
+
         let shift_div_by_64 = shift / 64;
         let shift_mod_by_64_div_by_8 = shift % 64 / 8;
         let shift_mod_by_64 = shift % 64;
@@ -564,31 +581,33 @@ mod test {
         let a8s = a.to_word();
         let mut a_slice_front = [0u8; 32];
         let mut a_slice_back = [0u8; 32];
+
         let mut suma :u64 = 0;
         let mut sumb :u64 = 0;
         for virtual_idx in 0..4 {
             let mut tmp_a :u64 = 0;
             for idx in 0..8 {
                 let now_idx = virtual_idx * 8 + idx;
+                //tmp_a:一组(8个cell)的数和, suma/b: 位的和
                 tmp_a = tmp_a + (1u64 << (8 * idx)) * (a8s[now_idx] as u64);
                 suma = suma + a8s[now_idx] as u64;
                 sumb = sumb + b8s[now_idx] as u64;
             }
-            let mut slice_back = 
-                if shift_mod_by_64 == 0 { 
-                    tmp_a 
-                } else { 
-                    tmp_a % (1u64 << shift_mod_by_64)
-                };
-            //println!("slice_back: {}", slice_back);
+        
             let mut slice_front = 
-                if shift_mod_by_64 == 0 {
-                    0   
+                if shift_mod_by_64 == 0{
+                    tmp_a
                 } else {
-                    tmp_a / (1u64 << shift_mod_by_64)
+                    tmp_a / (1u64 << (64-shift_mod_by_64))
                 };
-            //println!("slice_front: {}", slice_front);
-            assert_eq!(slice_front * (1u64 << shift_mod_by_64) + slice_back, tmp_a);
+            
+            let mut slice_back = 
+                if shift_mod_by_64 == 0 {
+                    tmp_a
+                } else {
+                    tmp_a % (1u64 << (64-shift_mod_by_64))
+                };
+            assert_eq!(slice_front * (1u64 << (64-shift_mod_by_64)) + slice_back, tmp_a);
             for idx in 0..8 {
                 let now_idx = virtual_idx * 8 + idx;
                 a_slice_back[now_idx] = (slice_back % (1 << 8)) as u8;
@@ -603,7 +622,9 @@ mod test {
         for idx in 0..32 {
             print!("{} ",a_slice_front[idx]);
         }println!("");
+
         (
+            //TODO:modify
             BigUint::from_bytes_le(&b8s),
             BigUint::from_bytes_le(&a_slice_front),
             BigUint::from_bytes_le(&a_slice_back),
@@ -618,44 +639,36 @@ mod test {
     }
 
     #[test]
-    fn shr_gadget() {
+    fn shl_gadget(){
         let rng = rand::thread_rng();
         let mut vec_a = vec![];
-        for idx in 0..32 {
-            vec_a.push(rng.clone().gen_range(0, 255));
+        for idx in 0..32{
+            vec_a.push(rng.clone().gen_range(0,255));
         }
 
-        for idx in 0..32 {
-            print!("{} ",vec_a[idx]);
+        for idx in 0..32{
+            print!("{} ", vec_a[idx]);
         }
         println!("");
 
-        //TODO: a_bits是怎么计算的?
         let a = BigUint::from_bytes_le(&vec_a);
         let a_bits = a.bits();
-        println!("a: {}", a);
-        println!("a_bits: {}", a_bits);
-        //let shift = rng.clone().gen_range(0, a_bits) as u64;
-        let shift = 128u64;
+        let shift = rng.clone().gen_range(0, a_bits) as u64;
         let bits_num = if a_bits % 8 == 0 {
             a_bits / 8
         } else {
-            a_bits / 8 + 1
+            a_bits /8 + 1
         };
         let mut push_bigint = [0u8; 32];
         for idx in 0..bits_num {
             push_bigint[idx as usize] = 1u8;
         }
-
-        //TODO: push_bigint 转换之后的值?
-        println!("push_bigint: {:?}", push_bigint);
         let push_bigint = BigUint::from_bytes_le(&push_bigint);
-        println!("push_bigint: {}", push_bigint);
         let (
             b,
             a_slice_front,
             a_slice_back,
-            shift_div_by_64,    
+            shift_div_by_64,
             shift_mod_by_64_div_by_8,
             //shift_mod_by_64,
             shift_mod_by_64_decpow,
@@ -664,7 +677,7 @@ mod test {
             suma,
             sumb,
         ) = result_generate(&a, &shift);
-        println!("b: {}", b);
+        println!("b: {:?}", b);
         try_test_circuit!(
             vec![
                 ExecutionStep {
@@ -678,7 +691,7 @@ mod test {
                     values: vec![a.clone(), push_bigint],
                 },
                 ExecutionStep {
-                    opcode: OpcodeId::SHR,
+                    opcode: OpcodeId::SHL,
                     case: Case::Success,
                     values: vec![
                         a.clone(),
@@ -688,6 +701,7 @@ mod test {
                         a_slice_back.clone(),
                         shift_div_by_64.clone(),
                         shift_mod_by_64_div_by_8.clone(),
+                        //shift_mod_by_64.clone(),
                         shift_mod_by_64_decpow.clone(),
                         shift_mod_by_64_pow.clone(),
                         shift_mod_by_8.clone(),
@@ -753,5 +767,6 @@ mod test {
             ],
             Ok(())
         );
+        
     }
 }

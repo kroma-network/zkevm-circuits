@@ -788,12 +788,12 @@ impl<F: FieldExt> EvmCircuit<F> {
 
                 //pow64
                 for idx in 0..64 {
-                    region.assign_fixed(
+                    region.assign_fixed(    
                         || "Pow64: tag",
                         self.fixed_table[0],
                         offset,
                         || Ok(F::from_u64(FixedLookup::Pow64 as u64)),
-                    )?;
+                    )?; 
                     region.assign_fixed(
                         || "Pow64: value",
                         self.fixed_table[1],
