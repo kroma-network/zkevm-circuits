@@ -22,9 +22,9 @@ struct SarSuccessAllocation<F> {
     shift_mod_by_64_decpow: Cell<F>,// means 2^(8-shift_mod_by_64) // means 2^(64-shift_mod_by_64)
     shift_mod_by_64_pow: Cell<F>,// means 2^shift_mod_by_64
     shift_mod_by_8: Cell<F>,
-    signed_num: Cell<F>,
+    sign_num: Cell<F>,
     high_pow: Cell<F>,
-    m256: Cell<F>,
+    m64: Cell<F>,
 }
 
 #[derive(Clone, Debug)]
@@ -85,9 +85,9 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                 shift_mod_by_64_decpow: success.cells.pop().unwrap(),
                 shift_mod_by_64_pow: success.cells.pop().unwrap(),
                 shift_mod_by_8: success.cells.pop().unwrap(),
-                signed_num: success.cells.pop().unwrap(),
+                sign_num: success.cells.pop().unwrap(),
                 high_pow: success.cells.pop().unwrap(),
-                m256: success.cells.pop().unwrap(),
+                m64: success.cells.pop().unwrap(),
             },
             stack_underflow: stack_underflow.selector,
             out_of_gas: (
@@ -132,10 +132,9 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                 shift_mod_by_64_decpow,
                 shift_mod_by_64_pow,
                 shift_mod_by_8,
-                //TODO: signed_num
-                signed_num,
+                sign_num,
                 high_pow,
-                m256,
+                m64,
             } = &self.success;
 
             let shift_mod_by_64 = shift_mod_by_64_div_by_8.expr() * 8.expr() + shift_mod_by_8.expr();  
@@ -177,7 +176,7 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                 for idx in 0..(4 - transplacement) {    
                     let tmpidx = idx + transplacement;
                     let merge_a = if idx + transplacement == (3 as usize){
-                        a_slice_front_digits[tmpidx].clone() + signed_num.expr() * high_pow.expr()
+                        a_slice_front_digits[tmpidx].clone() + sign_num.expr() * high_pow.expr()
                     } else {            
                         a_slice_front_digits[tmpidx].clone() + a_slice_back_digits[tmpidx + 1].clone() * shift_mod_by_64_decpow.expr()
                     };
@@ -186,7 +185,7 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                 }
                 for idx in (4 - transplacement)..4 {
                     sar_constraints[idx] = sar_constraints[idx].clone() + select_transplacement_polynomial.clone() * (b_digits[idx].clone()
-                        - signed_num.expr() * m256.expr());
+                        - sign_num.expr() * m64.expr());
                 }
             }
 
@@ -228,7 +227,8 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                 }
                 vec![sumc]
             };
-
+            
+            let sign_constraints = vec![sign_num.expr() * (1.expr() - sign_num.expr())];
             //check the specific 4 cells for shift_mod_by_8 bits and 4 cells for (8 - shift_mod_by_8) bits.
             let mut slice_bits_lookups = vec![];
             for virtual_idx in 0..4 {
@@ -327,6 +327,7 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                     sar_constraints.try_into().unwrap(),
                     merge_constraints,
                     slice_equal_to_zero_constraints,
+                    sign_constraints,
                 ]
                 .concat(),
                 lookups: [
@@ -530,7 +531,7 @@ impl<F: FieldExt> SarGadget<F>{
                 execution_step.values[9].to_bytes_le()[0] as u64
             ))
         )?;
-        self.success.signed_num.assign(
+        self.success.sign_num.assign(
             region,
             offset,
             Some(F::from_u64(
@@ -539,7 +540,6 @@ impl<F: FieldExt> SarGadget<F>{
         )?;
 
         let high_pow_digits = execution_step.values[11].to_u64_digits();
-        println!("high_pow_digits: {:?}", high_pow_digits);
         let high_pow = F::from_u64(if high_pow_digits.is_empty() {
             0u64
         } else {
@@ -551,17 +551,16 @@ impl<F: FieldExt> SarGadget<F>{
             Some(high_pow)
         )?;
 
-        let m256_digits = execution_step.values[12].to_u64_digits();
-        println!("m256_digits: {:?}", m256_digits);
-        let m256 = F::from_u64(if m256_digits.is_empty() {
+        let m64_digits = execution_step.values[12].to_u64_digits();
+        let m64 = F::from_u64(if m64_digits.is_empty() {
             0u64
         } else {
-            m256_digits[0]
+            m64_digits[0]
         });
-        self.success.m256.assign(
+        self.success.m64.assign(
             region,
             offset,
-            Some(m256)
+            Some(m64)
         )?;
         Ok(())
     }
@@ -589,30 +588,20 @@ mod test {
     }
 
     fn generate_high(shift_mod_by_64_div_by_8: &u64, shift_mod_by_8: &u64) -> u128 {
-        /*let count = 8 * shift_mod_by_64_div_by_8 + shift_mod_by_8;
-        println!("count: {}", count);
-        let mut res = 0u128;
-        for idx in 0..count{
-            res = res + (1 << (63-idx));
-            //println!("res: {}", res);
-        }
-        println!("res: {}", res);
-        res*/
         let count = 8 * shift_mod_by_64_div_by_8 + shift_mod_by_8;
         let res = (1 << 64u64) - (1 << (64-count));
-        println!("res: {}", res);
         res
     }
     fn result_generate(a: &BigUint, shift: &u64) -> (
         BigUint, BigUint, BigUint, BigUint, BigUint, BigUint,BigUint, BigUint, BigUint, BigUint,BigUint,u64, u64
     ) {
         let a8s = a.to_word();
-        let signed_num = if a8s[31] >= 128 {
-            1
+        let sign_num = if a8s[31] >= 128 {
+            1 as u8
         } else {
-            0
+            0 as u8
         };
-        println!("signed_num: {}", signed_num);
+        println!("sign_num: {}", sign_num);
         let mut b8s = (a >> shift).to_word();
         let shift_div_by_64 = shift / 64;
         let shift_mod_by_64_div_by_8 = shift % 64 / 8;
@@ -621,7 +610,7 @@ mod test {
         let shift_mod_by_64_decpow = (1u128 << 64) / (shift_mod_by_64_pow as u128); 
         let shift_mod_by_8 = shift % 8;
         println!("b: {}", a >> shift);
-        println!("b8: {:?}",b8s);
+        //println!("b8: {:?}",b8s);
         println!("shift_div_by_64: {}", shift_div_by_64);
         println!("shift_mod_by_64_pow: {}",shift_mod_by_64_pow);
         println!("shift_mod_by_64_decpow: {}",shift_mod_by_64_decpow);
@@ -630,19 +619,23 @@ mod test {
         println!("shift_mod_by_64_div_by_8 : {}", shift_mod_by_64_div_by_8);
         println!("shift_mod_by_8 : {}", shift_mod_by_8);
         
-        let mut b1 = b8s;
+        //let mut b1 = b8s;
         let high_cell = (shift_div_by_64 * 8 + shift_mod_by_64_div_by_8) as usize;
-        if signed_num == 1{ 
+        if sign_num == 1{ 
             let mut idx = 0;
             while idx != (high_cell) {
-                b1[(31-idx) as usize] = 255u8;
+                b8s[(31-idx) as usize] = 255u8;
                 idx = idx + 1;
             }
-            //TODO: bug
-            let m8 = 255 - (1 << (8-shift_mod_by_8) as u16) + 1;
-            b1[31-high_cell] = b1[31-high_cell] + m8;
+            let m8 = if shift_mod_by_8 == 0 {
+                0
+            } else {
+                255 - (1 << (8-shift_mod_by_8) as u16) + 1
+            };
+            b8s[31-high_cell] = b8s[31-high_cell] + m8;
         }
-        println!("b1: {:?}", b1);
+        println!("b8s: {:?}", b8s);
+
         let mut a_slice_front = [0u8; 32];
         let mut a_slice_back = [0u8; 32];
         let mut suma :u64 = 0;
@@ -654,7 +647,7 @@ mod test {
                 let now_idx = virtual_idx * 8 + idx;
                 tmp_a = tmp_a + (1u64 << (8 * idx)) * (a8s[now_idx] as u64);
                 suma = suma + a8s[now_idx] as u64;
-                sumb = sumb + b1[now_idx] as u64;
+                sumb = sumb + b8s[now_idx] as u64;
             }
             let mut slice_back = 
                 if shift_mod_by_64 == 0 { 
@@ -684,77 +677,17 @@ mod test {
         for idx in 0..32 {
             print!("{} ",a_slice_front[idx]);
         }println!("");
-
-
-        let mut a_digits = [0u128; 4];
-        let mut a_slice_back_digits = [0u128; 4];
-        let mut a_slice_front_digits = [0u128; 4];
-        let mut b_digits = [0u128; 4];
-        let mut b8_digits = [0u128; 4];
-        for virtual_idx in 0..4 {
-            let mut tmp_a = 0u128;
-            let mut tmp_a_slice_front = 0u128;
-            let mut tmp_a_slice_back = 0u128;
-            let mut tmp_b = 0u128;
-            let mut tmp_b8 = 0u128;
-            let mut radix = 1u128;
-            for idx in 0..8 {  
-                let now_idx = (virtual_idx * 8 + idx) as usize;
-                tmp_a = tmp_a + radix * (a8s[now_idx] as u128);
-                tmp_a_slice_back = tmp_a_slice_back + radix * (a_slice_back[now_idx] as u128);
-                tmp_a_slice_front = tmp_a_slice_front + radix * (a_slice_front[now_idx] as u128);
-                tmp_b = tmp_b + radix * (b1[now_idx] as u128);
-                tmp_b8 = tmp_b8 + radix * (b8s[now_idx] as u128);
-                radix = radix * ((1 << 8) as u128);
-            }
-            a_digits[virtual_idx] = tmp_a;
-            a_slice_back_digits[virtual_idx] = tmp_a_slice_back;
-            a_slice_front_digits[virtual_idx] = tmp_a_slice_front;
-            b_digits[virtual_idx] = tmp_b;
-            b8_digits[virtual_idx] = tmp_b8;
-        }
-        println!("a_digits: {:?}", a_digits);
-        println!("a1_slice_back_digits: {:?}", a_slice_back_digits);
-        println!("a1_slice_front_digits: {:?}", a_slice_front_digits);
-        println!("b1_digits: {:?}", b_digits);
-        println!("b8_digits: {:?}", b8_digits);
-        /*for idx in 0..3 {
-            println!("{}",a_slice_front_digits[idx] + a_slice_back_digits[idx + 1] * shift_mod_by_64_decpow);
-        }*/
-        let mut shl_constraints = vec![];
-        for idx in 0..4 {
-            shl_constraints.push(0);
-        }
+       
         let high_pow = generate_high(&shift_mod_by_64_div_by_8, &shift_mod_by_8);
-        for transplacement in (0 as usize)..(4 as usize){
-            //generate the polynomial depends on the shift_div_by_64
-            //let select_transplacement_polynomial = generate_polynomial(shift_div_by_64.clone(),transplacement as u64, 4u64);
-            for idx in 0..(4 - transplacement) {
-                let tmpidx = idx + transplacement;
-                let merge_a = if tmpidx == (3 as usize){
-                    a_slice_front_digits[tmpidx] + signed_num * high_pow
-                } else {
-                    a_slice_front_digits[tmpidx]+ a_slice_back_digits[tmpidx + 1] * (shift_mod_by_64_decpow as u128)
-                };
-                print!("merge_a: {} ",merge_a);
-                if merge_a > b_digits[idx]{
-                    println!("sub: {}", merge_a-b_digits[idx])
-                } else {
-                    println!("sub: {}", b_digits[idx]-merge_a)
-                }
-            }
-            println!(" ");
+        let mut m64 = [0u8; 8];
+        for idx in 0..8 {
+            m64[idx as usize] = 255u8;
         }
-
-        let mut m256 = [0u8; 32];
-        for idx in 0..32 {
-            m256[idx as usize] = 255u8;
-        }
-        let m256 = BigUint::from_bytes_le(&m256);
-        println!("m256: {}", m256);
+        let m64 = BigUint::from_bytes_le(&m64);
+        println!("m64: {}", m64);
        
         (
-            BigUint::from_bytes_le(&b1),
+            BigUint::from_bytes_le(&b8s),
             BigUint::from_bytes_le(&a_slice_front),
             BigUint::from_bytes_le(&a_slice_back),
             BigUint::from(shift_div_by_64),
@@ -762,9 +695,9 @@ mod test {
             BigUint::from(shift_mod_by_64_decpow),
             BigUint::from(shift_mod_by_64_pow),
             BigUint::from(shift_mod_by_8),
-            BigUint::from(signed_num),
+            BigUint::from(sign_num),
             BigUint::from(high_pow),
-            m256,
+            m64,
             suma,
             sumb,
         )
@@ -811,9 +744,9 @@ mod test {
             shift_mod_by_64_decpow,
             shift_mod_by_64_pow,
             shift_mod_by_8,
-            signed_num,
+            sign_num,
             high_pow,
-            m256,
+            m64,
             suma,
             sumb,
         ) = result_generate(&a, &shift);
@@ -844,9 +777,9 @@ mod test {
                         shift_mod_by_64_decpow.clone(),
                         shift_mod_by_64_pow.clone(),
                         shift_mod_by_8.clone(),
-                        signed_num.clone(),
+                        sign_num.clone(),
                         high_pow.clone(),
-                        m256.clone(),
+                        m64.clone(),
                     ],
                 }
             ],
