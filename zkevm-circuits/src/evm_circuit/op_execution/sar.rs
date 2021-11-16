@@ -420,16 +420,6 @@ fn generate_polynomial<F:FieldExt>(now_cell: Cell<F>, now_num: u64, lim: u64) ->
     now_expression * now_invert_expression
 }
 
-fn generate_high<F:FieldExt>(shift_mod_by_64_div_by_8: Cell<F>, shift_mod_by_8: Cell<F>) -> Expression<F>{
-    //TODO: 怎么生成它的多项式?
-    let mut res = Expression::Constant(F::from_u64(0u64));
-    let count = shift_mod_by_64_div_by_8.expr() * 8.expr() + shift_mod_by_8.expr();
-    for idx in 0..64{
-        res = 1.expr() - (count.clone()-idx.expr());
-    }
-    
-    res
-}
 
 impl<F: FieldExt> SarGadget<F>{
     fn assign_success(
