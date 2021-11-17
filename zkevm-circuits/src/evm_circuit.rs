@@ -149,6 +149,7 @@ pub(crate) enum FixedLookup {
     BitwiseXor,
     Bitslevel,
     Pow64,
+    Bitshigh,
 }
 
 impl<F: FieldExt> Expr<F> for FixedLookup {
@@ -825,6 +826,49 @@ impl<F: FieldExt> EvmCircuit<F> {
                         )?;
                     }
                     offset += 1;
+                }
+
+                //Bitshigh
+                for idx in 0..8 {
+                    for tmpidx in 0..8{
+                        region.assign_fixed(
+                            || "Bitshigh: tag",
+                            self.fixed_table[0],
+                            offset,
+                            || Ok(F::from_u64(FixedLookup::Bitshigh as u64)),
+                        )?;
+                        region.assign_fixed(
+                            || "Bitshigh: cell",
+                            self.fixed_table[1],
+                            offset,
+                            || Ok(F::from_u64(idx)),
+                        )?;
+                        region.assign_fixed(
+                            || "Bitshigh: bit",
+                            self.fixed_table[2],
+                            offset,
+                            || Ok(F::from_u64(tmpidx)),
+                        )?;
+                        let count = 8*idx + tmpidx;
+                        let highpow = F::from_u64(1u64 << 63) * F::from_u64(2u64) - F::from_u128(1u128 << (64-count));
+                        region.assign_fixed(
+                            || "Bitshigh: highpow",
+                            self.fixed_table[3],
+                            offset,
+                            || Ok(highpow)
+                        )?;
+                        for (idx, column) in
+                            self.fixed_table[4..].iter().enumerate()
+                        {
+                            region.assign_fixed(
+                                || format!("Bitshigh: padding {}", idx),
+                                *column,
+                                offset,
+                                || Ok(F::zero()),
+                            )?;
+                        }
+                        offset += 1;
+                    }
                 }
                 Ok(())
             },

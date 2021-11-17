@@ -316,7 +316,14 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                     )
                 })
                 .collect();
-
+            
+            //check 2^64 - 2^(64 - (8*shift_mod_by_64+shift_mod_by_8)) ==high_pow
+            let highpow_lookups = vec![
+                Lookup::FixedLookup(
+                    FixedLookup::Bitshigh,
+                    [shift_mod_by_64_div_by_8.expr(), shift_mod_by_8.expr(), high_pow.expr()],
+                )
+            ];
             Constraint {
                 name: "ShrGadget success",
                 selector: selector.expr(),
@@ -337,6 +344,7 @@ impl<F: FieldExt> OpGadget<F> for SarGadget<F> {
                     bus_mapping_lookups,
                     slice_front_range_lookups,
                     slice_back_range_lookups,
+                    highpow_lookups,
                 ].concat(),
             }
         };

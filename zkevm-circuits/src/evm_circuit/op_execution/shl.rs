@@ -596,7 +596,7 @@ mod test{
         
             let mut slice_front = 
                 if shift_mod_by_64 == 0{
-                    tmp_a
+                    0
                 } else {
                     tmp_a / (1u64 << (64-shift_mod_by_64))
                 };
