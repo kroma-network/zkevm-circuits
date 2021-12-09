@@ -1,7 +1,7 @@
 use crate::{
     evm_circuit::{
         step::{ExecutionState, Preset, Step},
-        table::{FixedTableTag, Lookup, RwTableTag},
+        table::{FixedTableTag, Lookup, RwTableTag, CallContextFieldTag, TxContextFieldTag},
         util::{Cell, Word},
     },
     util::Expr,
@@ -184,7 +184,7 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
         self.query_cells::<N>(true)
     }
 
-    fn query_cells<const N: usize>(&mut self, is_byte: bool) -> [Cell<F>; N] {
+    pub(crate) fn query_cells<const N: usize>(&mut self, is_byte: bool) -> [Cell<F>; N] {
         let mut cells = Vec::with_capacity(N);
 
         // Iterate rows to find cell that matches the is_byte requirement.
@@ -500,6 +500,47 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
                 0.expr(),
             ],
         );
+    }
+
+    // Call context
+
+    pub(crate) fn call_context_lookup(
+        &mut self,
+        is_write: Expression<F>,
+        call_id: Option<Expression<F>>,
+        tag: CallContextFieldTag,
+        value: Expression<F>,
+    ) {
+        let call_id = call_id.unwrap_or(self.curr.state.call_id.expr());
+        self.rw_lookup(
+            is_write,
+            RwTableTag::CallContext.expr(),
+            [
+                call_id,
+                tag.expr(),
+                value,
+                0.expr(),
+                0.expr(),
+            ],
+        )
+    }
+
+    // Tx
+
+    pub(crate) fn tx_lookup(
+        &mut self,
+        tx_id: Expression<F>,
+        tag: TxContextFieldTag,
+        index: Option<Expression<F>>,
+        value: Expression<F>,
+    ) {
+        let index = index.unwrap_or(0.expr());
+        self.add_lookup(Lookup::Tx {
+            id: tx_id,
+            field_tag: tag.expr(),
+            index: index,
+            value: value,
+        });
     }
 
     // Validation
