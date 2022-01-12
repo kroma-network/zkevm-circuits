@@ -1,7 +1,17 @@
 use crate::{
+<<<<<<< HEAD
     evm_circuit::util::{
         self, constraint_builder::ConstraintBuilder, from_bytes, pow_of_two,
         pow_of_two_expr, select, split_u256, sum, Cell,
+=======
+    evm_circuit::{
+        param::MAX_BYTES_FIELD,
+        table::{FixedTableTag, Lookup},
+        util::{
+            self, constraint_builder::ConstraintBuilder, from_bytes,
+            pow_of_two, pow_of_two_expr, select, split_u256, sum, Cell,
+        },
+>>>>>>> test_version for SHR
     },
     util::Expr,
 };
