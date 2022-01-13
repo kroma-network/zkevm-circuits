@@ -849,9 +849,6 @@ pub struct ShrWordsGadget<F> {
     shift_mod_by_8: Cell<F>,
 }
 impl<F:FieldExt> ShrWordsGadget<F> {
-
-    
-
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         a: util::Word<F>,
@@ -867,11 +864,11 @@ impl<F:FieldExt> ShrWordsGadget<F> {
         let shift_mod_by_8 = cb.query_cell();
 
         //we split shift to the equation: shift == shift_div_by_64 * 64 + shift_mod_by_64_div_by_8 * 8 + shift_mod_by_8
-        let shift_mod_by_64 = 8.expr() * shift_mod_by_64_div_by_8.expr()+ shift_mod_by_8.expr();
+        let shift_mod_by_64 = 8.expr() * shift_mod_by_64_div_by_8.expr() + shift_mod_by_8.expr();
         cb.require_equal(
             "shift == shift_div_by_64 * 64 + shift_mod_by_64_div_by_8 * 8 + shift_mod_by_8",
-            shift.expr() - shift_div_by_64.expr() * 64.expr(),
-            shift_mod_by_64.clone(),
+            shift.expr(),
+            shift_div_by_64.expr() * 64.expr() + shift_mod_by_64.clone(),
         );
 
         //merge 8 8-bit cell for a 64-bit expression for a, a_slice_front, a_slice_back, b

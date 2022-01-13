@@ -32,8 +32,8 @@ impl<F:FieldExt> ExecutionGadget<F> for ShrGadget<F> {
         let a = cb.query_word();
         let shift = cb.query_word();
 
-        cb.stack_pop(a.expr());
         cb.stack_pop(shift.expr());
+        cb.stack_pop(a.expr());
         let shr_words = ShrWordsGadget::construct(cb, a, shift);
         cb.stack_push(shr_words.b().expr());
 
@@ -68,7 +68,7 @@ impl<F:FieldExt> ExecutionGadget<F> for ShrGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
         let indices =
             [step.rw_indices[0], step.rw_indices[1], step.rw_indices[2]];
-        let [a, shift, b] = indices.map(|idx| block.rws[idx].stack_value());
+        let [shift, a, b] = indices.map(|idx| block.rws[idx].stack_value());
         self.shr_words.assign(region, offset, a, shift, b)
     }
 }
@@ -84,8 +84,8 @@ mod test {
 
     fn test_ok(opcode: OpcodeId, a: Word, shift: Word) {
         let bytecode = bytecode! {
-            PUSH32(a)
             PUSH32(shift)
+            PUSH32(a)
             #[start]
             .write_op(opcode)
             STOP
@@ -96,7 +96,7 @@ mod test {
 
     #[test]
     fn shr_gadget_simple() {
-        test_ok(OpcodeId::SHR, 0x02FF.into(), 0x1.into());
+        test_ok(OpcodeId::SHR, 0x1.into(), 0x02FF.into());
     }
     
     #[test]
@@ -104,6 +104,6 @@ mod test {
         let a = rand_word();
         let rng = rand::thread_rng();
         let shift = rng.clone().gen_range(0..=255);
-        test_ok(OpcodeId::SHR, a, shift.into());
+        test_ok(OpcodeId::SHR, shift.into(), a);
     }
 }
