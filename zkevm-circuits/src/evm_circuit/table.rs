@@ -117,7 +117,6 @@ impl FixedTableTag {
             ),
             Self::Bitslevel => Box::new((0..9).flat_map(move |level| {
                 (0..(1 << level)).map(move |idx| {
-                    //println!("[{},{},{}]",level,idx,0);
                     [tag, F::from(level), F::from(idx), F::zero()]
                 })
             })),
