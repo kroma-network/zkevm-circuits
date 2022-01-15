@@ -80,6 +80,10 @@ mod test {
         witness,
     };
     use bus_mapping::{bytecode, eth_types::Word, evm::OpcodeId};
+<<<<<<< HEAD
+=======
+    use rand::Rng;
+>>>>>>> finish div opcode
 
     fn test_ok(opcode: OpcodeId, dividend: Word, divisor: Word) {
         let bytecode = bytecode! {

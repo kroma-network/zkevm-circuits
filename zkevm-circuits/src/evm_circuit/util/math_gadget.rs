@@ -855,38 +855,11 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let mut quotient_limbs = vec![];
         let mut remainder_limbs = vec![];
         for idx in 0..4 {
-<<<<<<< HEAD
             let now_idx = (idx * 8) as usize;
             dividend_limbs.push(from_bytes::expr(&dividend.cells[now_idx..now_idx + 8]));
             divisor_limbs.push(from_bytes::expr(&divisor.cells[now_idx..now_idx + 8]));
             quotient_limbs.push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
             remainder_limbs.push(from_bytes::expr(&remainder[now_idx..now_idx + 8]));
-=======
-            shr_constraints.push(0.expr());
-        }
-        for transplacement in (0_usize)..(4_usize) {
-            //generate the polynomial depends on the shift_div_by_64
-            let select_transplacement_polynomial = generate_lagrange_base_polynomial(shift_div_by_64.clone(), transplacement as u64, 4u64);
-            for idx in 0..(4 - transplacement) {
-                let tmpidx = idx + transplacement;
-                let merge_a = if idx + transplacement == (3_usize){
-                    a_slice_front_digits[tmpidx].clone()
-                } else {
-                    a_slice_front_digits[tmpidx].clone() + a_slice_back_digits[tmpidx + 1].clone() * shift_mod_by_64_decpow.expr()
-                };
-                shr_constraints[idx] = shr_constraints[idx].clone() + 
-                    select_transplacement_polynomial.clone() * (merge_a - b_digits[idx].clone());
-            }
-            for idx in (4 - transplacement)..4 {
-                shr_constraints[idx] = shr_constraints[idx].clone() + select_transplacement_polynomial.clone() * b_digits[idx].clone();
-            }
-        }
-        for idx in 0..4 {
-            cb.require_zero(
-                "merge a_slice_back_digits and a_slice_front_digits == b_digits",
-                shr_constraints[idx].clone(),
-            );
->>>>>>> fixed some issue
         }
 
         let t0 = divisor_limbs[0].clone() * quotient_limbs[0].clone();
@@ -902,7 +875,6 @@ impl<F: FieldExt> DivWordsGadget<F> {
         
         let cur_v0 = from_bytes::expr(&v0[..]);
 
-<<<<<<< HEAD
         //radix_constant_64 == 2^64
         //radix_constant_128 == 2^128
         let radix_constant_64 = pow_of_two_expr(64);
@@ -916,30 +888,6 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 - (dividend_limbs[0].clone()
                     + dividend_limbs[1].clone() * radix_constant_64.clone()),
         );
-=======
-        //check serveral higher cells equal to zero for slice_back and slice_front
-        let mut equal_to_zero = 0.expr();
-        for digit_transplacement in 0..8 {
-            let select_transplacement_polynomial = generate_lagrange_base_polynomial(shift_mod_by_64_div_by_8.clone(), digit_transplacement as u64, 8u64);
-            for virtual_idx in 0..4 {
-                for idx in (digit_transplacement + 1) .. 8 {
-                    let nowidx = (virtual_idx * 8 + idx) as usize;
-                    equal_to_zero = 
-                        equal_to_zero + (select_transplacement_polynomial.clone() * a_slice_back[nowidx].expr());
-                }
-                for idx in (8 - digit_transplacement) .. 8 {
-                    let nowidx = (virtual_idx * 8 + idx) as usize;
-                    equal_to_zero = 
-                        equal_to_zero + (select_transplacement_polynomial.clone() * a_slice_front[nowidx].expr());
-                }
-            }
-        }
-        //i = 1..32
-        //check shift[i] = 0
-        for idx in 1..32 {
-            equal_to_zero = equal_to_zero + shift.cells[idx].expr();
-        }
->>>>>>> fixed some issue
         cb.require_zero(
             "product(quotient, divisor)_high + remainders_high == dividends_high",
             cur_v0 + t2.expr() + t3.expr() * radix_constant_64.clone()
@@ -947,72 +895,6 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 + remainder_limbs[3].clone() * radix_constant_64.clone()
                 - (dividend_limbs[2].clone() + dividend_limbs[3].clone() * radix_constant_64)
         );
-<<<<<<< HEAD
-=======
-        
-        //check the specific 4 cells for shift_mod_by_8 bits and 4 cells for (8 - shift_mod_by_8) bits.
-        for virtual_idx in 0..4 {
-            let mut slice_bits_polynomial = vec![0.expr(), 0.expr()];
-            for digit_transplacement in 0..8 {
-                let select_transplacement_polynomial = generate_lagrange_base_polynomial(shift_mod_by_64_div_by_8.clone(), digit_transplacement as u64, 8u64);
-                let nowidx = (virtual_idx * 8 + digit_transplacement) as usize;
-                slice_bits_polynomial[0] = slice_bits_polynomial[0].clone() + select_transplacement_polynomial.clone() * a_slice_back[nowidx].expr();
-                let nowidx = (virtual_idx * 8 + 7 - digit_transplacement) as usize;
-                slice_bits_polynomial[1] = slice_bits_polynomial[1].clone() + select_transplacement_polynomial.clone() * a_slice_front[nowidx].expr();
-            }
-            cb.add_lookup(Lookup::Fixed {
-                tag: FixedTableTag::Bitslevel.expr(),
-                values: [
-                    shift_mod_by_8.expr(),
-                    slice_bits_polynomial[0].clone(),
-                    0.expr(),
-                ]
-            });
-            cb.add_lookup(Lookup::Fixed {
-                tag: FixedTableTag::Bitslevel.expr(),
-                values: [
-                    8.expr() - shift_mod_by_8.expr(),
-                    slice_bits_polynomial[1].clone(),
-                    0.expr(),
-                ]
-            });
-        }
-
-        //check 2^shift_mod_by_64 == shift_mod_by_64_pow && 2^(8-shift_mod_by_64) == shift_mod_by_64_pow
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Pow64.expr(),
-            values: [
-                shift_mod_by_64,
-                shift_mod_by_64_pow.expr(),
-                shift_mod_by_64_decpow.expr(),
-            ]
-        });
-
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Bitslevel.expr(),
-            values: [
-                2.expr(),
-                shift_div_by_64.expr(),
-                0.expr(),
-            ]
-        });
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Bitslevel.expr(),
-            values: [
-                3.expr(),
-                shift_mod_by_64_div_by_8.expr(),
-                0.expr(),
-            ]
-        });
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Bitslevel.expr(),
-            values: [
-                3.expr(),
-                shift_mod_by_8.expr(),
-                0.expr(),
-            ]
-        });
->>>>>>> fixed some issue
 
         Self {
             dividend,
@@ -1031,17 +913,10 @@ impl<F: FieldExt> DivWordsGadget<F> {
         divisor: Word,
         quotient: Word,
     ) -> Result<(), Error> {
-<<<<<<< HEAD
         self.assign_witness(region, offset, &dividend, &divisor, &quotient)?;
         self.dividend.assign(region, offset, Some(dividend.to_le_bytes()))?;
         self.divisor.assign(region, offset, Some(divisor.to_le_bytes()))?;
         self.quotient.assign(region,offset, Some(quotient.to_le_bytes()))?;
-=======
-        self.assign_witness(region, offset, &a, &shift)?;
-        self.a.assign(region, offset, Some(a.to_le_bytes()))?;
-        self.shift.assign(region, offset, Some(shift.to_le_bytes()))?;
-        self.b.assign(region, offset, Some(b.to_le_bytes()))?;
->>>>>>> fixed some issue
         Ok(())
     }
 
@@ -1053,7 +928,6 @@ impl<F: FieldExt> DivWordsGadget<F> {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-<<<<<<< HEAD
         wdividend: &Word,
         wdivisor: &Word,
         wquotient: &Word,
@@ -1086,49 +960,13 @@ impl<F: FieldExt> DivWordsGadget<F> {
                     BigUint::from(a_limbs[a_idx])
                 } else {
                     BigUint::from(0u128)
-=======
-        wa: &Word,
-        wshift: &Word,
-    ) -> Result<(), Error> {
-        let a8s = wa.to_le_bytes();
-        let shift = wshift.to_le_bytes()[0] as u128;
-        let shift_div_by_64 = shift / 64;
-        let shift_mod_by_64_div_by_8 = shift % 64 / 8;
-        let shift_mod_by_64 = shift % 64;
-        let shift_mod_by_64_pow = 1u128 << shift_mod_by_64;
-        let shift_mod_by_64_decpow = (1u128 << 64) / (shift_mod_by_64_pow as u128); 
-        let shift_mod_by_8 = shift % 8;
-        let mut a_slice_front = [0u8; 32];
-        let mut a_slice_back = [0u8; 32];
-        for virtual_idx in 0..4 {
-            let mut tmp_a :u64 = 0;
-            for idx in 0..8 {
-                let now_idx = virtual_idx * 8 + idx;
-                tmp_a += (1u64 << (8 * idx)) * (a8s[now_idx] as u64);
-            }
-            let mut slice_back = 
-                if shift_mod_by_64 == 0 { 
-                    tmp_a 
-                } else { 
-                    tmp_a % (1u64 << shift_mod_by_64)
->>>>>>> fixed some issue
                 };
                 let tmp_b = if b_limbs.len() > b_idx {
                     BigUint::from(b_limbs[b_idx])
                 } else {
                     BigUint::from(0u128)
                 };
-<<<<<<< HEAD
                 rhs_sum = rhs_sum.clone() + tmp_a * tmp_b;
-=======
-            assert_eq!(slice_front * (1u64 << shift_mod_by_64) + slice_back, tmp_a);
-            for idx in 0..8 {
-                let now_idx = virtual_idx * 8 + idx;
-                a_slice_back[now_idx] = (slice_back % (1 << 8)) as u8;
-                a_slice_front[now_idx] = (slice_front % (1 << 8)) as u8;
-                slice_back >>= 8;
-                slice_front >>= 8;
->>>>>>> fixed some issue
             }
             t_digits.push(rhs_sum);
         }
@@ -1147,7 +985,6 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 BigUint::from(0u128)
             });
         }
-<<<<<<< HEAD
 
         let v0 = (constant_64.clone() * &t_digits[1] + &t_digits[0]
             + &d_now[0] + constant_64.clone() *&d_now[1] 
@@ -1157,23 +994,194 @@ impl<F: FieldExt> DivWordsGadget<F> {
         remainder.to_bytes_le()
             .into_iter()
             .zip(self.remainder.iter())
-=======
-        a_slice_front.iter()
-            .zip(self.a_slice_front.iter())
->>>>>>> fixed some issue
             .try_for_each(|(bt, assignee)| -> Result<(), Error> {
                 assignee.assign(region, offset, Some(F::from(bt as u64)))?;
                 Ok(())
             })?;
-<<<<<<< HEAD
         
         v0.to_bytes_le()
             .into_iter()
             .zip(self.v0.iter())
-=======
-        a_slice_back.iter()
-            .zip(self.a_slice_back.iter())
->>>>>>> fixed some issue
+            .try_for_each(|(bt, assignee)| -> Result<(), Error> {
+                assignee.assign(region, offset, Some(F::from(bt as u64)))?;
+                Ok(())
+            })?;
+        
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DivWordsGadget<F> {
+    dividend: util::Word<F>,
+    divisor: util::Word<F>,
+    quotient: util::Word<F>,
+    remainder: [Cell<F>; 32],
+    v0:[Cell<F>; 9],
+}
+
+impl<F: FieldExt> DivWordsGadget<F> {
+    pub(crate) fn construct(
+        cb: &mut ConstraintBuilder<F>,
+        dividend: util::Word<F>,
+        divisor: util::Word<F>,
+    ) -> Self {
+        let quotient = cb.query_word();
+        let remainder = array_init::array_init(|_| cb.query_byte());
+        let v0 = array_init::array_init(|_| cb.query_byte());
+
+        let mut dividend_limbs = vec![];
+        let mut divisor_limbs = vec![];
+        let mut quotient_limbs = vec![];
+        let mut remainder_limbs = vec![];
+        for idx in 0..4 {
+            let now_idx = (idx * 8) as usize;
+            dividend_limbs.push(from_bytes::expr(&dividend.cells[now_idx..now_idx + 8]));
+            divisor_limbs.push(from_bytes::expr(&divisor.cells[now_idx..now_idx + 8]));
+            quotient_limbs.push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
+            remainder_limbs.push(from_bytes::expr(&remainder[now_idx..now_idx + 8]));
+        }
+
+        let t0 = divisor_limbs[0].clone() * quotient_limbs[0].clone();
+        let t1 = divisor_limbs[0].clone() * quotient_limbs[1].clone()
+            + divisor_limbs[1].clone() * quotient_limbs[0].clone();
+        let t2 = divisor_limbs[0].clone() * quotient_limbs[2].clone()
+            + divisor_limbs[1].clone() * quotient_limbs[1].clone()
+            + divisor_limbs[2].clone() * quotient_limbs[0].clone();
+        let t3 = divisor_limbs[0].clone() * quotient_limbs[3].clone()
+            + divisor_limbs[1].clone() * quotient_limbs[2].clone()
+            + divisor_limbs[2].clone() * quotient_limbs[1].clone()
+            + divisor_limbs[3].clone() * quotient_limbs[0].clone();
+        
+        let cur_v0 = from_bytes::expr(&v0[..]);
+
+        //radix_constant_64 == 2^64
+        //radix_constant_128 == 2^128
+        let radix_constant_64 = pow_of_two_expr(64);
+        let radix_constant_128 = pow_of_two_expr(128);
+        cb.require_equal(
+            "product(quotient, divisor)_lo + remainders_lo == dividends_lo + radix_lo ⋅ 2^128",
+            cur_v0.clone() * radix_constant_128.clone(),
+            t0.expr() + t1.expr() * radix_constant_64.clone()
+                + (remainder_limbs[0].clone()
+                    + remainder_limbs[1].clone() * radix_constant_64.clone())
+                - (dividend_limbs[0].clone()
+                    + dividend_limbs[1].clone() * radix_constant_64.clone()),
+        );
+        cb.require_zero(
+            "product(quotient, divisor)_high + remainders_high == dividends_high",
+            cur_v0 + t2.expr() + t3.expr() * radix_constant_64.clone()
+                + remainder_limbs[2].clone() 
+                + remainder_limbs[3].clone() * radix_constant_64.clone()
+                - (dividend_limbs[2].clone() + dividend_limbs[3].clone() * radix_constant_64)
+        );
+
+        Self {
+            dividend,
+            divisor,
+            quotient,
+            remainder,
+            v0,
+        }
+    }
+
+    pub(crate) fn assign(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        dividend: Word,
+        divisor: Word,
+        quotient: Word,
+    ) -> Result<(), Error> {
+        self.assign_witness(region, offset, &dividend, &divisor, &quotient)?;
+        self.dividend.assign(region, offset, Some(dividend.to_le_bytes()))?;
+        self.divisor.assign(region, offset, Some(divisor.to_le_bytes()))?;
+        self.quotient.assign(region,offset, Some(quotient.to_le_bytes()))?;
+        Ok(())
+    }
+
+    pub(crate) fn quotient(&self) -> &util::Word<F> {
+        &self.quotient
+    }
+
+    fn assign_witness(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        wdividend: &Word,
+        wdivisor: &Word,
+        wquotient: &Word,
+    ) -> Result<(), Error> {
+        use num::BigUint;
+
+        let dividend = BigUint::from_bytes_le(&wdividend.to_le_bytes());
+        let divisor = BigUint::from_bytes_le(&wdivisor.to_le_bytes());
+        let quotient = BigUint::from_bytes_le(&wquotient.to_le_bytes());
+        let remainder = dividend.clone() - divisor.clone() * quotient.clone();
+        let constant_64 = BigUint::from(1u128 << 64);
+        let constant_128 = constant_64.clone() * constant_64.clone();
+        
+        let a_limbs = divisor.to_u64_digits();
+        let b_limbs = quotient.to_u64_digits();
+        let c_limbs = dividend.to_u64_digits();
+        let d_limbs = remainder.to_u64_digits();
+        let mut t_digits = vec![];
+
+        //a->divisor
+        //b->quotient
+        //c->dividend
+        //d->remainder
+        for total_idx in 0..4 {
+            let mut rhs_sum = BigUint::from(0u128);
+            for a_id in 0..=total_idx {
+                let (a_idx, b_idx) =
+                    (a_id as usize, (total_idx - a_id) as usize);
+                let tmp_a = if a_limbs.len() > a_idx {
+                    BigUint::from(a_limbs[a_idx])
+                } else {
+                    BigUint::from(0u128)
+                };
+                let tmp_b = if b_limbs.len() > b_idx {
+                    BigUint::from(b_limbs[b_idx])
+                } else {
+                    BigUint::from(0u128)
+                };
+                rhs_sum = rhs_sum.clone() + tmp_a * tmp_b;
+            }
+            t_digits.push(rhs_sum);
+        }
+
+        let mut c_now = vec![];
+        let mut d_now = vec![];
+        for idx in 0..4 {
+            c_now.push(if c_limbs.len() > idx {
+                BigUint::from(c_limbs[idx])
+            } else {
+                BigUint::from(0u128)
+            });
+            d_now.push(if d_limbs.len() > idx {
+                BigUint::from(d_limbs[idx])
+            } else {
+                BigUint::from(0u128)
+            });
+        }
+
+        let v0 = (constant_64.clone() * &t_digits[1] + &t_digits[0]
+            + &d_now[0] + constant_64.clone() *&d_now[1] 
+            - &c_now[0] - constant_64 * &c_now[1])
+            / &constant_128;
+        
+        remainder.to_bytes_le()
+            .into_iter()
+            .zip(self.remainder.iter())
+            .try_for_each(|(bt, assignee)| -> Result<(), Error> {
+                assignee.assign(region, offset, Some(F::from(bt as u64)))?;
+                Ok(())
+            })?;
+        
+        v0.to_bytes_le()
+            .into_iter()
+            .zip(self.v0.iter())
             .try_for_each(|(bt, assignee)| -> Result<(), Error> {
                 assignee.assign(region, offset, Some(F::from(bt as u64)))?;
                 Ok(())
