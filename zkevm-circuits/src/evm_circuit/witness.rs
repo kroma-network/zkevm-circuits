@@ -455,6 +455,7 @@ impl From<&bus_mapping::circuit_input_builder::ExecStep> for ExecutionState {
             OpcodeId::JUMPI => ExecutionState::JUMPI,
             OpcodeId::PC => ExecutionState::PC,
             OpcodeId::MSIZE => ExecutionState::MSIZE,
+            OpcodeId::DIV => ExecutionState::DIV,
             _ => unimplemented!("unimplemented opcode {:?}", step.op),
         }
     }
