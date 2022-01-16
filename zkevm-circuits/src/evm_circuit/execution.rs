@@ -22,6 +22,7 @@ mod bitwise;
 mod byte;
 mod coinbase;
 mod comparator;
+mod div;
 mod dup;
 mod error_oog_pure_memory;
 mod jump;
@@ -44,6 +45,7 @@ use bitwise::BitwiseGadget;
 use byte::ByteGadget;
 use coinbase::CoinbaseGadget;
 use comparator::ComparatorGadget;
+use div::DivGadget;
 use dup::DupGadget;
 use error_oog_pure_memory::ErrorOOGPureMemoryGadget;
 use jump::JumpGadget;
@@ -90,6 +92,7 @@ pub(crate) struct ExecutionConfig<F> {
     begin_tx_gadget: BeginTxGadget<F>,
     byte_gadget: ByteGadget<F>,
     comparator_gadget: ComparatorGadget<F>,
+    div_gadget: DivGadget<F>,
     dup_gadget: DupGadget<F>,
     error_oog_pure_memory_gadget: ErrorOOGPureMemoryGadget<F>,
     jump_gadget: JumpGadget<F>,
@@ -219,6 +222,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             begin_tx_gadget: configure_gadget!(),
             byte_gadget: configure_gadget!(),
             comparator_gadget: configure_gadget!(),
+            div_gadget: configure_gadget!(),
             dup_gadget: configure_gadget!(),
             error_oog_pure_memory_gadget: configure_gadget!(),
             jump_gadget: configure_gadget!(),
@@ -510,6 +514,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             ExecutionState::DUP => assign_exec_step!(self.dup_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
             ExecutionState::COINBASE => assign_exec_step!(self.coinbase_gadget),
+            ExecutionState::DIV => assign_exec_step!(self.div_gadget),
             ExecutionState::ErrorOutOfGasPureMemory => {
                 assign_exec_step!(self.error_oog_pure_memory_gadget)
             }
