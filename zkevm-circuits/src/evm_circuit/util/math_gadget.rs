@@ -816,7 +816,6 @@ impl<F: FieldExt, const NUM_BYTES: usize> MaxGadget<F, NUM_BYTES> {
         Ok(select::value(lt, rhs, lhs))
     }
 }
-
 #[derive(Clone, Debug)]
 pub(crate) struct DivWordsGadget<F> {
     dividend: util::Word<F>,
@@ -824,6 +823,8 @@ pub(crate) struct DivWordsGadget<F> {
     quotient: util::Word<F>,
     remainder: [Cell<F>; 32],
     v0:[Cell<F>; 9],
+    comparison_lo: ComparisonGadget<F, 16>,
+    comparison_hi: ComparisonGadget<F, 16>,
 }
 
 impl<F: FieldExt> DivWordsGadget<F> {
@@ -835,6 +836,25 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let quotient = cb.query_word();
         let remainder = array_init::array_init(|_| cb.query_byte());
         let v0 = array_init::array_init(|_| cb.query_byte());
+
+        let comparison_lo = ComparisonGadget::construct(
+            cb,
+            from_bytes::expr(&remainder[0..16]),
+            from_bytes::expr(&divisor.cells[0..16]),
+        );
+        let (lt_lo, eq_lo) = comparison_lo.expr();
+        let comparison_hi = ComparisonGadget::construct(
+            cb,
+            from_bytes::expr(&remainder[16..32]),
+            from_bytes::expr(&divisor.cells[16..32]),
+        );
+        let (lt_hi, eq_hi) = comparison_hi.expr();
+        let lt = select::expr(lt_hi, 1.expr(), eq_hi.clone() * lt_lo);
+        cb.require_equal(
+            "remainder < quotient",
+            1.expr(),
+            lt,
+        );
 
         let mut dividend_limbs = vec![];
         let mut divisor_limbs = vec![];
@@ -888,6 +908,8 @@ impl<F: FieldExt> DivWordsGadget<F> {
             quotient,
             remainder,
             v0,
+            comparison_lo,
+            comparison_hi,
         }
     }
 
@@ -993,6 +1015,45 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 Ok(())
             })?;
         
+        let divisor8s = divisor.to_bytes_le();
+        let remainder8s = remainder.to_bytes_le();
+        self.comparison_lo.assign(
+            region,
+            offset,
+            {
+                if remainder8s.len() <= 16 {
+                    from_bytes::value(&remainder8s[0..remainder8s.len()])
+                }
+                else {
+                    from_bytes::value(&remainder8s[0..16])
+                }
+            },
+            {
+                if divisor8s.len() <= 16 {
+                    from_bytes::value(&divisor8s[0..divisor8s.len()])
+                }
+                else {
+                    from_bytes::value(&divisor8s[0..16])
+                }
+            },
+        )?;
+        self.comparison_hi.assign(
+            region,
+            offset,
+            {
+                if remainder8s.len() <= 16 {F::zero()}
+                else {
+                    from_bytes::value(&remainder8s[16..remainder8s.len()])
+                }
+            },
+            {
+                if divisor8s.len() <= 16 {F::zero()}
+                else {
+                    from_bytes::value(&divisor8s[16..divisor8s.len()])
+                }
+            },
+        )?;
+
         Ok(())
     }
 }
