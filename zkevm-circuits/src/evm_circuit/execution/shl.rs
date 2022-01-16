@@ -82,10 +82,10 @@ mod test {
     use bus_mapping::{bytecode, eth_types::Word, evm::OpcodeId};
     use rand::Rng;
 
-    fn test_ok(opcode: OpcodeId, a: Word, shift: Word) {
+    fn test_ok(opcode: OpcodeId, shift: Word, a: Word) {
         let bytecode = bytecode! {
-            PUSH32(shift)
             PUSH32(a)
+            PUSH32(shift)
             #[start]
             .write_op(opcode)
             STOP
