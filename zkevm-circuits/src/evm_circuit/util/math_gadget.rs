@@ -816,3 +816,183 @@ impl<F: FieldExt, const NUM_BYTES: usize> MaxGadget<F, NUM_BYTES> {
         Ok(select::value(lt, rhs, lhs))
     }
 }
+
+#[derive(Clone, Debug)]
+pub(crate) struct DivWordsGadget<F> {
+    dividend: util::Word<F>,
+    divisor: util::Word<F>,
+    quotient: util::Word<F>,
+    remainder: [Cell<F>; 32],
+    v0:[Cell<F>; 9],
+}
+
+impl<F: FieldExt> DivWordsGadget<F> {
+    pub(crate) fn construct(
+        cb: &mut ConstraintBuilder<F>,
+        dividend: util::Word<F>,
+        divisor: util::Word<F>,
+    ) -> Self {
+        let quotient = cb.query_word();
+        let remainder = array_init::array_init(|_| cb.query_byte());
+        let v0 = array_init::array_init(|_| cb.query_byte());
+
+        let mut dividend_limbs = vec![];
+        let mut divisor_limbs = vec![];
+        let mut quotient_limbs = vec![];
+        let mut remainder_limbs = vec![];
+        for idx in 0..4 {
+            let now_idx = (idx * 8) as usize;
+            dividend_limbs.push(from_bytes::expr(&dividend.cells[now_idx..now_idx + 8]));
+            divisor_limbs.push(from_bytes::expr(&divisor.cells[now_idx..now_idx + 8]));
+            quotient_limbs.push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
+            remainder_limbs.push(from_bytes::expr(&remainder[now_idx..now_idx + 8]));
+        }
+
+        let t0 = divisor_limbs[0].clone() * quotient_limbs[0].clone();
+        let t1 = divisor_limbs[0].clone() * quotient_limbs[1].clone()
+            + divisor_limbs[1].clone() * quotient_limbs[0].clone();
+        let t2 = divisor_limbs[0].clone() * quotient_limbs[2].clone()
+            + divisor_limbs[1].clone() * quotient_limbs[1].clone()
+            + divisor_limbs[2].clone() * quotient_limbs[0].clone();
+        let t3 = divisor_limbs[0].clone() * quotient_limbs[3].clone()
+            + divisor_limbs[1].clone() * quotient_limbs[2].clone()
+            + divisor_limbs[2].clone() * quotient_limbs[1].clone()
+            + divisor_limbs[3].clone() * quotient_limbs[0].clone();
+        
+        let cur_v0 = from_bytes::expr(&v0[..]);
+
+        //radix_constant_64 == 2^64
+        //radix_constant_128 == 2^128
+        let radix_constant_64 = pow_of_two_expr(64);
+        let radix_constant_128 = pow_of_two_expr(128);
+        cb.require_equal(
+            "product(quotient, divisor)_lo + remainders_lo == dividends_lo + radix_lo ⋅ 2^128",
+            cur_v0.clone() * radix_constant_128.clone(),
+            t0.expr() + t1.expr() * radix_constant_64.clone()
+                + (remainder_limbs[0].clone()
+                    + remainder_limbs[1].clone() * radix_constant_64.clone())
+                - (dividend_limbs[0].clone()
+                    + dividend_limbs[1].clone() * radix_constant_64.clone()),
+        );
+        cb.require_zero(
+            "product(quotient, divisor)_high + remainders_high == dividends_high",
+            cur_v0 + t2.expr() + t3.expr() * radix_constant_64.clone()
+                + remainder_limbs[2].clone() 
+                + remainder_limbs[3].clone() * radix_constant_64.clone()
+                - (dividend_limbs[2].clone() + dividend_limbs[3].clone() * radix_constant_64)
+        );
+
+        Self {
+            dividend,
+            divisor,
+            quotient,
+            remainder,
+            v0,
+        }
+    }
+
+    pub(crate) fn assign(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        dividend: Word,
+        divisor: Word,
+        quotient: Word,
+    ) -> Result<(), Error> {
+        self.assign_witness(region, offset, &dividend, &divisor, &quotient)?;
+        self.dividend.assign(region, offset, Some(dividend.to_le_bytes()))?;
+        self.divisor.assign(region, offset, Some(divisor.to_le_bytes()))?;
+        self.quotient.assign(region,offset, Some(quotient.to_le_bytes()))?;
+        Ok(())
+    }
+
+    pub(crate) fn quotient(&self) -> &util::Word<F> {
+        &self.quotient
+    }
+
+    fn assign_witness(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        wdividend: &Word,
+        wdivisor: &Word,
+        wquotient: &Word,
+    ) -> Result<(), Error> {
+        use num::BigUint;
+
+        let dividend = BigUint::from_bytes_le(&wdividend.to_le_bytes());
+        let divisor = BigUint::from_bytes_le(&wdivisor.to_le_bytes());
+        let quotient = BigUint::from_bytes_le(&wquotient.to_le_bytes());
+        let remainder = dividend.clone() - divisor.clone() * quotient.clone();
+        let constant_64 = BigUint::from(1u128 << 64);
+        let constant_128 = constant_64.clone() * constant_64.clone();
+        
+        let a_limbs = divisor.to_u64_digits();
+        let b_limbs = quotient.to_u64_digits();
+        let c_limbs = dividend.to_u64_digits();
+        let d_limbs = remainder.to_u64_digits();
+        let mut t_digits = vec![];
+
+        //a->divisor
+        //b->quotient
+        //c->dividend
+        //d->remainder
+        for total_idx in 0..4 {
+            let mut rhs_sum = BigUint::from(0u128);
+            for a_id in 0..=total_idx {
+                let (a_idx, b_idx) =
+                    (a_id as usize, (total_idx - a_id) as usize);
+                let tmp_a = if a_limbs.len() > a_idx {
+                    BigUint::from(a_limbs[a_idx])
+                } else {
+                    BigUint::from(0u128)
+                };
+                let tmp_b = if b_limbs.len() > b_idx {
+                    BigUint::from(b_limbs[b_idx])
+                } else {
+                    BigUint::from(0u128)
+                };
+                rhs_sum = rhs_sum.clone() + tmp_a * tmp_b;
+            }
+            t_digits.push(rhs_sum);
+        }
+
+        let mut c_now = vec![];
+        let mut d_now = vec![];
+        for idx in 0..4 {
+            c_now.push(if c_limbs.len() > idx {
+                BigUint::from(c_limbs[idx])
+            } else {
+                BigUint::from(0u128)
+            });
+            d_now.push(if d_limbs.len() > idx {
+                BigUint::from(d_limbs[idx])
+            } else {
+                BigUint::from(0u128)
+            });
+        }
+
+        let v0 = (constant_64.clone() * &t_digits[1] + &t_digits[0]
+            + &d_now[0] + constant_64.clone() *&d_now[1] 
+            - &c_now[0] - constant_64 * &c_now[1])
+            / &constant_128;
+        
+        remainder.to_bytes_le()
+            .into_iter()
+            .zip(self.remainder.iter())
+            .try_for_each(|(bt, assignee)| -> Result<(), Error> {
+                assignee.assign(region, offset, Some(F::from(bt as u64)))?;
+                Ok(())
+            })?;
+        
+        v0.to_bytes_le()
+            .into_iter()
+            .zip(self.v0.iter())
+            .try_for_each(|(bt, assignee)| -> Result<(), Error> {
+                assignee.assign(region, offset, Some(F::from(bt as u64)))?;
+                Ok(())
+            })?;
+        
+        Ok(())
+    }
+}
