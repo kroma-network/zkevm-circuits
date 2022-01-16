@@ -84,8 +84,8 @@ mod test {
 
     fn test_ok(opcode: OpcodeId, a: Word, shift: Word) {
         let bytecode = bytecode! {
-            PUSH32(a)
             PUSH32(shift)
+            PUSH32(a)
             #[start]
             .write_op(opcode)
             STOP
@@ -96,7 +96,7 @@ mod test {
 
     #[test]
     fn shr_gadget_simple() {
-        test_ok(OpcodeId::SHR, 0x02FF.into(), 0x1.into());
+        test_ok(OpcodeId::SHR, 0x1.into(), 0x02FF.into());
     }
     
     #[test]
@@ -104,6 +104,6 @@ mod test {
         let a = rand_word();
         let rng = rand::thread_rng();
         let shift = rng.clone().gen_range(0..=255);
-        test_ok(OpcodeId::SHR, a, shift.into());
+        test_ok(OpcodeId::SHR, shift.into(), a);
     }
 }
