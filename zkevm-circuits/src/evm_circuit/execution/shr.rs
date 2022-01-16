@@ -32,8 +32,8 @@ impl<F:FieldExt> ExecutionGadget<F> for ShrGadget<F> {
         let a = cb.query_word();
         let shift = cb.query_word();
 
-        cb.stack_pop(a.expr());
         cb.stack_pop(shift.expr());
+        cb.stack_pop(a.expr());
         let shr_words = ShrWordsGadget::construct(cb, a, shift);
         cb.stack_push(shr_words.b().expr());
 
@@ -68,7 +68,7 @@ impl<F:FieldExt> ExecutionGadget<F> for ShrGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
         let indices =
             [step.rw_indices[0], step.rw_indices[1], step.rw_indices[2]];
-        let [a, shift, b] = indices.map(|idx| block.rws[idx].stack_value());
+        let [shift, a, b] = indices.map(|idx| block.rws[idx].stack_value());
         self.shr_words.assign(region, offset, a, shift, b)
     }
 }
