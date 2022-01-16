@@ -147,6 +147,17 @@ pub enum TxContextFieldTag {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub enum BlockContextFieldTag {
+    Coinbase = 1,
+    GasLimit,
+    BlockNumber,
+    Time,
+    Difficulty,
+    BaseFee,
+    BlockHash,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum RwTableTag {
     TxAccessListAccount = 1,
     TxAccessListStorageSlot,
@@ -198,6 +209,7 @@ impl_expr!(TxContextFieldTag);
 impl_expr!(RwTableTag);
 impl_expr!(AccountFieldTag);
 impl_expr!(CallContextFieldTag);
+impl_expr!(BlockContextFieldTag);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Table {
@@ -205,6 +217,7 @@ pub(crate) enum Table {
     Tx,
     Rw,
     Bytecode,
+    Block,
 }
 
 #[derive(Clone, Debug)]
@@ -256,6 +269,16 @@ pub(crate) enum Lookup<F> {
         /// data portion of PUSH* operations.
         is_code: Expression<F>,
     },
+    /// Lookup to block table, which contains constants of this block.
+    Block {
+        /// Tag to specify which field to read.
+        field_tag: Expression<F>,
+        /// Stores the block number only when field_tag is BlockHash, otherwise
+        /// should be set to 0.
+        number: Expression<F>,
+        /// Value of the field.
+        value: Expression<F>,
+    },
     /// Conditional lookup enabled by the first element.
     Conditional(Expression<F>, Box<Lookup<F>>),
 }
@@ -271,6 +294,7 @@ impl<F: FieldExt> Lookup<F> {
             Self::Tx { .. } => Table::Tx,
             Self::Rw { .. } => Table::Rw,
             Self::Bytecode { .. } => Table::Bytecode,
+            Self::Block { .. } => Table::Block,
             Self::Conditional(_, lookup) => lookup.table(),
         }
     }
@@ -313,6 +337,13 @@ impl<F: FieldExt> Lookup<F> {
                     value.clone(),
                     is_code.clone(),
                 ]
+            }
+            Self::Block {
+                field_tag,
+                number,
+                value,
+            } => {
+                vec![field_tag.clone(), number.clone(), value.clone()]
             }
             Self::Conditional(condition, lookup) => lookup
                 .input_exprs()

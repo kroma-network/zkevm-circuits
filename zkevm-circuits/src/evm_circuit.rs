@@ -24,27 +24,30 @@ pub struct EvmCircuit<F> {
 
 impl<F: FieldExt> EvmCircuit<F> {
     /// Configure EvmCircuit
-    pub fn configure<TxTable, RwTable, BytecodeTable>(
+    pub fn configure<TxTable, RwTable, BytecodeTable, BlockTable>(
         meta: &mut ConstraintSystem<F>,
-        randomness: Column<Instance>,
+        power_of_randomness: [Expression<F>; 31],
         tx_table: TxTable,
         rw_table: RwTable,
         bytecode_table: BytecodeTable,
+        block_table: BlockTable,
     ) -> Self
     where
         TxTable: LookupTable<F, 4>,
         RwTable: LookupTable<F, 8>,
         BytecodeTable: LookupTable<F, 4>,
+        BlockTable: LookupTable<F, 3>,
     {
         let fixed_table = [(); 4].map(|_| meta.fixed_column());
 
         let execution = ExecutionConfig::configure(
             meta,
-            randomness,
+            power_of_randomness,
             fixed_table,
             tx_table,
             rw_table,
             bytecode_table,
+            block_table,
         );
 
         Self {
@@ -107,11 +110,14 @@ impl<F: FieldExt> EvmCircuit<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm_circuit::{
-        param::STEP_HEIGHT,
-        table::FixedTableTag,
-        witness::{Block, Bytecode, Rw, Transaction},
-        EvmCircuit,
+    use crate::{
+        evm_circuit::{
+            param::STEP_HEIGHT,
+            table::FixedTableTag,
+            witness::{Block, BlockContext, Bytecode, Rw, Transaction},
+            EvmCircuit,
+        },
+        util::Expr,
     };
     use bus_mapping::eth_types::Word;
     use halo2::{
@@ -119,6 +125,7 @@ mod test {
         circuit::{Layouter, SimpleFloorPlanner},
         dev::{MockProver, VerifyFailure},
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
+        poly::Rotation,
     };
     use pairing::bn256::Fr as Fp;
     use rand::{
@@ -155,6 +162,7 @@ mod test {
         tx_table: [Column<Advice>; 4],
         rw_table: [Column<Advice>; 8],
         bytecode_table: [Column<Advice>; 4],
+        block_table: [Column<Advice>; 3],
         evm_circuit: EvmCircuit<F>,
     }
 
@@ -169,7 +177,7 @@ mod test {
                 || "tx table",
                 |mut region| {
                     let mut offset = 0;
-                    for column in self.rw_table {
+                    for column in self.tx_table {
                         region.assign_advice(
                             || "tx table all-zero row",
                             column,
@@ -277,6 +285,44 @@ mod test {
                 },
             )
         }
+
+        fn load_blocks(
+            &self,
+            layouter: &mut impl Layouter<F>,
+            block: &BlockContext<F>,
+            randomness: F,
+        ) -> Result<(), Error> {
+            layouter.assign_region(
+                || "block table",
+                |mut region| {
+                    let mut offset = 0;
+                    for column in self.block_table {
+                        region.assign_advice(
+                            || "block table all-zero row",
+                            column,
+                            offset,
+                            || Ok(F::zero()),
+                        )?;
+                    }
+                    offset += 1;
+
+                    for row in block.table_assignments(randomness) {
+                        for (column, value) in self.block_table.iter().zip(row)
+                        {
+                            region.assign_advice(
+                                || format!("block table row {}", offset),
+                                *column,
+                                offset,
+                                || Ok(value),
+                            )?;
+                        }
+                        offset += 1;
+                    }
+
+                    Ok(())
+                },
+            )
+        }
     }
 
     #[derive(Default)]
@@ -309,18 +355,35 @@ mod test {
             let tx_table = [(); 4].map(|_| meta.advice_column());
             let rw_table = [(); 8].map(|_| meta.advice_column());
             let bytecode_table = [(); 4].map(|_| meta.advice_column());
-            let randomness = meta.instance_column();
+            let block_table = [(); 3].map(|_| meta.advice_column());
+
+            let power_of_randomness = {
+                let columns = [(); 31].map(|_| meta.instance_column());
+                let mut power_of_randomness = None;
+
+                meta.create_gate("", |meta| {
+                    power_of_randomness = Some(columns.map(|column| {
+                        meta.query_instance(column, Rotation::cur())
+                    }));
+
+                    [0.expr()]
+                });
+
+                power_of_randomness.unwrap()
+            };
 
             Self::Config {
                 tx_table,
                 rw_table,
                 bytecode_table,
+                block_table,
                 evm_circuit: EvmCircuit::configure(
                     meta,
-                    randomness,
+                    power_of_randomness,
                     tx_table,
                     rw_table,
                     bytecode_table,
+                    block_table,
                 ),
             }
         }
@@ -347,6 +410,11 @@ mod test {
             config.load_bytecodes(
                 &mut layouter,
                 &self.block.bytecodes,
+                self.block.randomness,
+            )?;
+            config.load_blocks(
+                &mut layouter,
+                &self.block.context,
                 self.block.randomness,
             )?;
             config
@@ -377,16 +445,19 @@ mod test {
                 .sum::<usize>(),
         ));
 
-        let randomness =
-            vec![
-                block.randomness;
-                block.txs.iter().map(|tx| tx.steps.len()).sum::<usize>()
-                    * STEP_HEIGHT
-            ];
+        let power_of_randomness = (1..32)
+            .map(|exp| {
+                vec![
+                    block.randomness.pow(&[exp, 0, 0, 0]);
+                    block.txs.iter().map(|tx| tx.steps.len()).sum::<usize>()
+                        * STEP_HEIGHT
+                ]
+            })
+            .collect();
         let circuit = TestCircuit::<F>::new(block, fixed_table_tags);
 
         let prover =
-            MockProver::<F>::run(k, &circuit, vec![randomness]).unwrap();
+            MockProver::<F>::run(k, &circuit, power_of_randomness).unwrap();
         prover.verify()
     }
 
