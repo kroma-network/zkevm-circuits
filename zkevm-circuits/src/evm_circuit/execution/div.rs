@@ -31,9 +31,11 @@ impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
 
         let dividend = cb.query_word();
         let divisor = cb.query_word();
+        let div_words =
+            DivWordsGadget::construct(cb, dividend.clone(), divisor.clone());
+
         cb.stack_pop(dividend.expr());
         cb.stack_pop(divisor.expr());
-        let div_words = DivWordsGadget::construct(cb, dividend, divisor);
         cb.stack_push(div_words.quotient().expr());
 
         let step_state_transition = StepStateTransition {
