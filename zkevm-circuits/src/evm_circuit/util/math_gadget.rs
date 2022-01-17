@@ -837,24 +837,9 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let remainder = cb.query_bytes();
         let v0 = cb.query_bytes();
 
-        let lt_lo = LtGadget::construct(
-            cb,
-            from_bytes::expr(&remainder[0..16]),
-            from_bytes::expr(&divisor.cells[0..16]),
-        );
-        let comparison_hi = ComparisonGadget::construct(
-            cb,
-            from_bytes::expr(&remainder[16..32]),
-            from_bytes::expr(&divisor.cells[16..32]),
-        );
-        let (lt_hi, eq_hi) = comparison_hi.expr();
-        let lt = select::expr(lt_hi, 1.expr(), eq_hi * lt_lo.expr());
-        cb.require_equal("remainder < quotient", 1.expr(), lt);
-
         let mut dividend_limbs = vec![];
         let mut divisor_limbs = vec![];
         let mut quotient_limbs = vec![];
-        let mut remainder_limbs = vec![];
         for idx in 0..4 {
             let now_idx = (idx * 8) as usize;
             dividend_limbs
@@ -863,9 +848,9 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 .push(from_bytes::expr(&divisor.cells[now_idx..now_idx + 8]));
             quotient_limbs
                 .push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
-            remainder_limbs
-                .push(from_bytes::expr(&remainder[now_idx..now_idx + 8]));
         }
+        let remainder_lo = from_bytes::expr(&remainder[0..16]);
+        let remainder_hi = from_bytes::expr(&remainder[16..32]);
 
         let t0 = divisor_limbs[0].clone() * quotient_limbs[0].clone();
         let t1 = divisor_limbs[0].clone() * quotient_limbs[1].clone()
@@ -880,6 +865,20 @@ impl<F: FieldExt> DivWordsGadget<F> {
 
         let cur_v0 = from_bytes::expr(&v0[..]);
 
+        let lt_lo = LtGadget::construct(
+            cb,
+            remainder_lo.clone(),
+            from_bytes::expr(&divisor.cells[0..16]),
+        );
+        let comparison_hi = ComparisonGadget::construct(
+            cb,
+            remainder_hi.clone(),
+            from_bytes::expr(&divisor.cells[16..32]),
+        );
+        let (lt_hi, eq_hi) = comparison_hi.expr();
+        let lt = select::expr(lt_hi, 1.expr(), eq_hi * lt_lo.expr());
+        cb.require_equal("remainder < quotient", 1.expr(), lt);
+
         //radix_constant_64 == 2^64
         //radix_constant_128 == 2^128
         let radix_constant_64 = pow_of_two_expr(64);
@@ -888,16 +887,14 @@ impl<F: FieldExt> DivWordsGadget<F> {
             "product(quotient, divisor)_lo + remainders_lo == dividends_lo + radix_lo ⋅ 2^128",
             cur_v0.clone() * radix_constant_128,
             t0.expr() + t1.expr() * radix_constant_64.clone()
-                + (remainder_limbs[0].clone()
-                    + remainder_limbs[1].clone() * radix_constant_64.clone())
+                + remainder_lo
                 - (dividend_limbs[0].clone()
                     + dividend_limbs[1].clone() * radix_constant_64.clone()),
         );
         cb.require_zero(
             "product(quotient, divisor)_high + remainders_high == dividends_high",
             cur_v0 + t2.expr() + t3.expr() * radix_constant_64.clone()
-                + remainder_limbs[2].clone()
-                + remainder_limbs[3].clone() * radix_constant_64.clone()
+                + remainder_hi
                 - (dividend_limbs[2].clone() + dividend_limbs[3].clone() * radix_constant_64)
         );
 
