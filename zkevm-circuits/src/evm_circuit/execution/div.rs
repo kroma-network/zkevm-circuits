@@ -21,7 +21,7 @@ pub(crate) struct DivGadget<F> {
     div_words: DivWordsGadget<F>,
 }
 
-impl<F:FieldExt> ExecutionGadget<F> for DivGadget<F> {
+impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
     const NAME: &'static str = "DIV";
 
     const EXECUTION_STATE: ExecutionState = ExecutionState::DIV;
@@ -31,7 +31,6 @@ impl<F:FieldExt> ExecutionGadget<F> for DivGadget<F> {
 
         let dividend = cb.query_word();
         let divisor = cb.query_word();
-
         cb.stack_pop(dividend.expr());
         cb.stack_pop(divisor.expr());
         let div_words = DivWordsGadget::construct(cb, dividend, divisor);
@@ -68,8 +67,10 @@ impl<F:FieldExt> ExecutionGadget<F> for DivGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
         let indices =
             [step.rw_indices[0], step.rw_indices[1], step.rw_indices[2]];
-        let [dividend, divisor, quotient] = indices.map(|idx| block.rws[idx].stack_value());
-        self.div_words.assign(region, offset, dividend, divisor, quotient)
+        let [dividend, divisor, quotient] =
+            indices.map(|idx| block.rws[idx].stack_value());
+        self.div_words
+            .assign(region, offset, dividend, divisor, quotient)
     }
 }
 
@@ -101,7 +102,7 @@ mod test {
     fn div_gadget_simple() {
         test_ok(OpcodeId::DIV, 0xFF.into(), 0x5.into());
     }
-    
+
     #[test]
     fn div_gadget_rand() {
         let dividend = rand_word();
