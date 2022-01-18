@@ -16,15 +16,15 @@ use crate::{
 use halo2::{arithmetic::FieldExt, circuit::Region, plonk::Error};
 
 #[derive(Clone, Debug)]
-pub(crate) struct DivGadget<F> {
+pub(crate) struct ModGadget<F> {
     same_context: SameContextGadget<F>,
     div_words: DivWordsGadget<F>,
 }
 
-impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
-    const NAME: &'static str = "DIV";
+impl<F: FieldExt> ExecutionGadget<F> for ModGadget<F> {
+    const NAME: &'static str = "MOD";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::DIV;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::MOD;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let opcode = cb.query_cell();
@@ -36,7 +36,7 @@ impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
 
         cb.stack_pop(dividend.expr());
         cb.stack_pop(divisor.expr());
-        cb.stack_push(div_words.quotient().expr());
+        cb.stack_push(div_words.remainder().expr());
 
         let step_state_transition = StepStateTransition {
             rw_counter: Delta(3.expr()),
@@ -69,9 +69,9 @@ impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
         let indices =
             [step.rw_indices[0], step.rw_indices[1], step.rw_indices[2]];
-        let [dividend, divisor, quotient] =
+        let [dividend, divisor, remainder] =
             indices.map(|idx| block.rws[idx].stack_value());
-        let remainder = dividend - divisor * quotient;
+        let quotient = (dividend - remainder) / divisor;
         self.div_words
             .assign(region, offset, dividend, divisor, quotient, remainder)
     }
@@ -98,14 +98,14 @@ mod test {
     }
 
     #[test]
-    fn div_gadget_simple() {
-        test_ok(OpcodeId::DIV, 0xFF.into(), 0x4.into());
+    fn mod_gadget_simple() {
+        test_ok(OpcodeId::MOD, 0xFF.into(), 0x4.into());
     }
 
     #[test]
-    fn div_gadget_rand() {
+    fn mod_gadget_rand() {
         let dividend = rand_word();
         let divisor = rand_word();
-        test_ok(OpcodeId::DIV, dividend, divisor);
+        test_ok(OpcodeId::MOD, dividend, divisor);
     }
 }

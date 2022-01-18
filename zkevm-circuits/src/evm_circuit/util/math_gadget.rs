@@ -821,7 +821,7 @@ pub(crate) struct DivWordsGadget<F> {
     dividend: util::Word<F>,
     divisor: util::Word<F>,
     quotient: util::Word<F>,
-    remainder: [Cell<F>; 32],
+    remainder: util::Word<F>,
     v0: [Cell<F>; 9],
     lt_lo: LtGadget<F, 16>,
     comparison_hi: ComparisonGadget<F, 16>,
@@ -834,7 +834,7 @@ impl<F: FieldExt> DivWordsGadget<F> {
         divisor: util::Word<F>,
     ) -> Self {
         let quotient = cb.query_word();
-        let remainder = cb.query_bytes();
+        let remainder = cb.query_word();
         let v0 = cb.query_bytes();
 
         let mut dividend_limbs = vec![];
@@ -849,8 +849,8 @@ impl<F: FieldExt> DivWordsGadget<F> {
             quotient_limbs
                 .push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
         }
-        let remainder_lo = from_bytes::expr(&remainder[0..16]);
-        let remainder_hi = from_bytes::expr(&remainder[16..32]);
+        let remainder_lo = from_bytes::expr(&remainder.cells[0..16]);
+        let remainder_hi = from_bytes::expr(&remainder.cells[16..32]);
 
         let t0 = divisor_limbs[0].clone() * quotient_limbs[0].clone();
         let t1 = divisor_limbs[0].clone() * quotient_limbs[1].clone()
@@ -916,19 +916,28 @@ impl<F: FieldExt> DivWordsGadget<F> {
         dividend: Word,
         divisor: Word,
         quotient: Word,
+        remainder: Word,
     ) -> Result<(), Error> {
-        self.assign_witness(region, offset, &dividend, &divisor, &quotient)?;
+        self.assign_witness(
+            region, offset, &dividend, &divisor, &quotient, &remainder,
+        )?;
         self.dividend
             .assign(region, offset, Some(dividend.to_le_bytes()))?;
         self.divisor
             .assign(region, offset, Some(divisor.to_le_bytes()))?;
         self.quotient
             .assign(region, offset, Some(quotient.to_le_bytes()))?;
+        self.remainder
+            .assign(region, offset, Some(remainder.to_le_bytes()))?;
         Ok(())
     }
 
     pub(crate) fn quotient(&self) -> &util::Word<F> {
         &self.quotient
+    }
+
+    pub(crate) fn remainder(&self) -> &util::Word<F> {
+        &self.remainder
     }
 
     fn assign_witness(
@@ -938,13 +947,14 @@ impl<F: FieldExt> DivWordsGadget<F> {
         wdividend: &Word,
         wdivisor: &Word,
         wquotient: &Word,
+        wremainder: &Word,
     ) -> Result<(), Error> {
         use num::BigUint;
 
         let dividend = BigUint::from_bytes_le(&wdividend.to_le_bytes());
         let divisor = BigUint::from_bytes_le(&wdivisor.to_le_bytes());
         let quotient = BigUint::from_bytes_le(&wquotient.to_le_bytes());
-        let remainder = dividend.clone() - divisor.clone() * quotient.clone();
+        let remainder = BigUint::from_bytes_le(&wremainder.to_le_bytes());
         let constant_64 = BigUint::from(1u128 << 64);
         let constant_128 = constant_64.clone() * constant_64.clone();
 
@@ -1000,15 +1010,6 @@ impl<F: FieldExt> DivWordsGadget<F> {
             - &c_now[0]
             - constant_64 * &c_now[1])
             / &constant_128;
-
-        remainder
-            .to_bytes_le()
-            .into_iter()
-            .zip(self.remainder.iter())
-            .try_for_each(|(bt, assignee)| -> Result<(), Error> {
-                assignee.assign(region, offset, Some(F::from(bt as u64)))?;
-                Ok(())
-            })?;
 
         v0.to_bytes_le()
             .into_iter()
