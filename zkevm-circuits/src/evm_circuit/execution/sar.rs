@@ -97,7 +97,7 @@ mod test {
     #[test]
     fn sar_gadget_simple() {
         test_ok(OpcodeId::SAR, 0x02FF.into(), 0x1.into());
-        test_ok(OpcodeId::SAR, (!0x2).into(), 0x1.into());
+        test_ok(OpcodeId::SAR, Word::from_big_endian(&[255u8; 32]), 0x1.into());
     }
 
     #[test]
