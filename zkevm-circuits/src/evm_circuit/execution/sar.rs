@@ -100,7 +100,7 @@ mod test {
         test_ok(
             OpcodeId::SAR,
             Word::from_big_endian(&[255u8; 32]),
-            0x1.into(),
+            0x73.into(),
         );
     }
 
