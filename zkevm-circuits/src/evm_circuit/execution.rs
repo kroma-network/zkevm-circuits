@@ -34,7 +34,7 @@ mod mul;
 mod pc;
 mod pop;
 mod push;
-mod signed_comparator;
+mod rem;
 mod signextend;
 mod shr;
 mod stop;
@@ -58,7 +58,7 @@ use mul::MulGadget;
 use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
-use signed_comparator::SignedComparatorGadget;
+use rem::ModGadget;
 use signextend::SignextendGadget;
 use shr::ShrGadget;
 use stop::StopGadget;
@@ -111,6 +111,7 @@ pub(crate) struct ExecutionConfig<F> {
     swap_gadget: SwapGadget<F>,
     msize_gadget: MsizeGadget<F>,
     coinbase_gadget: CoinbaseGadget<F>,
+    mod_gadget: ModGadget<F>,
 }
 
 impl<F: FieldExt> ExecutionConfig<F> {
@@ -226,6 +227,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             byte_gadget: configure_gadget!(),
             comparator_gadget: configure_gadget!(),
             div_gadget: configure_gadget!(),
+            mod_gadget: configure_gadget!(),
             dup_gadget: configure_gadget!(),
             error_oog_pure_memory_gadget: configure_gadget!(),
             jump_gadget: configure_gadget!(),
@@ -519,6 +521,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
             ExecutionState::COINBASE => assign_exec_step!(self.coinbase_gadget),
             ExecutionState::DIV => assign_exec_step!(self.div_gadget),
+            ExecutionState::MOD => assign_exec_step!(self.mod_gadget),
             ExecutionState::ErrorOutOfGasPureMemory => {
                 assign_exec_step!(self.error_oog_pure_memory_gadget)
             }
