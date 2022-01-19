@@ -21,9 +21,9 @@ pub(crate) struct ShlGadget<F> {
     shl_words: ShlWordsGadget<F>,
 }
 
-impl<F:FieldExt> ExecutionGadget<F> for ShlGadget<F> {
+impl<F: FieldExt> ExecutionGadget<F> for ShlGadget<F> {
     const NAME: &'static str = "SHL";
-    
+
     const EXECUTION_STATE: ExecutionState = ExecutionState::SHL;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
@@ -98,12 +98,12 @@ mod test {
     fn shl_gadget_simple() {
         test_ok(OpcodeId::SHL, 0x1.into(), 0x02FF.into());
     }
-    
+
     #[test]
     fn shl_gadget_rand() {
         let a = rand_word();
-        let rng = rand::thread_rng();
-        let shift = rng.clone().gen_range(0..=255);
+        let mut rng = rand::thread_rng();
+        let shift = rng.gen_range(0..=255);
         test_ok(OpcodeId::SHL, shift.into(), a);
     }
 }
