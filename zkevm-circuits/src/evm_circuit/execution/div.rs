@@ -36,7 +36,7 @@ impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
 
         cb.stack_pop(dividend.expr());
         cb.stack_pop(divisor.expr());
-        cb.stack_push(div_words.quotient().expr());
+        cb.stack_push(div_words.quotient());
 
         let step_state_transition = StepStateTransition {
             rw_counter: Delta(3.expr()),
