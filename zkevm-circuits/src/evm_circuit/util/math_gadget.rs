@@ -241,13 +241,10 @@ impl<F: FieldExt> MulWordsGadget<F> {
 
         let mut a_limbs = vec![];
         let mut b_limbs = vec![];
-        let mut c_limbs = vec![];
         for virtual_idx in 0..4 {
             let now_idx = (virtual_idx * 8) as usize;
             a_limbs.push(from_bytes::expr(&a.cells[now_idx..now_idx + 8]));
             b_limbs.push(from_bytes::expr(&b.cells[now_idx..now_idx + 8]));
-            c_limbs
-                .push(from_bytes::expr(&product.cells[now_idx..now_idx + 8]));
         }
 
         let t0 = a_limbs[0].clone() * b_limbs[0].clone();
@@ -263,6 +260,8 @@ impl<F: FieldExt> MulWordsGadget<F> {
 
         let cur_v0 = from_bytes::expr(&v0[..]);
         let cur_v1 = from_bytes::expr(&v1[..]);
+        let c_lo = from_bytes::expr(&product.cells[0..16]);
+        let c_hi = from_bytes::expr(&product.cells[16..32]);
 
         //radix_constant_64 == 2^64
         //radix_constant_128 == 2^128
@@ -270,16 +269,18 @@ impl<F: FieldExt> MulWordsGadget<F> {
         let radix_constant_128 = pow_of_two_expr(128);
         cb.require_equal(
             "mul(multipliers_lo) == product_lo + radix_lo ⋅ 2^128",
-            cur_v0.clone() * radix_constant_128.clone(),
-            t0.expr() + t1.expr() * radix_constant_64.clone()
-                - (c_limbs[0].clone()
-                    + c_limbs[1].clone() * radix_constant_64.clone()),
+            c_lo,
+            cur_v0.clone() * radix_constant_128.clone()
+                + t0.expr()
+                + t1.expr() * radix_constant_64.clone(),
         );
         cb.require_equal(
             "mul(multipliers_high) == product_high + radix_high ⋅ 2^128",
-            cur_v1 * radix_constant_128,
-            cur_v0 + t2.expr() + t3.expr() * radix_constant_64.clone()
-                - (c_limbs[2].clone() + c_limbs[3].clone() * radix_constant_64),
+            c_hi,
+            cur_v1 * radix_constant_128
+                + cur_v0
+                + t2.expr()
+                + t3.expr() * radix_constant_64,
         );
 
         Self {
@@ -352,20 +353,25 @@ impl<F: FieldExt> MulWordsGadget<F> {
         }
 
         let mut c_now = vec![];
-        for idx in 0..4 {
-            c_now.push(if c_limbs.len() > idx {
-                BigUint::from(c_limbs[idx])
+        for idx in 0..2 {
+            let c_now_digit_lo = if c_limbs.len() > 2 * idx {
+                BigUint::from(c_limbs[2 * idx])
             } else {
                 BigUint::from(0u128)
-            })
+            };
+            let c_now_digit_hi = if c_limbs.len() > 2 * idx + 1 {
+                BigUint::from(c_limbs[2 * idx + 1])
+            } else {
+                BigUint::from(0u128)
+            };
+            c_now.push(c_now_digit_lo + c_now_digit_hi * constant_64.clone());
         }
+
         let v0 = (constant_64.clone() * &t_digits[1] + &t_digits[0]
-            - &c_now[0]
-            - constant_64.clone() * &c_now[1])
+            - &c_now[0])
             / &constant_128;
-        let v1 = (constant_64.clone() * &t_digits[3] + &v0 + &t_digits[2]
-            - &c_now[2]
-            - constant_64 * &c_now[3])
+        let v1 = (constant_64 * &t_digits[3] + &v0 + &t_digits[2]
+            - &c_now[1])
             / &constant_128;
 
         v0.to_bytes_le()
@@ -849,6 +855,8 @@ impl<F: FieldExt> DivWordsGadget<F> {
             quotient_limbs
                 .push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
         }
+        let dividend_lo = from_bytes::expr(&dividend.cells[0..16]);
+        let dividend_hi = from_bytes::expr(&dividend.cells[16..32]);
         let remainder_lo = from_bytes::expr(&remainder.cells[0..16]);
         let remainder_hi = from_bytes::expr(&remainder.cells[16..32]);
 
@@ -862,6 +870,12 @@ impl<F: FieldExt> DivWordsGadget<F> {
             + divisor_limbs[1].clone() * quotient_limbs[2].clone()
             + divisor_limbs[2].clone() * quotient_limbs[1].clone()
             + divisor_limbs[3].clone() * quotient_limbs[0].clone();
+        let overflow = divisor_limbs[1].clone() * quotient_limbs[3].clone()
+            + divisor_limbs[2].clone() * quotient_limbs[3].clone()
+            + divisor_limbs[3].clone() * quotient_limbs[3].clone()
+            + divisor_limbs[2].clone() * quotient_limbs[2].clone()
+            + divisor_limbs[3].clone() * quotient_limbs[2].clone()
+            + divisor_limbs[3].clone() * quotient_limbs[1].clone();
 
         let cur_v0 = from_bytes::expr(&v0[..]);
 
@@ -879,23 +893,25 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let lt = select::expr(lt_hi, 1.expr(), eq_hi * lt_lo.expr());
         cb.require_equal("remainder < quotient", 1.expr(), lt);
 
-        //radix_constant_64 == 2^64
-        //radix_constant_128 == 2^128
+        // radix_constant_64 == 2^64
+        // radix_constant_128 == 2^128
         let radix_constant_64 = pow_of_two_expr(64);
         let radix_constant_128 = pow_of_two_expr(128);
         cb.require_equal(
-            "product(quotient, divisor)_lo + remainders_lo == dividends_lo + radix_lo ⋅ 2^128",
-            cur_v0.clone() * radix_constant_128,
+            "product(quotient, divisor)_lo + remainders_lo == dividends_lo + carry_lo ⋅ 2^128",
             t0.expr() + t1.expr() * radix_constant_64.clone()
-                + remainder_lo
-                - (dividend_limbs[0].clone()
-                    + dividend_limbs[1].clone() * radix_constant_64.clone()),
+                + remainder_lo,
+            cur_v0.clone() * radix_constant_128 + dividend_lo,
+        );
+        cb.require_equal(
+            "product(quotient, divisor)_high + remainders_high == dividends_high",
+            cur_v0 + t2.expr() + t3.expr() * radix_constant_64
+                + remainder_hi,
+            dividend_hi,
         );
         cb.require_zero(
-            "product(quotient, divisor)_high + remainders_high == dividends_high",
-            cur_v0 + t2.expr() + t3.expr() * radix_constant_64.clone()
-                + remainder_hi
-                - (dividend_limbs[2].clone() + dividend_limbs[3].clone() * radix_constant_64)
+            "overflow of product(quotient, divisor) == 0",
+            overflow,
         );
 
         Self {
@@ -932,12 +948,12 @@ impl<F: FieldExt> DivWordsGadget<F> {
         Ok(())
     }
 
-    pub(crate) fn quotient(&self) -> &util::Word<F> {
-        &self.quotient
+    pub(crate) fn quotient(&self) -> Expression<F> {
+        self.quotient.expr()
     }
 
-    pub(crate) fn remainder(&self) -> &util::Word<F> {
-        &self.remainder
+    pub(crate) fn remainder(&self) -> Expression<F> {
+        self.remainder.expr()
     }
 
     fn assign_witness(
@@ -964,10 +980,10 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let d_limbs = remainder.to_u64_digits();
         let mut t_digits = vec![];
 
-        //a->divisor
-        //b->quotient
-        //c->dividend
-        //d->remainder
+        // a->divisor
+        // b->quotient
+        // c->dividend
+        // d->remainder
         for total_idx in 0..4 {
             let mut rhs_sum = BigUint::from(0u128);
             for a_id in 0..=total_idx {
@@ -990,26 +1006,35 @@ impl<F: FieldExt> DivWordsGadget<F> {
 
         let mut c_now = vec![];
         let mut d_now = vec![];
-        for idx in 0..4 {
-            c_now.push(if c_limbs.len() > idx {
-                BigUint::from(c_limbs[idx])
+        for idx in 0..2 {
+            let c_now_digit_lo = if c_limbs.len() > 2 * idx {
+                BigUint::from(c_limbs[2 * idx])
             } else {
                 BigUint::from(0u128)
-            });
-            d_now.push(if d_limbs.len() > idx {
-                BigUint::from(d_limbs[idx])
+            };
+            let c_now_digit_hi = if c_limbs.len() > 2 * idx + 1 {
+                BigUint::from(c_limbs[2 * idx + 1])
             } else {
                 BigUint::from(0u128)
-            });
+            };
+            let d_now_digit_lo = if d_limbs.len() > 2 * idx {
+                BigUint::from(d_limbs[2 * idx])
+            } else {
+                BigUint::from(0u128)
+            };
+            let d_now_digit_hi = if d_limbs.len() > 2 * idx + 1 {
+                BigUint::from(d_limbs[2 * idx + 1])
+            } else {
+                BigUint::from(0u128)
+            };
+            c_now.push(c_now_digit_lo + c_now_digit_hi * constant_64.clone());
+            d_now.push(d_now_digit_lo + d_now_digit_hi * constant_64.clone());
         }
 
-        let v0 = (constant_64.clone() * &t_digits[1]
-            + &t_digits[0]
-            + &d_now[0]
-            + constant_64.clone() * &d_now[1]
-            - &c_now[0]
-            - constant_64 * &c_now[1])
-            / &constant_128;
+        let v0 =
+            (constant_64 * &t_digits[1] + &t_digits[0] + &d_now[0]
+                - &c_now[0])
+                / &constant_128;
 
         v0.to_bytes_le()
             .into_iter()
@@ -1024,37 +1049,29 @@ impl<F: FieldExt> DivWordsGadget<F> {
         self.lt_lo.assign(
             region,
             offset,
-            {
-                if remainder8s.len() <= 16 {
-                    from_bytes::value(&remainder8s[0..remainder8s.len()])
-                } else {
-                    from_bytes::value(&remainder8s[0..16])
-                }
+            if remainder8s.len() <= 16 {
+                from_bytes::value(&remainder8s[0..remainder8s.len()])
+            } else {
+                from_bytes::value(&remainder8s[0..16])
             },
-            {
-                if divisor8s.len() <= 16 {
-                    from_bytes::value(&divisor8s[0..divisor8s.len()])
-                } else {
-                    from_bytes::value(&divisor8s[0..16])
-                }
+            if divisor8s.len() <= 16 {
+                from_bytes::value(&divisor8s[0..divisor8s.len()])
+            } else {
+                from_bytes::value(&divisor8s[0..16])
             },
         )?;
         self.comparison_hi.assign(
             region,
             offset,
-            {
-                if remainder8s.len() <= 16 {
-                    F::zero()
-                } else {
-                    from_bytes::value(&remainder8s[16..remainder8s.len()])
-                }
+            if remainder8s.len() <= 16 {
+                F::zero()
+            } else {
+                from_bytes::value(&remainder8s[16..remainder8s.len()])
             },
-            {
-                if divisor8s.len() <= 16 {
-                    F::zero()
-                } else {
-                    from_bytes::value(&divisor8s[16..divisor8s.len()])
-                }
+            if divisor8s.len() <= 16 {
+                F::zero()
+            } else {
+                from_bytes::value(&divisor8s[16..divisor8s.len()])
             },
         )?;
 
