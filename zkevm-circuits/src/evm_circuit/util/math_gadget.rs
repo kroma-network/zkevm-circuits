@@ -370,8 +370,7 @@ impl<F: FieldExt> MulWordsGadget<F> {
         let v0 = (constant_64.clone() * &t_digits[1] + &t_digits[0]
             - &c_now[0])
             / &constant_128;
-        let v1 = (constant_64 * &t_digits[3] + &v0 + &t_digits[2]
-            - &c_now[1])
+        let v1 = (constant_64 * &t_digits[3] + &v0 + &t_digits[2] - &c_now[1])
             / &constant_128;
 
         v0.to_bytes_le()
@@ -1031,10 +1030,9 @@ impl<F: FieldExt> DivWordsGadget<F> {
             d_now.push(d_now_digit_lo + d_now_digit_hi * constant_64.clone());
         }
 
-        let v0 =
-            (constant_64 * &t_digits[1] + &t_digits[0] + &d_now[0]
-                - &c_now[0])
-                / &constant_128;
+        let v0 = (constant_64 * &t_digits[1] + &t_digits[0] + &d_now[0]
+            - &c_now[0])
+            / &constant_128;
 
         v0.to_bytes_le()
             .into_iter()
