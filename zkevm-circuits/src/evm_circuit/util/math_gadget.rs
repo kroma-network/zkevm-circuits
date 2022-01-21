@@ -924,6 +924,8 @@ impl<F: FieldExt> DivWordsGadget<F> {
             quotient,
             remainder,
             v0,
+            lt_lo,
+            comparison_hi,
         }
     }
 

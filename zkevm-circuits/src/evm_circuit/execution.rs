@@ -35,8 +35,8 @@ mod mul;
 mod pc;
 mod pop;
 mod push;
+mod signed_comparator;
 mod signextend;
-mod shr;
 mod stop;
 mod swap;
 
@@ -59,8 +59,8 @@ use mul::MulGadget;
 use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
+use signed_comparator::SignedComparatorGadget;
 use signextend::SignextendGadget;
-use shr::ShrGadget;
 use stop::StopGadget;
 use swap::SwapGadget;
 
@@ -106,7 +106,6 @@ pub(crate) struct ExecutionConfig<F> {
     push_gadget: PushGadget<F>,
     signed_comparator_gadget: SignedComparatorGadget<F>,
     signextend_gadget: SignextendGadget<F>,
-    shr_gadget: ShrGadget<F>,
     stop_gadget: StopGadget<F>,
     swap_gadget: SwapGadget<F>,
     msize_gadget: MsizeGadget<F>,
@@ -239,7 +238,6 @@ impl<F: FieldExt> ExecutionConfig<F> {
             push_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
             signextend_gadget: configure_gadget!(),
-            shr_gadget: configure_gadget!(),
             stop_gadget: configure_gadget!(),
             swap_gadget: configure_gadget!(),
             msize_gadget: configure_gadget!(),
