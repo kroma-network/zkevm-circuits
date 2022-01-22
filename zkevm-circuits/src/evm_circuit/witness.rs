@@ -575,6 +575,7 @@ impl From<&bus_mapping::circuit_input_builder::ExecStep> for ExecutionState {
             OpcodeId::SUB => ExecutionState::ADD,
             OpcodeId::EQ | OpcodeId::LT | OpcodeId::GT => ExecutionState::CMP,
             OpcodeId::SLT | OpcodeId::SGT => ExecutionState::SCMP,
+            OpcodeId::SHL => ExecutionState::SHL,
             OpcodeId::SIGNEXTEND => ExecutionState::SIGNEXTEND,
             OpcodeId::STOP => ExecutionState::STOP,
             OpcodeId::AND => ExecutionState::BITWISE,

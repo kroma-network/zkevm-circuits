@@ -33,6 +33,7 @@ mod mul;
 mod pc;
 mod pop;
 mod push;
+mod shl;
 mod signed_comparator;
 mod signextend;
 mod stop;
@@ -55,6 +56,7 @@ use mul::MulGadget;
 use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
+use shl::ShlGadget;
 use signed_comparator::SignedComparatorGadget;
 use signextend::SignextendGadget;
 use stop::StopGadget;
@@ -99,6 +101,7 @@ pub(crate) struct ExecutionConfig<F> {
     pc_gadget: PcGadget<F>,
     pop_gadget: PopGadget<F>,
     push_gadget: PushGadget<F>,
+    shl_gadget: ShlGadget<F>,
     signed_comparator_gadget: SignedComparatorGadget<F>,
     signextend_gadget: SignextendGadget<F>,
     stop_gadget: StopGadget<F>,
@@ -228,6 +231,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             pc_gadget: configure_gadget!(),
             pop_gadget: configure_gadget!(),
             push_gadget: configure_gadget!(),
+            shl_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
             signextend_gadget: configure_gadget!(),
             stop_gadget: configure_gadget!(),
@@ -489,6 +493,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             ExecutionState::ADD => assign_exec_step!(self.add_gadget),
             ExecutionState::MUL => assign_exec_step!(self.mul_gadget),
             ExecutionState::BITWISE => assign_exec_step!(self.bitwise_gadget),
+            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::SIGNEXTEND => {
                 assign_exec_step!(self.signextend_gadget)
             }
