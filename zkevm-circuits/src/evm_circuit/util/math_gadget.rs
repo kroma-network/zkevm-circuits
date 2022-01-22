@@ -259,18 +259,13 @@ impl<F: FieldExt> MulWordsGadget<F> {
         let radix_constant_128 = pow_of_two_expr(128);
         cb.require_equal(
             "mul(multipliers_lo) == product_lo + radix_lo ⋅ 2^128",
-            c_lo,
-            cur_v0.clone() * radix_constant_128.clone()
-                + t0.expr()
-                + t1.expr() * radix_constant_64.clone(),
+            t0.expr() + t1.expr() * radix_constant_64.clone(),
+            cur_v0.clone() * radix_constant_128.clone() + c_lo,
         );
         cb.require_equal(
             "mul(multipliers_high) == product_high + radix_high ⋅ 2^128",
-            c_hi,
-            cur_v1 * radix_constant_128
-                + cur_v0
-                + t2.expr()
-                + t3.expr() * radix_constant_64,
+            cur_v0 + t2.expr() + t3.expr() * radix_constant_64,
+            cur_v1 * radix_constant_128 + c_hi,
         );
 
         Self {
