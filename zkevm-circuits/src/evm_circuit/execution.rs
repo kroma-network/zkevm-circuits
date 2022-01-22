@@ -34,6 +34,7 @@ mod pc;
 mod pop;
 mod push;
 mod shl;
+mod signed_comparator;
 mod signextend;
 mod stop;
 mod swap;
@@ -56,6 +57,7 @@ use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
 use shl::ShlGadget;
+use signed_comparator::SignedComparatorGadget;
 use signextend::SignextendGadget;
 use stop::StopGadget;
 use swap::SwapGadget;
@@ -99,8 +101,9 @@ pub(crate) struct ExecutionConfig<F> {
     pc_gadget: PcGadget<F>,
     pop_gadget: PopGadget<F>,
     push_gadget: PushGadget<F>,
-    shl_gadget: ShlGadget<F>,
+    signed_comparator_gadget: SignedComparatorGadget<F>,
     signextend_gadget: SignextendGadget<F>,
+    shl_gadget: ShlGadget<F>,
     stop_gadget: StopGadget<F>,
     swap_gadget: SwapGadget<F>,
     msize_gadget: MsizeGadget<F>,
@@ -229,6 +232,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
             pop_gadget: configure_gadget!(),
             push_gadget: configure_gadget!(),
             shl_gadget: configure_gadget!(),
+            signed_comparator_gadget: configure_gadget!(),
             signextend_gadget: configure_gadget!(),
             stop_gadget: configure_gadget!(),
             swap_gadget: configure_gadget!(),
@@ -296,7 +300,8 @@ impl<F: FieldExt> ExecutionConfig<F> {
 
         // Push lookups of this ExecutionState to independent_lookups for
         // further configuration in configure_lookup.
-        independent_lookups.push(lookups);
+        independent_lookups
+            .push(lookups.iter().map(|(_, lookup)| lookup.clone()).collect());
 
         gadget
     }
@@ -390,7 +395,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
                 let mut offset = 0;
                 for transaction in &block.txs {
                     for step in &transaction.steps {
-                        let call = &transaction.calls[step.call_idx];
+                        let call = &transaction.calls[step.call_index];
 
                         self.q_step.enable(&mut region, offset)?;
                         if offset == 0 {
@@ -430,7 +435,7 @@ impl<F: FieldExt> ExecutionConfig<F> {
                 let mut offset = 0;
                 for transaction in &block.txs {
                     for step in &transaction.steps {
-                        let call = &transaction.calls[step.call_idx];
+                        let call = &transaction.calls[step.call_index];
 
                         self.q_step.enable(&mut region, offset)?;
                         self.assign_exec_step(
@@ -492,6 +497,9 @@ impl<F: FieldExt> ExecutionConfig<F> {
                 assign_exec_step!(self.signextend_gadget)
             }
             ExecutionState::CMP => assign_exec_step!(self.comparator_gadget),
+            ExecutionState::SCMP => {
+                assign_exec_step!(self.signed_comparator_gadget)
+            }
             ExecutionState::BYTE => assign_exec_step!(self.byte_gadget),
             ExecutionState::POP => assign_exec_step!(self.pop_gadget),
             ExecutionState::MEMORY => assign_exec_step!(self.memory_gadget),
@@ -505,8 +513,8 @@ impl<F: FieldExt> ExecutionConfig<F> {
             ExecutionState::PUSH => assign_exec_step!(self.push_gadget),
             ExecutionState::DUP => assign_exec_step!(self.dup_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
-            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::COINBASE => assign_exec_step!(self.coinbase_gadget),
+            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::ErrorOutOfGasPureMemory => {
                 assign_exec_step!(self.error_oog_pure_memory_gadget)
             }

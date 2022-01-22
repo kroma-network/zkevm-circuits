@@ -1,6 +1,5 @@
 use crate::{
     evm_circuit::{
-        param::MAX_BYTES_FIELD,
         table::{FixedTableTag, Lookup},
         util::{
             self, constraint_builder::ConstraintBuilder, from_bytes,
@@ -9,9 +8,10 @@ use crate::{
     },
     util::Expr,
 };
-use bus_mapping::eth_types::{ToLittleEndian, Word};
+use eth_types::{ToLittleEndian, ToScalar, Word};
 use halo2::plonk::Error;
 use halo2::{arithmetic::FieldExt, circuit::Region, plonk::Expression};
+use std::convert::TryFrom;
 
 /// Returns `1` when `value == 0`, and returns `0` otherwise.
 #[derive(Clone, Debug)]
@@ -178,16 +178,8 @@ impl<F: FieldExt, const N: usize> AddWordsGadget<F, N> {
 
         let carry_lo = (sum_of_addends_lo - sum_lo) >> 128;
         let carry_hi = (sum_of_addends_hi + carry_lo - sum_hi) >> 128;
-        self.carry_lo.assign(
-            region,
-            offset,
-            Some(F::from(carry_lo.low_u64())),
-        )?;
-        self.carry_hi.assign(
-            region,
-            offset,
-            Some(F::from(carry_hi.low_u64())),
-        )?;
+        self.carry_lo.assign(region, offset, carry_lo.to_scalar())?;
+        self.carry_hi.assign(region, offset, carry_hi.to_scalar())?;
 
         Ok(())
     }
@@ -467,9 +459,12 @@ impl<F: FieldExt> MulWordByU64Gadget<F> {
 
         let mut assign_quotient =
             |cells: &[Cell<F>], value: Word| -> Result<(), Error> {
-                for (cell, byte) in
-                    cells.iter().zip(value.low_u64().to_le_bytes().iter())
-                {
+                for (cell, byte) in cells.iter().zip(
+                    u64::try_from(value)
+                        .map_err(|_| Error::Synthesis)?
+                        .to_le_bytes()
+                        .iter(),
+                ) {
                     cell.assign(region, offset, Some(F::from(*byte as u64)))?;
                 }
                 Ok(())
@@ -494,20 +489,19 @@ impl<F: FieldExt> MulWordByU64Gadget<F> {
 }
 
 /// Requires that the passed in value is within the specified range.
-/// `NUM_BYTES` is required to be `<= 31`.
+/// `N_BYTES` is required to be `<= MAX_N_BYTES_INTEGER`.
 #[derive(Clone, Debug)]
-pub struct RangeCheckGadget<F, const NUM_BYTES: usize> {
-    parts: [Cell<F>; NUM_BYTES],
+pub struct RangeCheckGadget<F, const N_BYTES: usize> {
+    parts: [Cell<F>; N_BYTES],
 }
 
-impl<F: FieldExt, const NUM_BYTES: usize> RangeCheckGadget<F, NUM_BYTES> {
+impl<F: FieldExt, const N_BYTES: usize> RangeCheckGadget<F, N_BYTES> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         value: Expression<F>,
     ) -> Self {
-        assert!(NUM_BYTES <= 31, "number of bytes too large");
-
         let parts = cb.query_bytes();
+
         // Require that the reconstructed value from the parts equals the
         // original value
         cb.require_equal(
@@ -534,33 +528,31 @@ impl<F: FieldExt, const NUM_BYTES: usize> RangeCheckGadget<F, NUM_BYTES> {
 }
 
 /// Returns `1` when `lhs < rhs`, and returns `0` otherwise.
-/// lhs and rhs `< 256**NUM_BYTES`
-/// `NUM_BYTES` is required to be `<= MAX_BYTES_FIELD` to prevent overflow:
-/// values are stored in a single field element and two of these
-/// are added together.
+/// lhs and rhs `< 256**N_BYTES`
+/// `N_BYTES` is required to be `<= MAX_N_BYTES_INTEGER` to prevent overflow:
+/// values are stored in a single field element and two of these are added
+/// together.
 /// The equation that is enforced is `lhs - rhs == diff - (lt * range)`.
-/// Because all values are `<= 256**NUM_BYTES` and `lt` is boolean,
-///  `lt` can only be `1` when `lhs < rhs`.
+/// Because all values are `<= 256**N_BYTES` and `lt` is boolean, `lt` can only
+/// be `1` when `lhs < rhs`.
 #[derive(Clone, Debug)]
-pub struct LtGadget<F, const NUM_BYTES: usize> {
+pub struct LtGadget<F, const N_BYTES: usize> {
     lt: Cell<F>, // `1` when `lhs < rhs`, `0` otherwise.
-    diff: [Cell<F>; NUM_BYTES], /* The byte values of `diff`.
+    diff: [Cell<F>; N_BYTES], /* The byte values of `diff`.
                   * `diff` equals `lhs - rhs` if `lhs >= rhs`,
                   * `lhs - rhs + range` otherwise. */
-    range: F, // The range of the inputs, `256**NUM_BYTES`
+    range: F, // The range of the inputs, `256**N_BYTES`
 }
 
-impl<F: FieldExt, const NUM_BYTES: usize> LtGadget<F, NUM_BYTES> {
+impl<F: FieldExt, const N_BYTES: usize> LtGadget<F, N_BYTES> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         lhs: Expression<F>,
         rhs: Expression<F>,
     ) -> Self {
-        assert!(NUM_BYTES <= MAX_BYTES_FIELD, "unsupported number of bytes");
-
         let lt = cb.query_bool();
         let diff = cb.query_bytes();
-        let range = pow_of_two(NUM_BYTES * 8);
+        let range = pow_of_two(N_BYTES * 8);
 
         // The equation we require to hold: `lhs - rhs == diff - (lt * range)`.
         cb.require_equal(
@@ -588,7 +580,7 @@ impl<F: FieldExt, const NUM_BYTES: usize> LtGadget<F, NUM_BYTES> {
         self.lt.assign(
             region,
             offset,
-            Some(F::from(if lt { 1 } else { 0 })),
+            Some(if lt { F::one() } else { F::zero() }),
         )?;
 
         // Set the bytes of diff
@@ -609,21 +601,21 @@ impl<F: FieldExt, const NUM_BYTES: usize> LtGadget<F, NUM_BYTES> {
 /// Returns (lt, eq):
 /// - `lt` is `1` when `lhs < rhs`, `0` otherwise.
 /// - `eq` is `1` when `lhs == rhs`, `0` otherwise.
-/// lhs and rhs `< 256**NUM_BYTES`
-/// `NUM_BYTES` is required to be `<= MAX_BYTES_FIELD`.
+/// lhs and rhs `< 256**N_BYTES`
+/// `N_BYTES` is required to be `<= MAX_N_BYTES_INTEGER`.
 #[derive(Clone, Debug)]
-pub struct ComparisonGadget<F, const NUM_BYTES: usize> {
-    lt: LtGadget<F, NUM_BYTES>,
+pub struct ComparisonGadget<F, const N_BYTES: usize> {
+    lt: LtGadget<F, N_BYTES>,
     eq: IsZeroGadget<F>,
 }
 
-impl<F: FieldExt, const NUM_BYTES: usize> ComparisonGadget<F, NUM_BYTES> {
+impl<F: FieldExt, const N_BYTES: usize> ComparisonGadget<F, N_BYTES> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         lhs: Expression<F>,
         rhs: Expression<F>,
     ) -> Self {
-        let lt = LtGadget::<F, NUM_BYTES>::construct(cb, lhs, rhs);
+        let lt = LtGadget::<F, N_BYTES>::construct(cb, lhs, rhs);
         let eq = IsZeroGadget::<F>::construct(cb, sum::expr(&lt.diff_bytes()));
 
         Self { lt, eq }
@@ -706,55 +698,58 @@ impl<F: FieldExt> PairSelectGadget<F> {
     }
 }
 
-/// Returns (quotient: numerator/divisor, remainder: numerator%divisor),
-/// with `numerator` an expression and `divisor` a constant.
+/// Returns (quotient: numerator/denominator, remainder: numerator%denominator),
+/// with `numerator` an expression and `denominator` a constant.
 /// Input requirements:
-/// - `quotient < 256**NUM_BYTES`
-/// - `quotient * divisor < field size`
-/// - `remainder < divisor` currently requires a lookup table for `divisor`
+/// - `quotient < 256**N_BYTES`
+/// - `quotient * denominator < field size`
+/// - `remainder < denominator` requires a range lookup table for `denominator`
 #[derive(Clone, Debug)]
-pub struct ConstantDivisionGadget<F, const NUM_BYTES: usize> {
+pub struct ConstantDivisionGadget<F, const N_BYTES: usize> {
     quotient: Cell<F>,
     remainder: Cell<F>,
-    divisor: u64,
-    quotient_range_check: RangeCheckGadget<F, NUM_BYTES>,
+    denominator: u64,
+    quotient_range_check: RangeCheckGadget<F, N_BYTES>,
 }
 
-impl<F: FieldExt, const NUM_BYTES: usize> ConstantDivisionGadget<F, NUM_BYTES> {
+impl<F: FieldExt, const N_BYTES: usize> ConstantDivisionGadget<F, N_BYTES> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         numerator: Expression<F>,
-        divisor: u64,
+        denominator: u64,
     ) -> Self {
         let quotient = cb.query_cell();
         let remainder = cb.query_cell();
 
-        // Require that remainder < divisor
-        cb.range_lookup(remainder.expr(), divisor);
+        // Require that remainder < denominator
+        cb.range_lookup(remainder.expr(), denominator);
 
-        // Require that quotient < 2**NUM_BYTES
-        // so we can't have any overflow when doing `quotient * divisor`.
+        // Require that quotient < 2**N_BYTES
+        // so we can't have any overflow when doing `quotient * denominator`.
         let quotient_range_check =
             RangeCheckGadget::construct(cb, quotient.expr());
 
         // Check if the division was done correctly
         cb.require_equal(
-            "lhnumerator - remainder == quotient ⋅ divisor",
+            "numerator - remainder == quotient ⋅ denominator",
             numerator - remainder.expr(),
-            quotient.expr() * divisor.expr(),
+            quotient.expr() * denominator.expr(),
         );
 
         Self {
             quotient,
             remainder,
-            divisor,
+            denominator,
             quotient_range_check,
         }
     }
 
-    pub(crate) fn expr(&self) -> (Expression<F>, Expression<F>) {
-        // Return the quotient and the remainder
-        (self.quotient.expr(), self.remainder.expr())
+    pub(crate) fn quotient(&self) -> Expression<F> {
+        self.quotient.expr()
+    }
+
+    pub(crate) fn remainder(&self) -> Expression<F> {
+        self.remainder.expr()
     }
 
     pub(crate) fn assign(
@@ -763,9 +758,10 @@ impl<F: FieldExt, const NUM_BYTES: usize> ConstantDivisionGadget<F, NUM_BYTES> {
         offset: usize,
         numerator: u128,
     ) -> Result<(u128, u128), Error> {
-        let divisor = self.divisor as u128;
-        let quotient = numerator / divisor;
-        let remainder = numerator % divisor;
+        let denominator = self.denominator as u128;
+        let quotient = numerator / denominator;
+        let remainder = numerator % denominator;
+
         self.quotient
             .assign(region, offset, Some(F::from_u128(quotient)))?;
         self.remainder
@@ -782,27 +778,33 @@ impl<F: FieldExt, const NUM_BYTES: usize> ConstantDivisionGadget<F, NUM_BYTES> {
 }
 
 /// Returns `rhs` when `lhs < rhs`, and returns `lhs` otherwise.
-/// lhs and rhs `< 256**NUM_BYTES`
-/// `NUM_BYTES` is required to be `<= 31`.
+/// lhs and rhs `< 256**N_BYTES`
+/// `N_BYTES` is required to be `<= MAX_N_BYTES_INTEGER`.
 #[derive(Clone, Debug)]
-pub struct MaxGadget<F, const NUM_BYTES: usize> {
-    lt: LtGadget<F, NUM_BYTES>,
+pub struct MinMaxGadget<F, const N_BYTES: usize> {
+    lt: LtGadget<F, N_BYTES>,
+    min: Expression<F>,
     max: Expression<F>,
 }
 
-impl<F: FieldExt, const NUM_BYTES: usize> MaxGadget<F, NUM_BYTES> {
+impl<F: FieldExt, const N_BYTES: usize> MinMaxGadget<F, N_BYTES> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         lhs: Expression<F>,
         rhs: Expression<F>,
     ) -> Self {
         let lt = LtGadget::construct(cb, lhs.clone(), rhs.clone());
-        let max = select::expr(lt.expr(), rhs, lhs);
+        let max = select::expr(lt.expr(), rhs.clone(), lhs.clone());
+        let min = select::expr(lt.expr(), lhs, rhs);
 
-        Self { lt, max }
+        Self { lt, min, max }
     }
 
-    pub(crate) fn expr(&self) -> Expression<F> {
+    pub(crate) fn min(&self) -> Expression<F> {
+        self.min.clone()
+    }
+
+    pub(crate) fn max(&self) -> Expression<F> {
         self.max.clone()
     }
 
@@ -812,25 +814,29 @@ impl<F: FieldExt, const NUM_BYTES: usize> MaxGadget<F, NUM_BYTES> {
         offset: usize,
         lhs: F,
         rhs: F,
-    ) -> Result<F, Error> {
+    ) -> Result<(F, F), Error> {
         let (lt, _) = self.lt.assign(region, offset, lhs, rhs)?;
-        Ok(select::value(lt, rhs, lhs))
+        Ok(if lt.is_zero_vartime() {
+            (rhs, lhs)
+        } else {
+            (lhs, rhs)
+        })
     }
 }
 
-//generating Lagrange base polynomial for a cell.
-//the polynomial will equal to 1 when cell equals to idx,otherwise 0.
-//the cell's domain will be 0..domain_size
+// This function generates Lagrange polynomial given a cell, index, and domain
+// size. The polynomial will be equal to 1 when `cell == idx`, otherwise 0.
+// The value of the cell needs to be in the range [0, domain_size)
 fn generate_lagrange_base_polynomial<F: FieldExt>(
     cell: Cell<F>,
     idx: u64,
     domain_size: u64,
 ) -> Expression<F> {
-    let mut base_ploy = 1.expr();
+    let mut base_poly = 1.expr();
     let mut accumulated_inverse = 1.expr();
     for x in 0..domain_size {
         if x != idx {
-            base_ploy = base_ploy * (cell.expr() - x.expr());
+            base_poly = base_poly * (cell.expr() - x.expr());
             let inverse = if x < idx {
                 F::from_u128((idx - x) as u128).invert().unwrap()
             } else {
@@ -839,7 +845,7 @@ fn generate_lagrange_base_polynomial<F: FieldExt>(
             accumulated_inverse = accumulated_inverse * inverse;
         }
     }
-    base_ploy * accumulated_inverse
+    base_poly * accumulated_inverse
 }
 
 #[derive(Clone, Debug)]
@@ -847,15 +853,23 @@ pub struct ShlWordsGadget<F> {
     a: util::Word<F>,
     shift: util::Word<F>,
     b: util::Word<F>,
+    // slice_front means the higher part of split digit
+    // slice_back means the lower part of the split digit
     a_slice_front: [Cell<F>; 32],
     a_slice_back: [Cell<F>; 32],
-    shift_div_by_64: Cell<F>,
-    shift_mod_by_64_div_by_8: Cell<F>,
-    shift_mod_by_64_decpow: Cell<F>, // means 2^(8-shift_mod_by_64)
-    shift_mod_by_64_pow: Cell<F>,    // means 2^shift_mod_by_64
-    shift_mod_by_8: Cell<F>,
+    // shift_div64, shift_mod64_div8, shift_mod8
+    // is used to seperate shift[0]
+    shift_div64: Cell<F>,
+    shift_mod64_div8: Cell<F>,
+    shift_mod64_decpow: Cell<F>, // means 2^(8-shift_mod64)
+    shift_mod64_pow: Cell<F>,    // means 2^shift_mod64
+    shift_mod8: Cell<F>,
+    // if combination of shift[1..32] == 0
+    // shift_overflow will be equal to 0, otherwise 1.
+    shift_overflow: Cell<F>,
+    // is_zero will check combination of shift[1..32] == 0
+    is_zero: IsZeroGadget<F>,
 }
-
 impl<F: FieldExt> ShlWordsGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
@@ -865,20 +879,39 @@ impl<F: FieldExt> ShlWordsGadget<F> {
         let b = cb.query_word();
         let a_slice_front = array_init::array_init(|_| cb.query_byte());
         let a_slice_back = array_init::array_init(|_| cb.query_byte());
-        let shift_div_by_64 = cb.query_cell();
-        let shift_mod_by_64_div_by_8 = cb.query_cell();
-        let shift_mod_by_64_decpow = cb.query_cell();
-        let shift_mod_by_64_pow = cb.query_cell();
-        let shift_mod_by_8 = cb.query_cell();
+        let shift_div64 = cb.query_cell();
+        let shift_mod64_div8 = cb.query_cell();
+        let shift_mod64_decpow = cb.query_cell();
+        let shift_mod64_pow = cb.query_cell();
+        let shift_mod8 = cb.query_cell();
+        let shift_overflow = cb.query_bool();
 
-        let shift_mod_by_64 =
-            8.expr() * shift_mod_by_64_div_by_8.expr() + shift_mod_by_8.expr();
+        // check (combination of shift[1..32] == 0) == 1 - shift_overflow
+        let mut sum = 0.expr();
+        (1..32).for_each(|idx| sum = sum.clone() + shift.cells[idx].expr());
+        let is_zero = IsZeroGadget::construct(cb, sum);
         cb.require_equal(
-            "shift == shift_div_by_64 * 64 + shift_mod_by_64_div_by_8 * 8 + shift_mod_by_8",
-            shift.expr(),
-            shift_div_by_64.expr() * 64.expr() + shift_mod_by_64.clone(),
+            "shift_overflow == shift > 256 ",
+            shift_overflow.expr(),
+            1.expr() - is_zero.expr(),
         );
 
+        // rename variable:
+        // shift_div64 :a
+        // shift_mod64_div8:b
+        // shift_mod8:c
+        // we split shift[0] to the equation:
+        // shift[0] == a * 64 + b * 8 + c
+        let shift_mod64 =
+            8.expr() * shift_mod64_div8.expr() + shift_mod8.expr();
+        cb.require_equal(
+            "shift[0] == shift_div64 * 64 + shift_mod64_div8 * 8 + shift_mod8",
+            shift.cells[0].expr(),
+            shift_div64.expr() * 64.expr() + shift_mod64.clone(),
+        );
+
+        // merge 8 8-bit cell for a 64-bit expression
+        // for a, a_slice_front, a_slice_back, b
         let mut a_digits = vec![];
         let mut a_slice_front_digits = vec![];
         let mut a_slice_back_digits = vec![];
@@ -886,37 +919,40 @@ impl<F: FieldExt> ShlWordsGadget<F> {
         for virtual_idx in 0..4 {
             let now_idx = (virtual_idx * 8) as usize;
             a_digits.push(from_bytes::expr(&a.cells[now_idx..now_idx + 8]));
-            a_slice_front_digits
-                .push(from_bytes::expr(&a_slice_front[now_idx..now_idx + 8]));
             a_slice_back_digits
                 .push(from_bytes::expr(&a_slice_back[now_idx..now_idx + 8]));
+            a_slice_front_digits
+                .push(from_bytes::expr(&a_slice_front[now_idx..now_idx + 8]));
             b_digits.push(from_bytes::expr(&b.cells[now_idx..now_idx + 8]));
         }
 
-        let mut shl_constraints = vec![];
-        for idx in 0..4 {
-            shl_constraints.push(0.expr());
-        }
+        // check combination of a_slice_back_digits and a_slice_front_digits
+        // == b_digits
+        let mut shl_constraints =
+            (0..4).map(|_| 0.expr()).collect::<Vec<Expression<F>>>();
         for transplacement in (0_usize)..(4_usize) {
+            // generate the polynomial depends on the shift_div64
             let select_transplacement_polynomial =
                 generate_lagrange_base_polynomial(
-                    shift_div_by_64.clone(),
+                    shift_div64.clone(),
                     transplacement as u64,
-                    4_u64,
+                    4u64,
                 );
             for idx in 0..(4 - transplacement) {
                 let tmpidx = idx + transplacement;
                 let merge_a = if idx == (0_usize) {
-                    a_slice_back_digits[idx].clone()
-                        * shift_mod_by_64_pow.expr()
+                    a_slice_back_digits[idx].clone() * shift_mod64_pow.expr()
                 } else {
-                    a_slice_back_digits[idx].clone()
-                        * shift_mod_by_64_pow.expr()
+                    a_slice_back_digits[idx].clone() * shift_mod64_pow.expr()
                         + a_slice_front_digits[idx - 1].clone()
                 };
                 shl_constraints[tmpidx] = shl_constraints[tmpidx].clone()
                     + select_transplacement_polynomial.clone()
-                        * (merge_a - b_digits[tmpidx].clone());
+                        * select::expr(
+                            shift_overflow.expr(),
+                            b_digits[tmpidx].clone(),
+                            merge_a - b_digits[tmpidx].clone(),
+                        );
             }
             for idx in 0..transplacement {
                 shl_constraints[idx] = shl_constraints[idx].clone()
@@ -924,26 +960,30 @@ impl<F: FieldExt> ShlWordsGadget<F> {
                         * b_digits[idx].clone();
             }
         }
-
-        for idx in 0..4 {
+        (0..4).for_each(|idx|
             cb.require_zero(
                 "merge a_slice_back_digits and a_slice_front_digits == b_digits",
                 shl_constraints[idx].clone(),
-            );
+            )
+        );
+
+        // for i in 0..4
+        // a_slice_back_digits[i] + a_slice_front_digits * shift_mod64_decpow
+        // == a_digits[i]
+        for idx in 0..4 {
             cb.require_equal(
-                "a[idx] == a_slice_back[idx] + a_slice_front[idx] * shift_mod_by_64_decpow",
-                a_slice_back_digits[idx].clone() + a_slice_front_digits[idx].clone() * shift_mod_by_64_decpow.expr(),
+                "a[idx] == a_slice_back[idx] + a_slice_front[idx] * shift_mod64_decpow",
+                a_slice_back_digits[idx].clone() + a_slice_front_digits[idx].clone() * shift_mod64_decpow.expr(),
                 a_digits[idx].clone(),
             );
         }
 
-        //check serveral higher cells equal to zero for slice_back and
-        // slice_front
+        // check serveral higher cells == 0 for slice_back and slice_front
         let mut equal_to_zero = 0.expr();
         for digit_transplacement in 0..8 {
             let select_transplacement_polynomial =
                 generate_lagrange_base_polynomial(
-                    shift_mod_by_64_div_by_8.clone(),
+                    shift_mod64_div8.clone(),
                     digit_transplacement as u64,
                     8u64,
                 );
@@ -963,25 +1003,14 @@ impl<F: FieldExt> ShlWordsGadget<F> {
             }
         }
 
-        //0 <= shift[i] < 256
-        //i = 1..32
-        //check shift[i] = 0
-        for idx in 1..32 {
-            equal_to_zero = equal_to_zero + shift.cells[idx].expr();
-        }
-        cb.require_zero(
-            "several higher part of slice should be zero.",
-            equal_to_zero,
-        );
-
-        //check the specific 4 cells for shift_mod_by_8 bits and 4 cells for
-        // (8 - shift_mod_by_8) bits.
+        //check the specific 4 cells in 0..(1 << shift_mod8).
+        //check another specific 4 cells in 0..(1 << (8 - shift_mod8)).
         for virtual_idx in 0..4 {
             let mut slice_bits_polynomial = vec![0.expr(), 0.expr()];
             for digit_transplacement in 0..8 {
                 let select_transplacement_polynomial =
                     generate_lagrange_base_polynomial(
-                        shift_mod_by_64_div_by_8.clone(),
+                        shift_mod64_div8.clone(),
                         digit_transplacement as u64,
                         8u64,
                     );
@@ -995,47 +1024,66 @@ impl<F: FieldExt> ShlWordsGadget<F> {
                     + select_transplacement_polynomial.clone()
                         * a_slice_back[nowidx].expr();
             }
-            cb.add_lookup(Lookup::Fixed {
-                tag: FixedTableTag::Bitslevel.expr(),
-                values: [
-                    shift_mod_by_8.expr(),
-                    slice_bits_polynomial[0].clone(),
-                    0.expr(),
-                ],
-            });
-            cb.add_lookup(Lookup::Fixed {
-                tag: FixedTableTag::Bitslevel.expr(),
-                values: [
-                    8.expr() - shift_mod_by_8.expr(),
-                    slice_bits_polynomial[1].clone(),
-                    0.expr(),
-                ],
-            });
+            cb.add_lookup(
+                "slice_bits range lookup",
+                Lookup::Fixed {
+                    tag: FixedTableTag::Bitslevel.expr(),
+                    values: [
+                        shift_mod8.expr(),
+                        slice_bits_polynomial[0].clone(),
+                        0.expr(),
+                    ],
+                },
+            );
+            cb.add_lookup(
+                "slice_bits range lookup",
+                Lookup::Fixed {
+                    tag: FixedTableTag::Bitslevel.expr(),
+                    values: [
+                        8.expr() - shift_mod8.expr(),
+                        slice_bits_polynomial[1].clone(),
+                        0.expr(),
+                    ],
+                },
+            );
         }
 
-        //check 2^shift_mod_by_64 == shift_mod_by_64_pow &&
-        // 2^(8-shift_mod_by_64) == shift_mod_by_64_pow
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Pow64.expr(),
-            values: [
-                shift_mod_by_64,
-                shift_mod_by_64_pow.expr(),
-                shift_mod_by_64_decpow.expr(),
-            ],
-        });
+        // check:
+        // 2^shift_mod64 == shift_mod64_pow
+        // 2^(8-shift_mod64) == shift_mod64_decpow
+        cb.add_lookup(
+            "pow_of_two lookup",
+            Lookup::Fixed {
+                tag: FixedTableTag::Pow64.expr(),
+                values: [
+                    shift_mod64,
+                    shift_mod64_pow.expr(),
+                    shift_mod64_decpow.expr(),
+                ],
+            },
+        );
 
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Bitslevel.expr(),
-            values: [2.expr(), shift_div_by_64.expr(), 0.expr()],
-        });
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Bitslevel.expr(),
-            values: [3.expr(), shift_mod_by_64_div_by_8.expr(), 0.expr()],
-        });
-        cb.add_lookup(Lookup::Fixed {
-            tag: FixedTableTag::Bitslevel.expr(),
-            values: [3.expr(), shift_mod_by_8.expr(), 0.expr()],
-        });
+        cb.add_lookup(
+            "shift_div64 range lookup",
+            Lookup::Fixed {
+                tag: FixedTableTag::Bitslevel.expr(),
+                values: [2.expr(), shift_div64.expr(), 0.expr()],
+            },
+        );
+        cb.add_lookup(
+            "shift_mod64_div8 range lookup",
+            Lookup::Fixed {
+                tag: FixedTableTag::Bitslevel.expr(),
+                values: [3.expr(), shift_mod64_div8.expr(), 0.expr()],
+            },
+        );
+        cb.add_lookup(
+            "shift_mod8 range lookup",
+            Lookup::Fixed {
+                tag: FixedTableTag::Bitslevel.expr(),
+                values: [3.expr(), shift_mod8.expr(), 0.expr()],
+            },
+        );
 
         Self {
             a,
@@ -1043,11 +1091,13 @@ impl<F: FieldExt> ShlWordsGadget<F> {
             b,
             a_slice_front,
             a_slice_back,
-            shift_div_by_64,
-            shift_mod_by_64_div_by_8,
-            shift_mod_by_64_decpow,
-            shift_mod_by_64_pow,
-            shift_mod_by_8,
+            shift_div64,
+            shift_mod64_div8,
+            shift_mod64_decpow,
+            shift_mod64_pow,
+            shift_mod8,
+            shift_overflow,
+            is_zero,
         }
     }
 
@@ -1080,13 +1130,12 @@ impl<F: FieldExt> ShlWordsGadget<F> {
     ) -> Result<(), Error> {
         let a8s = wa.to_le_bytes();
         let shift = wshift.to_le_bytes()[0] as u128;
-        let shift_div_by_64 = shift / 64;
-        let shift_mod_by_64_div_by_8 = shift % 64 / 8;
-        let shift_mod_by_64 = shift % 64;
-        let shift_mod_by_64_pow = 1u128 << shift_mod_by_64;
-        let shift_mod_by_64_decpow =
-            (1u128 << 64) / (shift_mod_by_64_pow as u128);
-        let shift_mod_by_8 = shift % 8;
+        let shift_div64 = shift / 64;
+        let shift_mod64_div8 = shift % 64 / 8;
+        let shift_mod64 = shift % 64;
+        let shift_mod64_pow = 1u128 << shift_mod64;
+        let shift_mod64_decpow = (1u128 << 64) / (shift_mod64_pow as u128);
+        let shift_mod8 = shift % 8;
         let mut a_slice_front = [0u8; 32];
         let mut a_slice_back = [0u8; 32];
         for virtual_idx in 0..4 {
@@ -1095,20 +1144,16 @@ impl<F: FieldExt> ShlWordsGadget<F> {
                 let now_idx = virtual_idx * 8 + idx;
                 tmp_a += (1u64 << (8 * idx)) * (a8s[now_idx] as u64);
             }
-            let mut slice_back = if shift_mod_by_64 == 0 {
+            let mut slice_back = if shift_mod64 == 0 {
                 tmp_a
             } else {
-                tmp_a % (1u64 << (64 - shift_mod_by_64))
+                tmp_a % (1u64 << (64 - shift_mod64))
             };
-            let mut slice_front = if shift_mod_by_64 == 0 {
+            let mut slice_front = if shift_mod64 == 0 {
                 0
             } else {
-                tmp_a / (1u64 << (64 - shift_mod_by_64))
+                tmp_a / (1u64 << (64 - shift_mod64))
             };
-            assert_eq!(
-                slice_front * (1u64 << (64 - shift_mod_by_64)) + slice_back,
-                tmp_a
-            );
             for idx in 0..8 {
                 let now_idx = virtual_idx * 8 + idx;
                 a_slice_back[now_idx] = (slice_back % (1 << 8)) as u8;
@@ -1131,32 +1176,42 @@ impl<F: FieldExt> ShlWordsGadget<F> {
                 assignee.assign(region, offset, Some(F::from(*bt as u64)))?;
                 Ok(())
             })?;
-        self.shift_div_by_64.assign(
+        self.shift_div64.assign(
             region,
             offset,
-            Some(F::from_u128(shift_div_by_64)),
+            Some(F::from_u128(shift_div64)),
         )?;
-        self.shift_mod_by_64_div_by_8.assign(
+        self.shift_mod64_div8.assign(
             region,
             offset,
-            Some(F::from_u128(shift_mod_by_64_div_by_8)),
+            Some(F::from_u128(shift_mod64_div8)),
         )?;
-        self.shift_mod_by_64_decpow.assign(
+        self.shift_mod64_decpow.assign(
             region,
             offset,
-            Some(F::from_u128(shift_mod_by_64_decpow)),
+            Some(F::from_u128(shift_mod64_decpow)),
         )?;
-        self.shift_mod_by_64_pow.assign(
+        self.shift_mod64_pow.assign(
             region,
             offset,
-            Some(F::from_u128(shift_mod_by_64_pow)),
+            Some(F::from_u128(shift_mod64_pow)),
         )?;
-        self.shift_mod_by_8.assign(
+        self.shift_mod8.assign(
             region,
             offset,
-            Some(F::from_u128(shift_mod_by_8)),
+            Some(F::from_u128(shift_mod8)),
         )?;
 
+        let mut sum: u128 = 0;
+        wshift.to_le_bytes().iter().for_each(|v| sum += *v as u128);
+        sum -= shift as u128;
+        let shift_overflow = sum != 0;
+        self.is_zero.assign(region, offset, F::from_u128(sum))?;
+        self.shift_overflow.assign(
+            region,
+            offset,
+            Some(F::from_u128(shift_overflow as u128)),
+        )?;
         Ok(())
     }
 }
