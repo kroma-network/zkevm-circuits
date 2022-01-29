@@ -13,6 +13,7 @@ use crate::{
     },
     util::Expr,
 };
+use eth_types::Word;
 use halo2::{arithmetic::FieldExt, circuit::Region, plonk::Error};
 
 #[derive(Clone, Debug)]
@@ -71,7 +72,12 @@ impl<F: FieldExt> ExecutionGadget<F> for DivGadget<F> {
             [step.rw_indices[0], step.rw_indices[1], step.rw_indices[2]];
         let [dividend, divisor, quotient] =
             indices.map(|idx| block.rws[idx].stack_value());
-        let remainder = dividend - divisor * quotient;
+        let zero = Word::from_big_endian(&[0u8; 32]);
+        let remainder = if divisor != zero {
+            dividend - divisor * quotient
+        } else {
+            zero
+        };
         self.div_words
             .assign(region, offset, dividend, divisor, quotient, remainder)
     }
@@ -104,6 +110,11 @@ mod test {
             OpcodeId::DIV,
             Word::from_big_endian(&[255u8; 32]),
             0xABCDEF.into(),
+        );
+        test_ok(
+            OpcodeId::DIV,
+            Word::from_big_endian(&[255u8; 32]),
+            0x0.into(),
         );
     }
 

@@ -830,6 +830,9 @@ pub(crate) struct DivWordsGadget<F> {
     v0: [Cell<F>; 9],
     lt_lo: LtGadget<F, 16>,
     comparison_hi: ComparisonGadget<F, 16>,
+    divisor_is_zero: IsZeroGadget<F>,
+    quotient_is_zero: IsZeroGadget<F>,
+    remainder_is_zero: IsZeroGadget<F>,
 }
 
 impl<F: FieldExt> DivWordsGadget<F> {
@@ -845,6 +848,7 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let mut dividend_limbs = vec![];
         let mut divisor_limbs = vec![];
         let mut quotient_limbs = vec![];
+        let mut remainder_limbs = vec![];
         for idx in 0..4 {
             let now_idx = (idx * 8) as usize;
             dividend_limbs
@@ -853,12 +857,20 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 .push(from_bytes::expr(&divisor.cells[now_idx..now_idx + 8]));
             quotient_limbs
                 .push(from_bytes::expr(&quotient.cells[now_idx..now_idx + 8]));
+            remainder_limbs
+                .push(from_bytes::expr(&remainder.cells[now_idx..now_idx + 8]));
         }
+        // radix_constant_64 == 2^64
+        // radix_constant_128 == 2^128
+        let radix_constant_64 = pow_of_two_expr(64);
+        let radix_constant_128 = pow_of_two_expr(128);
         let dividend_lo = from_bytes::expr(&dividend.cells[0..16]);
         let dividend_hi = from_bytes::expr(&dividend.cells[16..32]);
-        let remainder_lo = from_bytes::expr(&remainder.cells[0..16]);
-        let remainder_hi = from_bytes::expr(&remainder.cells[16..32]);
+        let remainder_lo = remainder_limbs[0].clone()
+            + remainder_limbs[1].clone() * radix_constant_64.clone();
 
+        let remainder_hi = remainder_limbs[2].clone()
+            + remainder_limbs[3].clone() * radix_constant_64.clone();
         let t0 = divisor_limbs[0].clone() * quotient_limbs[0].clone();
         let t1 = divisor_limbs[0].clone() * quotient_limbs[1].clone()
             + divisor_limbs[1].clone() * quotient_limbs[0].clone();
@@ -876,6 +888,29 @@ impl<F: FieldExt> DivWordsGadget<F> {
             + divisor_limbs[3].clone() * quotient_limbs[2].clone()
             + divisor_limbs[3].clone() * quotient_limbs[1].clone();
 
+        // when divisor == 0, quotient == 0.
+        let mut divisor_sum = 0.expr();
+        let mut quotient_sum = 0.expr();
+        let mut remainder_sum = 0.expr();
+        (0..4).for_each(|idx| {
+            divisor_sum = divisor_sum.clone() + divisor_limbs[idx].clone();
+            quotient_sum = quotient_sum.clone() + quotient_limbs[idx].clone();
+            remainder_sum =
+                remainder_sum.clone() + remainder_limbs[idx].clone();
+        });
+        let divisor_is_zero = IsZeroGadget::construct(cb, divisor_sum);
+        let quotient_is_zero = IsZeroGadget::construct(cb, quotient_sum);
+        let remainder_is_zero = IsZeroGadget::construct(cb, remainder_sum);
+        cb.require_zero(
+            "quotient == 0 && remainder == 0 when divisor == 0",
+            select::expr(
+                divisor_is_zero.expr(),
+                (1.expr() - quotient_is_zero.expr())
+                    * (1.expr() - remainder_is_zero.expr()),
+                0.expr(),
+            ),
+        );
+
         let cur_v0 = from_bytes::expr(&v0[..]);
 
         let lt_lo = LtGadget::construct(
@@ -890,23 +925,31 @@ impl<F: FieldExt> DivWordsGadget<F> {
         );
         let (lt_hi, eq_hi) = comparison_hi.expr();
         let lt = select::expr(lt_hi, 1.expr(), eq_hi * lt_lo.expr());
-        cb.require_equal("remainder < quotient", 1.expr(), lt);
+        cb.require_equal(
+            "remainder < divisor when divisor != 0",
+            1.expr(),
+            select::expr(divisor_is_zero.expr(), 1.expr(), lt),
+        );
 
-        // radix_constant_64 == 2^64
-        // radix_constant_128 == 2^128
-        let radix_constant_64 = pow_of_two_expr(64);
-        let radix_constant_128 = pow_of_two_expr(128);
         cb.require_equal(
             "product(quotient, divisor)_lo + remainders_lo == dividends_lo + carry_lo ⋅ 2^128",
             t0.expr() + t1.expr() * radix_constant_64.clone()
                 + remainder_lo,
-            cur_v0.clone() * radix_constant_128 + dividend_lo,
+            select::expr(
+                divisor_is_zero.expr(),
+                0.expr(),
+                cur_v0.clone() * radix_constant_128 + dividend_lo,
+            ),
         );
         cb.require_equal(
             "product(quotient, divisor)_high + remainders_high == dividends_high",
             cur_v0 + t2.expr() + t3.expr() * radix_constant_64
                 + remainder_hi,
-            dividend_hi,
+            select::expr(
+                divisor_is_zero.expr(),
+                0.expr(),
+                dividend_hi,
+            ),
         );
         cb.require_zero(
             "overflow of product(quotient, divisor) == 0",
@@ -921,6 +964,9 @@ impl<F: FieldExt> DivWordsGadget<F> {
             v0,
             lt_lo,
             comparison_hi,
+            divisor_is_zero,
+            quotient_is_zero,
+            remainder_is_zero,
         }
     }
 
@@ -977,6 +1023,9 @@ impl<F: FieldExt> DivWordsGadget<F> {
         let b_limbs = quotient.to_u64_digits();
         let c_limbs = dividend.to_u64_digits();
         let d_limbs = remainder.to_u64_digits();
+        let mut divisor_sum = 0u128;
+        let mut quotient_sum = 0u128;
+        let mut remainder_sum = 0u128;
         let mut t_digits = vec![];
 
         // a->divisor
@@ -1002,6 +1051,24 @@ impl<F: FieldExt> DivWordsGadget<F> {
             }
             t_digits.push(rhs_sum);
         }
+
+        (0..4).for_each(|idx| {
+            divisor_sum += if a_limbs.len() > idx {
+                a_limbs[idx] as u128
+            } else {
+                0u128
+            };
+            quotient_sum += if b_limbs.len() > idx {
+                b_limbs[idx] as u128
+            } else {
+                0u128
+            };
+            remainder_sum += if d_limbs.len() > idx {
+                d_limbs[idx] as u128
+            } else {
+                0u128
+            };
+        });
 
         let mut c_now = vec![];
         let mut d_now = vec![];
@@ -1030,9 +1097,12 @@ impl<F: FieldExt> DivWordsGadget<F> {
             d_now.push(d_now_digit_lo + d_now_digit_hi * constant_64.clone());
         }
 
-        let v0 = (constant_64 * &t_digits[1] + &t_digits[0] + &d_now[0]
-            - &c_now[0])
-            / &constant_128;
+        let v0 = if divisor_sum != 0 {
+            (constant_64 * &t_digits[1] + &t_digits[0] + &d_now[0] - &c_now[0])
+                / &constant_128
+        } else {
+            0u64.into()
+        };
 
         v0.to_bytes_le()
             .into_iter()
@@ -1072,7 +1142,21 @@ impl<F: FieldExt> DivWordsGadget<F> {
                 from_bytes::value(&divisor8s[16..divisor8s.len()])
             },
         )?;
-
+        self.divisor_is_zero.assign(
+            region,
+            offset,
+            F::from_u128(divisor_sum),
+        )?;
+        self.quotient_is_zero.assign(
+            region,
+            offset,
+            F::from_u128(quotient_sum),
+        )?;
+        self.remainder_is_zero.assign(
+            region,
+            offset,
+            F::from_u128(remainder_sum),
+        )?;
         Ok(())
     }
 }
