@@ -1,5 +1,5 @@
 use super::Opcode;
-use crate::circuit_input_builder::CircuitInputStateRef;
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::{operation::RW, Error};
 use eth_types::GethExecStep;
 
@@ -15,12 +15,14 @@ pub(crate) struct StackOnlyOpcode<const N: usize>;
 impl<const N: usize> Opcode for StackOnlyOpcode<N> {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
+        exec_step: &mut ExecStep,
         steps: &[GethExecStep],
     ) -> Result<(), Error> {
         let step = &steps[0];
         // N stack reads
         for i in 0..N {
             state.push_stack_op(
+                exec_step,
                 RW::READ,
                 step.stack.nth_last_filled(i),
                 step.stack.nth_last(i)?,
@@ -30,6 +32,7 @@ impl<const N: usize> Opcode for StackOnlyOpcode<N> {
         // Get operator result from next step and do stack write
         let result_value = steps[1].stack.last()?;
         state.push_stack_op(
+            exec_step,
             RW::WRITE,
             step.stack.last_filled().map(|a| a - 1 + N),
             result_value,
@@ -77,10 +80,11 @@ mod stackonlyop_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         // Read a
         state_ref.push_stack_op(
+            &mut step,
             RW::READ,
             StackAddress(1024 - 1),
             word!("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
@@ -88,6 +92,7 @@ mod stackonlyop_tests {
 
         // Write ~a
         state_ref.push_stack_op(
+            &mut step,
             RW::WRITE,
             StackAddress(1024 - 1),
             word!("0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0"),
@@ -139,7 +144,7 @@ mod stackonlyop_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         let last_stack_pointer = StackAddress(1022);
         let second_last_stack_pointer = StackAddress(1023);
@@ -148,13 +153,18 @@ mod stackonlyop_tests {
         let sum = Word::from(0x100);
 
         // Manage first stack read at latest stack position
-        state_ref.push_stack_op(RW::READ, last_stack_pointer, stack_value_a);
+        state_ref.push_stack_op(&mut step, RW::READ, last_stack_pointer, stack_value_a);
 
         // Manage second stack read at second latest stack position
-        state_ref.push_stack_op(RW::READ, second_last_stack_pointer, stack_value_b);
+        state_ref.push_stack_op(
+            &mut step,
+            RW::READ,
+            second_last_stack_pointer,
+            stack_value_b,
+        );
 
         // Add StackOp associated to the 0x80 push at the latest Stack pos.
-        state_ref.push_stack_op(RW::WRITE, second_last_stack_pointer, sum);
+        state_ref.push_stack_op(&mut step, RW::WRITE, second_last_stack_pointer, sum);
 
         tx.steps_mut().push(step);
         test_builder.block.txs_mut().push(tx);
@@ -203,15 +213,35 @@ mod stackonlyop_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         // Read a, b, n
-        state_ref.push_stack_op(RW::READ, StackAddress(1024 - 3), Word::from(0x12345));
-        state_ref.push_stack_op(RW::READ, StackAddress(1024 - 2), Word::from(0x6789a));
-        state_ref.push_stack_op(RW::READ, StackAddress(1024 - 1), Word::from(0xbcdef));
+        state_ref.push_stack_op(
+            &mut step,
+            RW::READ,
+            StackAddress(1024 - 3),
+            Word::from(0x12345),
+        );
+        state_ref.push_stack_op(
+            &mut step,
+            RW::READ,
+            StackAddress(1024 - 2),
+            Word::from(0x6789a),
+        );
+        state_ref.push_stack_op(
+            &mut step,
+            RW::READ,
+            StackAddress(1024 - 1),
+            Word::from(0xbcdef),
+        );
 
         // Write a + b % n
-        state_ref.push_stack_op(RW::WRITE, StackAddress(1024 - 1), Word::from(0x79bdf));
+        state_ref.push_stack_op(
+            &mut step,
+            RW::WRITE,
+            StackAddress(1024 - 1),
+            Word::from(0x79bdf),
+        );
 
         tx.steps_mut().push(step);
         test_builder.block.txs_mut().push(tx);

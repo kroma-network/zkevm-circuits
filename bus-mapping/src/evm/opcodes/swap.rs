@@ -1,5 +1,5 @@
 use super::Opcode;
-use crate::circuit_input_builder::CircuitInputStateRef;
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::{operation::RW, Error};
 use eth_types::GethExecStep;
 
@@ -11,6 +11,7 @@ pub(crate) struct Swap<const N: usize>;
 impl<const N: usize> Opcode for Swap<N> {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
+        exec_step: &mut ExecStep,
         steps: &[GethExecStep],
     ) -> Result<(), Error> {
         let step = &steps[0];
@@ -18,14 +19,14 @@ impl<const N: usize> Opcode for Swap<N> {
         // Peek b and a
         let stack_b_value_read = step.stack.nth_last(N)?;
         let stack_b_position = step.stack.nth_last_filled(N);
-        state.push_stack_op(RW::READ, stack_b_position, stack_b_value_read);
+        state.push_stack_op(exec_step, RW::READ, stack_b_position, stack_b_value_read);
         let stack_a_value_read = step.stack.last()?;
         let stack_a_position = step.stack.last_filled();
-        state.push_stack_op(RW::READ, stack_a_position, stack_a_value_read);
+        state.push_stack_op(exec_step, RW::READ, stack_a_position, stack_a_value_read);
 
         // Write a into b_position, write b into a_position
-        state.push_stack_op(RW::WRITE, stack_b_position, stack_a_value_read);
-        state.push_stack_op(RW::WRITE, stack_a_position, stack_b_value_read);
+        state.push_stack_op(exec_step, RW::WRITE, stack_b_position, stack_a_value_read);
+        state.push_stack_op(exec_step, RW::WRITE, stack_a_position, stack_b_value_read);
 
         Ok(())
     }
@@ -77,17 +78,17 @@ mod swap_tests {
                 test_builder.block_ctx.rwc,
                 0,
             );
-            let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+            let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
             let a_pos = StackAddress(1024 - 6);
             let b_pos = StackAddress(1024 - 5 + i * 2);
             let a_val = Word::from(*a);
             let b_val = Word::from(*b);
 
-            state_ref.push_stack_op(RW::READ, b_pos, b_val);
-            state_ref.push_stack_op(RW::READ, a_pos, a_val);
-            state_ref.push_stack_op(RW::WRITE, b_pos, a_val);
-            state_ref.push_stack_op(RW::WRITE, a_pos, b_val);
+            state_ref.push_stack_op(&mut step, RW::READ, b_pos, b_val);
+            state_ref.push_stack_op(&mut step, RW::READ, a_pos, a_val);
+            state_ref.push_stack_op(&mut step, RW::WRITE, b_pos, a_val);
+            state_ref.push_stack_op(&mut step, RW::WRITE, a_pos, b_val);
 
             tx.steps_mut().push(step);
         }

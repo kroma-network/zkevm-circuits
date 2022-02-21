@@ -1,5 +1,5 @@
 use super::Opcode;
-use crate::circuit_input_builder::CircuitInputStateRef;
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::Error;
 use eth_types::GethExecStep;
 
@@ -12,6 +12,7 @@ pub(crate) struct Jumpdest;
 impl Opcode for Jumpdest {
     fn gen_associated_ops(
         _state: &mut CircuitInputStateRef,
+        _exec_step: &mut ExecStep,
         _steps: &[GethExecStep],
     ) -> Result<(), Error> {
         // Jumpdest does not generate any operations

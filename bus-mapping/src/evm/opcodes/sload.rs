@@ -1,5 +1,5 @@
 use super::Opcode;
-use crate::circuit_input_builder::CircuitInputStateRef;
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::{
     operation::{StorageOp, RW},
     Error,
@@ -15,6 +15,7 @@ pub(crate) struct Sload;
 impl Opcode for Sload {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
+        exec_step: &mut ExecStep,
         steps: &[GethExecStep],
     ) -> Result<(), Error> {
         let step = &steps[0];
@@ -24,11 +25,12 @@ impl Opcode for Sload {
         let stack_position = step.stack.last_filled();
 
         // Manage first stack read at latest stack position
-        state.push_stack_op(RW::READ, stack_position, stack_value_read);
+        state.push_stack_op(exec_step, RW::READ, stack_position, stack_value_read);
 
         // Storage read
         let storage_value_read = step.storage.get_or_err(&stack_value_read)?;
         state.push_op(
+            exec_step,
             RW::READ,
             StorageOp::new(
                 state.call().address,
@@ -39,7 +41,7 @@ impl Opcode for Sload {
         );
 
         // First stack write
-        state.push_stack_op(RW::WRITE, stack_position, storage_value_read);
+        state.push_stack_op(exec_step, RW::WRITE, stack_position, storage_value_read);
 
         Ok(())
     }
@@ -89,11 +91,17 @@ mod sload_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
         // Add StackOp associated to the stack pop.
-        state_ref.push_stack_op(RW::READ, StackAddress::from(1023), Word::from(0x0u32));
+        state_ref.push_stack_op(
+            &mut step,
+            RW::READ,
+            StackAddress::from(1023),
+            Word::from(0x0u32),
+        );
         // Add StorageOp associated to the storage read.
         state_ref.push_op(
+            &mut step,
             RW::READ,
             StorageOp::new(
                 Address::from([0u8; 20]),
@@ -103,7 +111,12 @@ mod sload_tests {
             ),
         );
         // Add StackOp associated to the stack push.
-        state_ref.push_stack_op(RW::WRITE, StackAddress::from(1023), Word::from(0x6fu32));
+        state_ref.push_stack_op(
+            &mut step,
+            RW::WRITE,
+            StackAddress::from(1023),
+            Word::from(0x6fu32),
+        );
         tx.steps_mut().push(step);
         test_builder.block.txs_mut().push(tx);
 

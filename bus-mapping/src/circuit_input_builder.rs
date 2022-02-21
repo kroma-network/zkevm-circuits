@@ -608,21 +608,34 @@ pub struct CircuitInputStateRef<'a> {
     pub tx: &'a mut Transaction,
     /// Transaction Context
     pub tx_ctx: &'a mut TransactionContext,
-    /// Step
-    pub step: &'a mut ExecStep,
 }
 
 impl<'a> CircuitInputStateRef<'a> {
+    ///
+    pub fn new_step(&self, geth_step: &GethExecStep) -> ExecStep {
+        ExecStep::new(
+            geth_step,
+            self.tx_ctx.call_index(),
+            self.block_ctx.rwc,
+            self.tx_ctx.call_ctx().swc,
+        )
+    }
+
+    ///
+    pub fn push_step_to_tx(&mut self, step: ExecStep) {
+        self.tx.steps.push(step);
+    }
+
     /// Push an [`Operation`] into the [`OperationContainer`] with the next
     /// [`RWCounter`] and then adds a reference to the stored operation
     /// ([`OperationRef`]) inside the bus-mapping instance of the current
     /// [`ExecStep`].  Then increase the block_ctx [`RWCounter`] by one.
-    pub fn push_op<T: Op>(&mut self, rw: RW, op: T) {
+    pub fn push_op<T: Op>(&mut self, step: &mut ExecStep, rw: RW, op: T) {
         let op_ref =
             self.block
                 .container
                 .insert(Operation::new(self.block_ctx.rwc.inc_pre(), rw, op));
-        self.step.bus_mapping_instance.push(op_ref);
+        step.bus_mapping_instance.push(op_ref);
     }
 
     /// Push an [`Operation`] with reversible to be true into the
@@ -633,13 +646,13 @@ impl<'a> CircuitInputStateRef<'a> {
     /// This method should be used in `Opcode::gen_associated_ops` instead of
     /// `push_op` when the operation is `RW::WRITE` and it can be reverted (for
     /// example, a write `StorageOp`).
-    pub fn push_op_reversible<T: Op>(&mut self, rw: RW, op: T) {
+    pub fn push_op_reversible<T: Op>(&mut self, step: &mut ExecStep, rw: RW, op: T) {
         let op_ref = self.block.container.insert(Operation::new_reversible(
             self.block_ctx.rwc.inc_pre(),
             rw,
             op,
         ));
-        self.step.bus_mapping_instance.push(op_ref);
+        step.bus_mapping_instance.push(op_ref);
 
         // Increase state_write_counter
         self.call_ctx_mut().swc += 1;
@@ -660,9 +673,16 @@ impl<'a> CircuitInputStateRef<'a> {
     /// the stored operation ([`OperationRef`]) inside the bus-mapping
     /// instance of the current [`ExecStep`].  Then increase the `block_ctx`
     /// [`RWCounter`] by one.
-    pub fn push_memory_op(&mut self, rw: RW, address: MemoryAddress, value: u8) {
+    pub fn push_memory_op(
+        &mut self,
+        step: &mut ExecStep,
+        rw: RW,
+        address: MemoryAddress,
+        value: u8,
+    ) {
         let call_id = self.call().call_id;
         self.push_op(
+            step,
             rw,
             MemoryOp {
                 call_id,
@@ -677,9 +697,16 @@ impl<'a> CircuitInputStateRef<'a> {
     /// the stored operation ([`OperationRef`]) inside the bus-mapping
     /// instance of the current [`ExecStep`].  Then increase the `block_ctx`
     /// [`RWCounter`] by one.
-    pub fn push_stack_op(&mut self, rw: RW, address: StackAddress, value: Word) {
+    pub fn push_stack_op(
+        &mut self,
+        step: &mut ExecStep,
+        rw: RW,
+        address: StackAddress,
+        value: Word,
+    ) {
         let call_id = self.call().call_id;
         self.push_op(
+            step,
             rw,
             StackOp {
                 call_id,
@@ -1210,7 +1237,6 @@ impl<'a> CircuitInputBuilder {
         &'a mut self,
         tx: &'a mut Transaction,
         tx_ctx: &'a mut TransactionContext,
-        step: &'a mut ExecStep,
     ) -> CircuitInputStateRef {
         CircuitInputStateRef {
             sdb: &mut self.sdb,
@@ -1219,7 +1245,6 @@ impl<'a> CircuitInputBuilder {
             block_ctx: &mut self.block_ctx,
             tx,
             tx_ctx,
-            step,
         }
     }
 
@@ -1294,21 +1319,13 @@ impl<'a> CircuitInputBuilder {
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace)?;
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
-            let mut step = ExecStep::new(
-                geth_step,
-                tx_ctx.call_index(),
-                self.block_ctx.rwc,
-                tx_ctx.call_ctx().swc,
-            );
-            let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx, &mut step);
+            let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
 
             gen_associated_ops(
                 &geth_step.op,
                 &mut state_ref,
                 &geth_trace.struct_logs[index..],
             )?;
-
-            tx.steps.push(step);
         }
 
         self.block.txs.push(tx);
@@ -1787,8 +1804,7 @@ mod tracer_tests {
         }
 
         fn state_ref(&mut self) -> CircuitInputStateRef {
-            self.builder
-                .state_ref(&mut self.tx, &mut self.tx_ctx, &mut self.step)
+            self.builder.state_ref(&mut self.tx, &mut self.tx_ctx)
         }
     }
 

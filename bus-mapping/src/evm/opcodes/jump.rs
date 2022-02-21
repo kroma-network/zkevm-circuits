@@ -1,5 +1,5 @@
 use super::Opcode;
-use crate::circuit_input_builder::CircuitInputStateRef;
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::{operation::RW, Error};
 use eth_types::GethExecStep;
 
@@ -12,12 +12,14 @@ pub(crate) struct Jump;
 impl Opcode for Jump {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
+        exec_step: &mut ExecStep,
         steps: &[GethExecStep],
     ) -> Result<(), Error> {
         let step = &steps[0];
 
         // `JUMP` needs only one read operation
         state.push_stack_op(
+            exec_step,
             RW::READ,
             step.stack.nth_last_filled(0),
             step.stack.nth_last(0)?,
@@ -73,10 +75,15 @@ mod jump_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         // Add the last Stack read
-        state_ref.push_stack_op(RW::READ, StackAddress::from(1023), Word::from(destination));
+        state_ref.push_stack_op(
+            &mut step,
+            RW::READ,
+            StackAddress::from(1023),
+            Word::from(destination),
+        );
 
         tx.steps_mut().push(step);
         test_builder.block.txs_mut().push(tx);

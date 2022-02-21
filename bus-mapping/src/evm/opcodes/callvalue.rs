@@ -1,5 +1,5 @@
 use super::Opcode;
-use crate::circuit_input_builder::CircuitInputStateRef;
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::operation::{CallContextField, CallContextOp, RW};
 use crate::Error;
 use eth_types::GethExecStep;
@@ -12,6 +12,7 @@ pub(crate) struct Callvalue;
 impl Opcode for Callvalue {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
+        exec_step: &mut ExecStep,
         steps: &[GethExecStep],
     ) -> Result<(), Error> {
         let step = &steps[0];
@@ -19,6 +20,7 @@ impl Opcode for Callvalue {
         let value = steps[1].stack.last()?;
         // CallContext read of the call_value
         state.push_op(
+            exec_step,
             RW::READ,
             CallContextOp {
                 call_id: state.call().call_id,
@@ -27,7 +29,12 @@ impl Opcode for Callvalue {
             },
         );
         // Stack write of the call_value
-        state.push_stack_op(RW::WRITE, step.stack.last_filled().map(|a| a - 1), value);
+        state.push_stack_op(
+            exec_step,
+            RW::WRITE,
+            step.stack.last_filled().map(|a| a - 1),
+            value,
+        );
 
         Ok(())
     }
@@ -69,12 +76,13 @@ mod callvalue_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         let call_value = block.eth_tx.value;
 
         // Add the CallContext read
         state_ref.push_op(
+            &mut step,
             RW::READ,
             CallContextOp {
                 call_id: state_ref.call().call_id,
@@ -83,7 +91,12 @@ mod callvalue_tests {
             },
         );
         // Add the Stack write
-        state_ref.push_stack_op(RW::WRITE, StackAddress::from(1024 - 1), call_value);
+        state_ref.push_stack_op(
+            &mut step,
+            RW::WRITE,
+            StackAddress::from(1024 - 1),
+            call_value,
+        );
 
         tx.steps_mut().push(step);
         test_builder.block.txs_mut().push(tx);
