@@ -4,6 +4,7 @@ use crate::Error;
 use core::fmt::Debug;
 use eth_types::GethExecStep;
 
+mod calldatasize;
 mod caller;
 mod callvalue;
 mod coinbase;
@@ -18,6 +19,7 @@ mod mstore;
 mod pc;
 mod pop;
 mod push;
+mod selfbalance;
 mod sload;
 mod stackonlyop;
 mod stop;
@@ -27,6 +29,7 @@ use crate::evm::OpcodeId;
 use log::warn;
 
 use self::push::Push;
+use calldatasize::Calldatasize;
 use caller::Caller;
 use callvalue::Callvalue;
 use dup::Dup;
@@ -39,6 +42,7 @@ use msize::Msize;
 use mstore::Mstore;
 use pc::Pc;
 use pop::Pop;
+use selfbalance::Selfbalance;
 use sload::Sload;
 use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
@@ -116,7 +120,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         OpcodeId::CALLER => Caller::gen_associated_ops_multi,
         OpcodeId::CALLVALUE => Callvalue::gen_associated_ops_multi,
         // OpcodeId::CALLDATALOAD => {},
-        // OpcodeId::CALLDATASIZE => {},
+        OpcodeId::CALLDATASIZE => Calldatasize::gen_associated_ops,
         // OpcodeId::CALLDATACOPY => {},
         // OpcodeId::CODESIZE => {},
         // OpcodeId::CODECOPY => {},
@@ -133,7 +137,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         // OpcodeId::DIFFICULTY => {},
         // OpcodeId::GASLIMIT => {},
         // OpcodeId::CHAINID => {},
-        // OpcodeId::SELFBALANCE => {},
+        OpcodeId::SELFBALANCE => Selfbalance::gen_associated_ops,
         // OpcodeId::BASEFEE => {},
         OpcodeId::POP => Pop::gen_associated_ops_multi,
         OpcodeId::MLOAD => Mload::gen_associated_ops_multi,
