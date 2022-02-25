@@ -79,13 +79,14 @@ mod calldatasize_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         // Get calldatasize from eth tx.
         let call_data_size = block.eth_tx.input.to_vec().len();
 
         // Add the read operation.
         state_ref.push_op(
+            &mut step,
             RW::READ,
             CallContextOp {
                 call_id: state_ref.call().call_id,
@@ -96,6 +97,7 @@ mod calldatasize_tests {
 
         // Add the stack write.
         state_ref.push_stack_op(
+            &mut step,
             RW::WRITE,
             StackAddress::from(1024 - 1),
             eth_types::U256::from(call_data_size),

@@ -90,13 +90,14 @@ mod selfbalance_tests {
             test_builder.block_ctx.rwc,
             0,
         );
-        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx, &mut step);
+        let mut state_ref = test_builder.state_ref(&mut tx, &mut tx_ctx);
 
         let callee_address = block.eth_tx.to.unwrap();
         let self_balance = state_ref.sdb.get_account(&callee_address).1.balance;
 
         // CallContext read for callee_address
         state_ref.push_op(
+            &mut step,
             RW::READ,
             CallContextOp {
                 call_id: state_ref.call().call_id,
@@ -107,6 +108,7 @@ mod selfbalance_tests {
 
         // Account read for balance of callee_address
         state_ref.push_op(
+            &mut step,
             RW::READ,
             AccountOp {
                 address: callee_address,
@@ -117,7 +119,12 @@ mod selfbalance_tests {
         );
 
         // Add the Stack write
-        state_ref.push_stack_op(RW::WRITE, StackAddress::from(1024 - 1), self_balance);
+        state_ref.push_stack_op(
+            &mut step,
+            RW::WRITE,
+            StackAddress::from(1024 - 1),
+            self_balance,
+        );
 
         tx.steps_mut().push(step);
         test_builder.block.txs_mut().push(tx);
