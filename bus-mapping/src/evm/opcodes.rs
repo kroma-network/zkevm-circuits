@@ -4,6 +4,7 @@ use crate::Error;
 use core::fmt::Debug;
 use eth_types::GethExecStep;
 
+mod calldatacopy;
 mod calldatasize;
 mod caller;
 mod callvalue;
@@ -29,6 +30,7 @@ use crate::evm::OpcodeId;
 use log::warn;
 
 use self::push::Push;
+use calldatacopy::Calldatacopy;
 use calldatasize::Calldatasize;
 use caller::Caller;
 use callvalue::Callvalue;
@@ -121,7 +123,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         OpcodeId::CALLVALUE => Callvalue::gen_associated_ops_multi,
         // OpcodeId::CALLDATALOAD => {},
         OpcodeId::CALLDATASIZE => Calldatasize::gen_associated_ops_multi,
-        // OpcodeId::CALLDATACOPY => {},
+        OpcodeId::CALLDATACOPY => Calldatacopy::gen_associated_ops_multi,
         // OpcodeId::CODESIZE => {},
         // OpcodeId::CODECOPY => {},
         // OpcodeId::GASPRICE => {},
