@@ -1032,6 +1032,7 @@ impl From<&bus_mapping::circuit_input_builder::ExecStep> for ExecutionState {
             OpcodeId::TIMESTAMP => ExecutionState::TIMESTAMP,
             OpcodeId::GAS => ExecutionState::GAS,
             OpcodeId::SELFBALANCE => ExecutionState::SELFBALANCE,
+            OpcodeId::CALLDATACOPY => ExecutionState::CALLDATACOPY,
             _ => unimplemented!("unimplemented opcode {:?}", step.op),
         }
     }
