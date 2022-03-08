@@ -31,6 +31,7 @@ pub struct BytecodeTestConfig {
     pub enable_evm_circuit_test: bool,
     pub evm_circuit_lookup_tags: Vec<FixedTableTag>,
     pub enable_state_circuit_test: bool,
+    pub is_root_call: bool,
     pub gas_limit: u64,
 }
 
@@ -38,6 +39,7 @@ impl Default for BytecodeTestConfig {
     fn default() -> Self {
         Self {
             gas_limit: 1_000_000u64,
+            is_root_call: true,
             enable_evm_circuit_test: true,
             enable_state_circuit_test: true,
             evm_circuit_lookup_tags: get_fixed_table(FixedTableConfig::Incomplete),
@@ -59,7 +61,11 @@ pub fn test_circuits_using_bytecode(
     );
     let mut builder = block_trace.new_circuit_input_builder();
     builder
-        .handle_tx(&block_trace.eth_tx, &block_trace.geth_trace)
+        .handle_tx(
+            &block_trace.eth_tx,
+            &block_trace.geth_trace,
+            config.is_root_call,
+        )
         .unwrap();
 
     // build a witness block from trace result

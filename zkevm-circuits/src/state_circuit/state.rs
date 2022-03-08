@@ -1790,7 +1790,9 @@ mod tests {
             mock::new_single_tx_trace_code(&bytecode).unwrap(),
         );
         let mut builder = block.new_circuit_input_builder();
-        builder.handle_tx(&block.eth_tx, &block.geth_trace).unwrap();
+        builder
+            .handle_tx(&block.eth_tx, &block.geth_trace, true)
+            .unwrap();
 
         let stack_ops = builder.block.container.sorted_stack();
         let memory_ops = builder.block.container.sorted_memory();

@@ -44,10 +44,10 @@ mod gas_tests {
         let block = BlockData::new_from_geth_data(new_single_tx_trace_code_at_start(&code)?);
 
         let mut builder = block.new_circuit_input_builder();
-        builder.handle_tx(&block.eth_tx, &block.geth_trace)?;
+        builder.handle_tx(&block.eth_tx, &block.geth_trace, true)?;
 
         let mut test_builder = block.new_circuit_input_builder();
-        let mut tx = test_builder.new_tx(&block.eth_tx, !block.geth_trace.failed)?;
+        let mut tx = test_builder.new_tx(&block.eth_tx, !block.geth_trace.failed, true)?;
         let mut tx_ctx = TransactionContext::new(&block.eth_tx, &block.geth_trace)?;
 
         let mut step = ExecStep::new(

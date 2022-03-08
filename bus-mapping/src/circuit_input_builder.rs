@@ -497,6 +497,7 @@ impl Transaction {
         code_db: &mut CodeDB,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
+        is_root: bool,
     ) -> Result<Self, Error> {
         let (found, _) = sdb.get_account(&eth_tx.from);
         if !found {
@@ -515,7 +516,7 @@ impl Transaction {
                 caller_id: 0,
                 kind: CallKind::Call,
                 is_static: false,
-                is_root: true,
+                is_root: is_root,
                 is_persistent: is_success,
                 is_success,
                 rw_counter_end_of_reversion: 0,
@@ -1253,6 +1254,7 @@ impl<'a> CircuitInputBuilder {
         &mut self,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
+        is_root: bool,
     ) -> Result<Transaction, Error> {
         let call_id = self.block_ctx.rwc.0;
 
@@ -1267,7 +1269,14 @@ impl<'a> CircuitInputBuilder {
             ),
         );
 
-        Transaction::new(call_id, &self.sdb, &mut self.code_db, eth_tx, is_success)
+        Transaction::new(
+            call_id,
+            &self.sdb,
+            &mut self.code_db,
+            eth_tx,
+            is_success,
+            is_root,
+        )
     }
 
     /// Iterate over all generated CallContext RwCounterEndOfReversion
@@ -1300,7 +1309,7 @@ impl<'a> CircuitInputBuilder {
     ) -> Result<(), Error> {
         for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
             let geth_trace = &geth_traces[tx_index];
-            self.handle_tx(tx, geth_trace)?;
+            self.handle_tx(tx, geth_trace, true)?;
         }
         self.set_value_ops_call_context_rwc_eor();
         Ok(())
@@ -1314,8 +1323,9 @@ impl<'a> CircuitInputBuilder {
         &mut self,
         eth_tx: &eth_types::Transaction,
         geth_trace: &GethExecTrace,
+        is_root_call: bool,
     ) -> Result<(), Error> {
-        let mut tx = self.new_tx(eth_tx, !geth_trace.failed)?;
+        let mut tx = self.new_tx(eth_tx, !geth_trace.failed, is_root_call)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace)?;
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
@@ -1785,7 +1795,7 @@ mod tracer_tests {
         fn new(geth_data: &GethData, geth_step: &GethExecStep) -> Self {
             let block = crate::mock::BlockData::new_from_geth_data(geth_data.clone());
             let mut builder = block.new_circuit_input_builder();
-            let tx = builder.new_tx(&block.eth_tx, true).unwrap();
+            let tx = builder.new_tx(&block.eth_tx, true, true).unwrap();
             let tx_ctx = TransactionContext::new(
                 &block.eth_tx,
                 &GethExecTrace {

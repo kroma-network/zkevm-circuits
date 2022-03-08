@@ -121,7 +121,7 @@ mod test {
         );
         let mut builder = block_trace.new_circuit_input_builder();
         builder
-            .handle_tx(&block_trace.eth_tx, &block_trace.geth_trace)
+            .handle_tx(&block_trace.eth_tx, &block_trace.geth_trace, true)
             .expect("could not handle block tx");
         let mut block = block_convert(&builder.block, &builder.code_db);
 
