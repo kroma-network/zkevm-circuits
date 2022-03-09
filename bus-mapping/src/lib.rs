@@ -125,7 +125,7 @@
 //!     struct_logs: geth_steps,
 //! };
 //! // Here we update the circuit input with the data from the transaction trace.
-//! builder.handle_tx(&eth_tx, &geth_trace).unwrap();
+//! builder.handle_tx(&eth_tx, &geth_trace, Default::default()).unwrap();
 //!
 //! // Get an ordered vector with all of the Stack operations of this trace.
 //! let stack_ops = builder.block.container.sorted_stack();

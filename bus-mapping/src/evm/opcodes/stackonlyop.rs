@@ -66,12 +66,12 @@ mod stackonlyop_tests {
 
         let mut builder = block.new_circuit_input_builder();
         builder
-            .handle_tx(&block.eth_tx, &block.geth_trace, true)
+            .handle_tx(&block.eth_tx, &block.geth_trace, Default::default())
             .unwrap();
 
         let mut test_builder = block.new_circuit_input_builder();
         let mut tx = test_builder
-            .new_tx(&block.eth_tx, !block.geth_trace.failed, true)
+            .new_tx(&block.eth_tx, Default::default(), !block.geth_trace.failed)
             .unwrap();
         let mut tx_ctx = TransactionContext::new(&block.eth_tx, &block.geth_trace).unwrap();
 
@@ -132,12 +132,12 @@ mod stackonlyop_tests {
 
         let mut builder = block.new_circuit_input_builder();
         builder
-            .handle_tx(&block.eth_tx, &block.geth_trace, true)
+            .handle_tx(&block.eth_tx, &block.geth_trace, Default::default())
             .unwrap();
 
         let mut test_builder = block.new_circuit_input_builder();
         let mut tx = test_builder
-            .new_tx(&block.eth_tx, !block.geth_trace.failed, true)
+            .new_tx(&block.eth_tx, Default::default(), !block.geth_trace.failed)
             .unwrap();
         let mut tx_ctx = TransactionContext::new(&block.eth_tx, &block.geth_trace).unwrap();
 
@@ -203,12 +203,12 @@ mod stackonlyop_tests {
 
         let mut builder = block.new_circuit_input_builder();
         builder
-            .handle_tx(&block.eth_tx, &block.geth_trace, true)
+            .handle_tx(&block.eth_tx, &block.geth_trace, Default::default())
             .unwrap();
 
         let mut test_builder = block.new_circuit_input_builder();
         let mut tx = test_builder
-            .new_tx(&block.eth_tx, !block.geth_trace.failed, true)
+            .new_tx(&block.eth_tx, Default::default(), !block.geth_trace.failed)
             .unwrap();
         let mut tx_ctx = TransactionContext::new(&block.eth_tx, &block.geth_trace).unwrap();
 

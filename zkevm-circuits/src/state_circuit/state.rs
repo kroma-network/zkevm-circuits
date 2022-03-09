@@ -1821,7 +1821,7 @@ mod tests {
         );
         let mut builder = block.new_circuit_input_builder();
         builder
-            .handle_tx(&block.eth_tx, &block.geth_trace, true)
+            .handle_tx(&block.eth_tx, &block.geth_trace, Default::default())
             .unwrap();
 
         let stack_ops = builder.block.container.sorted_stack();
