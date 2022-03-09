@@ -990,50 +990,56 @@ impl From<&ExecError> for ExecutionState {
     }
 }
 
-impl From<&bus_mapping::circuit_input_builder::ExecStep> for ExecutionState {
-    fn from(step: &bus_mapping::circuit_input_builder::ExecStep) -> Self {
+impl From<&circuit_input_builder::ExecStep> for ExecutionState {
+    fn from(step: &circuit_input_builder::ExecStep) -> Self {
         if let Some(error) = step.error.as_ref() {
             return error.into();
         }
-        if step.op.is_dup() {
-            return ExecutionState::DUP;
-        }
-        if step.op.is_push() {
-            return ExecutionState::PUSH;
-        }
-        if step.op.is_swap() {
-            return ExecutionState::SWAP;
-        }
-        match step.op {
-            OpcodeId::ADD => ExecutionState::ADD,
-            OpcodeId::MUL => ExecutionState::MUL,
-            OpcodeId::SUB => ExecutionState::ADD,
-            OpcodeId::EQ | OpcodeId::LT | OpcodeId::GT => ExecutionState::CMP,
-            OpcodeId::SLT | OpcodeId::SGT => ExecutionState::SCMP,
-            OpcodeId::SIGNEXTEND => ExecutionState::SIGNEXTEND,
-            OpcodeId::STOP => ExecutionState::STOP,
-            OpcodeId::AND => ExecutionState::BITWISE,
-            OpcodeId::XOR => ExecutionState::BITWISE,
-            OpcodeId::OR => ExecutionState::BITWISE,
-            OpcodeId::POP => ExecutionState::POP,
-            OpcodeId::PUSH32 => ExecutionState::PUSH,
-            OpcodeId::BYTE => ExecutionState::BYTE,
-            OpcodeId::MLOAD => ExecutionState::MEMORY,
-            OpcodeId::MSTORE => ExecutionState::MEMORY,
-            OpcodeId::MSTORE8 => ExecutionState::MEMORY,
-            OpcodeId::JUMPDEST => ExecutionState::JUMPDEST,
-            OpcodeId::JUMP => ExecutionState::JUMP,
-            OpcodeId::JUMPI => ExecutionState::JUMPI,
-            OpcodeId::PC => ExecutionState::PC,
-            OpcodeId::MSIZE => ExecutionState::MSIZE,
-            OpcodeId::CALLER => ExecutionState::CALLER,
-            OpcodeId::CALLVALUE => ExecutionState::CALLVALUE,
-            OpcodeId::COINBASE => ExecutionState::COINBASE,
-            OpcodeId::TIMESTAMP => ExecutionState::TIMESTAMP,
-            OpcodeId::GAS => ExecutionState::GAS,
-            OpcodeId::SELFBALANCE => ExecutionState::SELFBALANCE,
-            OpcodeId::CALLDATACOPY => ExecutionState::CALLDATACOPY,
-            _ => unimplemented!("unimplemented opcode {:?}", step.op),
+        match step.exec_state {
+            circuit_input_builder::ExecState::Op(op) => {
+                if op.is_dup() {
+                    return ExecutionState::DUP;
+                }
+                if op.is_push() {
+                    return ExecutionState::PUSH;
+                }
+                if op.is_swap() {
+                    return ExecutionState::SWAP;
+                }
+                match op {
+                    OpcodeId::ADD => ExecutionState::ADD,
+                    OpcodeId::MUL => ExecutionState::MUL,
+                    OpcodeId::SUB => ExecutionState::ADD,
+                    OpcodeId::EQ | OpcodeId::LT | OpcodeId::GT => ExecutionState::CMP,
+                    OpcodeId::SLT | OpcodeId::SGT => ExecutionState::SCMP,
+                    OpcodeId::SIGNEXTEND => ExecutionState::SIGNEXTEND,
+                    OpcodeId::STOP => ExecutionState::STOP,
+                    OpcodeId::AND => ExecutionState::BITWISE,
+                    OpcodeId::XOR => ExecutionState::BITWISE,
+                    OpcodeId::OR => ExecutionState::BITWISE,
+                    OpcodeId::POP => ExecutionState::POP,
+                    OpcodeId::PUSH32 => ExecutionState::PUSH,
+                    OpcodeId::BYTE => ExecutionState::BYTE,
+                    OpcodeId::MLOAD => ExecutionState::MEMORY,
+                    OpcodeId::MSTORE => ExecutionState::MEMORY,
+                    OpcodeId::MSTORE8 => ExecutionState::MEMORY,
+                    OpcodeId::JUMPDEST => ExecutionState::JUMPDEST,
+                    OpcodeId::JUMP => ExecutionState::JUMP,
+                    OpcodeId::JUMPI => ExecutionState::JUMPI,
+                    OpcodeId::PC => ExecutionState::PC,
+                    OpcodeId::MSIZE => ExecutionState::MSIZE,
+                    OpcodeId::CALLER => ExecutionState::CALLER,
+                    OpcodeId::CALLVALUE => ExecutionState::CALLVALUE,
+                    OpcodeId::COINBASE => ExecutionState::COINBASE,
+                    OpcodeId::TIMESTAMP => ExecutionState::TIMESTAMP,
+                    OpcodeId::GAS => ExecutionState::GAS,
+                    OpcodeId::SELFBALANCE => ExecutionState::SELFBALANCE,
+                    OpcodeId::CALLDATACOPY => ExecutionState::CALLDATACOPY,
+                    _ => unimplemented!("unimplemented opcode {:?}", op),
+                }
+            }
+            circuit_input_builder::ExecState::BeginTx =>  ExecutionState::BeginTx,
+            circuit_input_builder::ExecState::CopyToMemory =>  ExecutionState::CopyToMemory,
         }
     }
 }
@@ -1073,7 +1079,10 @@ fn step_convert(step: &circuit_input_builder::ExecStep) -> ExecStep {
         stack_pointer: STACK_CAPACITY - step.stack_size,
         gas_left: step.gas_left.0,
         gas_cost: step.gas_cost.as_u64(),
-        opcode: Some(step.op),
+        opcode: match step.exec_state {
+            circuit_input_builder::ExecState::Op(op) => Some(op),
+            _ => None,
+        },
         memory_size: step.memory_size as u64,
         state_write_counter: step.swc,
         aux_data: Default::default(),
