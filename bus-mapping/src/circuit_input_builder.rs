@@ -560,8 +560,11 @@ impl Transaction {
                 code_hash,
                 depth: 1,
                 value: eth_tx.value,
-                call_data_offset: 0,
-                call_data_length: eth_tx.input.as_ref().len() as u64,
+                call_data_offset: config.call_data_offset,
+                call_data_length: std::cmp::max(
+                    config.call_data_length,
+                    eth_tx.input.as_ref().len(),
+                ) as u64,
                 return_data_offset: 0,
                 return_data_length: 0,
             }
@@ -640,6 +643,8 @@ pub struct TransactionConfig {
     pub is_root_call: bool,
     /// Initialized length of call data
     pub call_data_length: usize,
+    /// Initialized offset of call data
+    pub call_data_offset: u64,
 }
 
 impl Default for TransactionConfig {
@@ -647,6 +652,7 @@ impl Default for TransactionConfig {
         Self {
             is_root_call: true,
             call_data_length: 0,
+            call_data_offset: 0,
         }
     }
 }
