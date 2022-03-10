@@ -74,23 +74,20 @@ fn recover_transcripts<R: Read>(reader: &mut R) -> Result<(Vec<u8>, Vec<u8>), IO
     reader.read_exact(&mut id_buf)?;
     drop(id_buf);
 
-    let mut evm_proof_len_buf = [0u8; 4];
-    reader.read_exact(&mut evm_proof_len_buf)?;
-
-    let evm_proof_len = u32::from_le_bytes(evm_proof_len_buf);
-    let mut evm_proof_buf = vec![0u8; evm_proof_len as usize];
-    reader.read_exact(&mut evm_proof_buf)?;
-    let evm_proof = evm_proof_buf.to_vec();
-
-    let mut state_proof_len_buf = [0u8; 4];
-    reader.read_exact(&mut state_proof_len_buf)?;
-
-    let state_proof_len = u32::from_le_bytes(state_proof_len_buf);
-    let mut state_proof_buf = vec![0u8; state_proof_len as usize];
-    reader.read_exact(&mut state_proof_buf)?;
-    let state_proof = state_proof_buf.to_vec();
+    let evm_proof = extract_proof(reader)?;
+    let state_proof = extract_proof(reader)?;
 
     Ok((evm_proof, state_proof))
+}
+
+fn extract_proof<R: Read>(reader: &mut R) -> Result<Vec<u8>, IOError> {
+    let mut proof_len_buf = [0u8; 4];
+    reader.read_exact(&mut proof_len_buf)?;
+
+    let proof_len = u32::from_le_bytes(proof_len_buf);
+    let mut proof_buf = vec![0u8; proof_len as usize];
+    reader.read_exact(&mut proof_buf)?;
+    Ok(proof_buf.to_vec())
 }
 
 fn verify_proofs(
