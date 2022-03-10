@@ -7,7 +7,7 @@ use std::os::unix::net::UnixListener;
 use std::path::Path;
 use zkevm_circuits::{evm_circuit::EvmCircuit, state_circuit::StateCircuit};
 
-const SOCKET_PATH: &'static str = "/tmp/halo2.sock";
+const SOCKET_PATH: &'static str = "/tmp/verifier.sock";
 // TODO: what should this be?
 const DEGREE: u32 = 1;
 
