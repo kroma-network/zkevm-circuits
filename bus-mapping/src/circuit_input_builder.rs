@@ -1858,9 +1858,7 @@ mod tracer_tests {
         fn new(geth_data: &GethData, geth_step: &GethExecStep) -> Self {
             let block = crate::mock::BlockData::new_from_geth_data(geth_data.clone());
             let mut builder = block.new_circuit_input_builder();
-            let tx = builder
-                .new_tx(&block.eth_tx, Default::default(), true)
-                .unwrap();
+            let tx = builder.new_tx(&block.eth_tx, true, None).unwrap();
             let tx_ctx = TransactionContext::new(
                 &block.eth_tx,
                 &GethExecTrace {

@@ -64,7 +64,7 @@ pub fn test_circuits_using_bytecode(
         .handle_tx(
             &block_trace.eth_tx,
             &block_trace.geth_trace,
-            &config.call_data,
+            config.call_data.as_ref().map(Vec::as_ref),
         )
         .unwrap();
 
