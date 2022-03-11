@@ -530,8 +530,8 @@ impl Transaction {
         sdb: &StateDB,
         code_db: &mut CodeDB,
         eth_tx: &eth_types::Transaction,
-        config: TransactionConfig,
         is_success: bool,
+        call_data: Option<&[u8]>,
     ) -> Result<Self, Error> {
         let (found, _) = sdb.get_account(&eth_tx.from);
         if !found {
@@ -550,7 +550,7 @@ impl Transaction {
                 caller_id: 0,
                 kind: CallKind::Call,
                 is_static: false,
-                is_root: config.is_root_call,
+                is_root: true,
                 is_persistent: is_success,
                 is_success,
                 rw_counter_end_of_reversion: 0,
@@ -560,9 +560,9 @@ impl Transaction {
                 code_hash,
                 depth: 1,
                 value: eth_tx.value,
-                call_data_offset: config.call_data_offset,
+                call_data_offset: 0,
                 call_data_length: std::cmp::max(
-                    config.call_data_length,
+                    call_data.map_or(0, |data| data.len()),
                     eth_tx.input.as_ref().len(),
                 ) as u64,
                 return_data_offset: 0,
@@ -593,10 +593,10 @@ impl Transaction {
             }
         };
 
-        let mut input = eth_tx.input.to_vec();
-        if input.len() < config.call_data_length {
-            input.resize(config.call_data_length, 0);
-        }
+        let input = match call_data {
+            Some(data) => data.to_vec(),
+            None => eth_tx.input.to_vec(),
+        };
 
         Ok(Self {
             nonce: eth_tx.nonce.as_u64(),
@@ -1316,8 +1316,8 @@ impl<'a> CircuitInputBuilder {
     pub fn new_tx(
         &mut self,
         eth_tx: &eth_types::Transaction,
-        config: TransactionConfig,
         is_success: bool,
+        call_data: Option<&[u8]>,
     ) -> Result<Transaction, Error> {
         let call_id = self.block_ctx.rwc.0;
 
@@ -1337,8 +1337,8 @@ impl<'a> CircuitInputBuilder {
             &self.sdb,
             &mut self.code_db,
             eth_tx,
-            config,
             is_success,
+            call_data,
         )
     }
 
@@ -1372,7 +1372,7 @@ impl<'a> CircuitInputBuilder {
     ) -> Result<(), Error> {
         for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
             let geth_trace = &geth_traces[tx_index];
-            self.handle_tx(tx, geth_trace, Default::default())?;
+            self.handle_tx(tx, geth_trace, None)?;
         }
         self.set_value_ops_call_context_rwc_eor();
         Ok(())
@@ -1386,9 +1386,9 @@ impl<'a> CircuitInputBuilder {
         &mut self,
         eth_tx: &eth_types::Transaction,
         geth_trace: &GethExecTrace,
-        tx_config: TransactionConfig,
+        call_data: Option<&[u8]>,
     ) -> Result<(), Error> {
-        let mut tx = self.new_tx(eth_tx, tx_config, !geth_trace.failed)?;
+        let mut tx = self.new_tx(eth_tx, !geth_trace.failed, call_data)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace)?;
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
