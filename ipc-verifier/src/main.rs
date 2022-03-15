@@ -8,6 +8,7 @@ use std::fs;
 use std::io::{Cursor, Error as IOError, Read, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
+use tracing::{debug, info};
 use zkevm_circuits::state_circuit::StateCircuit;
 
 use eth_types::Field;
@@ -22,33 +23,47 @@ const SOCKET_PATH: &'static str = "/tmp/verifier.sock";
 const DEGREE: u32 = 1;
 
 fn main() {
-    let socket = Path::new(SOCKET_PATH);
+    // Init logging
+    tracing_subscriber::fmt::init();
 
-    // Delete old socket if present
-    if socket.exists() {
-        fs::remove_file(&socket).expect("should be able to clear out old socket file");
-    }
-
-    // Start a server on the unix socket
-    let listener = UnixListener::bind(&socket).expect("should be able to bind to unix socket");
-
-    let (mut socket, _addr) = listener
-        .accept()
-        .expect("should be able to accept a connection");
+    info!("starting preliminary setup");
 
     // Set up params
     // TODO: this should probably come from a transcript file later on
+    debug!("building parameters");
     let general_params: Params<G1Affine> = Params::<G1Affine>::unsafe_setup::<Bn256>(DEGREE);
+
+    debug!("generating circuits");
     let evm_circuit = TestCircuit::<Fr>::default();
     // TODO: where do i get the config?
     let state_circuit = StateCircuit::<Fr, true, 49152, 16384, 2000, 16384, 1300, 16384>::default();
 
+    debug!("generating verifier keys");
     let evm_vk = keygen_vk(&general_params, &evm_circuit).unwrap();
-
     let state_vk = keygen_vk(&general_params, &state_circuit).unwrap();
 
+    debug!("generating verifier parameters");
     let verifier_params: ParamsVerifier<Bn256> =
         general_params.verifier((DEGREE * 2) as usize).unwrap();
+
+    let socket = Path::new(SOCKET_PATH);
+
+    // Delete old socket if present
+    if socket.exists() {
+        debug!("old socket file removed");
+        fs::remove_file(&socket).expect("should be able to clear out old socket file");
+    }
+
+    info!("starting server");
+
+    // Start a server on the unix socket
+    let listener = UnixListener::bind(&socket).expect("should be able to bind to unix socket");
+
+    let (mut socket, addr) = listener
+        .accept()
+        .expect("should be able to accept a connection");
+
+    info!("server started on {:?}", addr);
 
     loop {
         // Read msg length
@@ -59,17 +74,23 @@ fn main() {
 
         let msg_length = u32::from_le_bytes(buf);
 
+        debug!("reading a message of {} bytes", msg_length);
+
         let mut buf = vec![0u8; msg_length as usize];
         socket
             .read_exact(&mut buf)
             .expect("should be able to read proof message");
 
+        debug!("message read finished");
+
+        debug!("recovering proofs");
         let mut reader = Cursor::new(buf);
         let (evm_proof, state_proof) =
             recover_transcripts(&mut reader).expect("should be able to recover proofs");
 
         let verified = verify_proofs(evm_proof, state_proof, &verifier_params, &evm_vk, &state_vk);
 
+        debug!("writing response {}", verified);
         socket
             .write(&vec![verified as u8])
             .expect("should be able to write to the sequencer");
@@ -106,6 +127,7 @@ fn verify_proofs(
     state_vk: &VerifyingKey<G1Affine>,
 ) -> bool {
     // State
+    debug!("verifying state proof");
     let mut verifier_transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&state_proof[..]);
     let strategy = SingleVerifier::new(&verifier_params);
 
