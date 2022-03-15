@@ -156,62 +156,64 @@ impl<F: Field> ExecutionGadget<F> for CopyToMemoryGadget<F> {
         _: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        let StepAuxiliaryData::CopyToMemory {
+        if let StepAuxiliaryData::CopyToMemory {
             src_addr,
             dst_addr,
             bytes_left,
             src_addr_end,
             from_tx,
             selectors,
-        } = step.aux_data.as_ref().unwrap();
+        } = step.aux_data.as_ref().unwrap(){
+                self.src_addr
+                .assign(region, offset, Some(F::from(*src_addr)))?;
+            self.dst_addr
+                .assign(region, offset, Some(F::from(*dst_addr)))?;
+            self.bytes_left
+                .assign(region, offset, Some(F::from(*bytes_left)))?;
+            self.src_addr_end
+                .assign(region, offset, Some(F::from(*src_addr_end)))?;
+            self.from_tx
+                .assign(region, offset, Some(F::from(*from_tx as u64)))?;
+            self.tx_id
+                .assign(region, offset, Some(F::from(tx.id as u64)))?;
 
-        self.src_addr
-            .assign(region, offset, Some(F::from(*src_addr)))?;
-        self.dst_addr
-            .assign(region, offset, Some(F::from(*dst_addr)))?;
-        self.bytes_left
-            .assign(region, offset, Some(F::from(*bytes_left)))?;
-        self.src_addr_end
-            .assign(region, offset, Some(F::from(*src_addr_end)))?;
-        self.from_tx
-            .assign(region, offset, Some(F::from(*from_tx as u64)))?;
-        self.tx_id
-            .assign(region, offset, Some(F::from(tx.id as u64)))?;
-
-        // Retrieve the bytes
-        assert_eq!(selectors.len(), MAX_COPY_BYTES);
-        let mut rw_idx = 0;
-        let mut bytes = vec![0u8; MAX_COPY_BYTES];
-        for (idx, selector) in selectors.iter().enumerate() {
-            let addr = *src_addr as usize + idx;
-            bytes[idx] = if *selector == 1 && addr < *src_addr_end as usize {
-                if *from_tx {
-                    assert!(addr < tx.call_data.len());
-                    tx.call_data[addr]
+            // Retrieve the bytes
+            assert_eq!(selectors.len(), MAX_COPY_BYTES);
+            let mut rw_idx = 0;
+            let mut bytes = vec![0u8; MAX_COPY_BYTES];
+            for (idx, selector) in selectors.iter().enumerate() {
+                let addr = *src_addr as usize + idx;
+                bytes[idx] = if *selector == 1 && addr < *src_addr_end as usize {
+                    if *from_tx {
+                        assert!(addr < tx.call_data.len());
+                        tx.call_data[addr]
+                    } else {
+                        rw_idx += 1;
+                        block.rws[step.rw_indices[rw_idx]].memory_value()
+                    }
                 } else {
-                    rw_idx += 1;
-                    block.rws[step.rw_indices[rw_idx]].memory_value()
+                    0
+                };
+                if *selector == 1 {
+                    // increase rw_idx for writing back to memory
+                    rw_idx += 1
                 }
-            } else {
-                0
-            };
-            if *selector == 1 {
-                // increase rw_idx for writing back to memory
-                rw_idx += 1
             }
+
+            self.buffer_reader
+                .assign(region, offset, *src_addr, *src_addr_end, &bytes, selectors)?;
+
+            let num_bytes_copied = selectors.iter().fold(0, |acc, s| acc + (*s as u64));
+            self.finish_gadget.assign(
+                region,
+                offset,
+                F::from(num_bytes_copied),
+                F::from(*bytes_left),
+            )?;
+
         }
 
-        self.buffer_reader
-            .assign(region, offset, *src_addr, *src_addr_end, &bytes, selectors)?;
-
-        let num_bytes_copied = selectors.iter().fold(0, |acc, s| acc + (*s as u64));
-        self.finish_gadget.assign(
-            region,
-            offset,
-            F::from(num_bytes_copied),
-            F::from(*bytes_left),
-        )?;
-
+       
         Ok(())
     }
 }

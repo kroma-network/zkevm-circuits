@@ -27,6 +27,7 @@ mod stackonlyop;
 mod stop;
 mod swap;
 mod timestamp;
+mod logs;
 use crate::evm::OpcodeId;
 use log::warn;
 
@@ -50,6 +51,7 @@ use sload::Sload;
 use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
 use swap::Swap;
+use logs::Log;
 
 /// Generic opcode trait which defines the logic of the
 /// [`Operation`](crate::operation::Operation) that should be generated for one

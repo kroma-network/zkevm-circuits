@@ -281,6 +281,12 @@ pub enum StepAuxiliaryData {
         from_tx: bool,
         selectors: Vec<u8>,
     },
+    CopyToLog {
+        src_addr: u64,
+        bytes_left: u64,
+        src_addr_end: u64,
+        selectors: Vec<u8>,
+    },
 }
 
 impl From<circuit_input_builder::StepAuxiliaryData> for StepAuxiliaryData {
@@ -299,6 +305,17 @@ impl From<circuit_input_builder::StepAuxiliaryData> for StepAuxiliaryData {
                 bytes_left,
                 src_addr_end,
                 from_tx,
+                selectors,
+            },
+            circuit_input_builder::StepAuxiliaryData::CopyToLog {
+                src_addr,
+                bytes_left,
+                src_addr_end,
+                selectors,
+            } => StepAuxiliaryData::CopyToLog {
+                src_addr,
+                bytes_left,
+                src_addr_end,
                 selectors,
             },
         }
@@ -1054,6 +1071,9 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                 if op.is_swap() {
                     return ExecutionState::SWAP;
                 }
+                if op.is_log() {
+                    return ExecutionState::LOG;
+                }
                 match op {
                     OpcodeId::ADD => ExecutionState::ADD,
                     OpcodeId::MUL => ExecutionState::MUL,
@@ -1090,6 +1110,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
             }
             circuit_input_builder::ExecState::BeginTx => ExecutionState::BeginTx,
             circuit_input_builder::ExecState::CopyToMemory => ExecutionState::CopyToMemory,
+            circuit_input_builder::ExecState::CopyToLog => ExecutionState::CopyToLog,
         }
     }
 }
@@ -1119,6 +1140,7 @@ fn step_convert(step: &circuit_input_builder::ExecStep) -> ExecStep {
                     operation::Target::Account => RwTableTag::Account,
                     operation::Target::AccountDestructed => RwTableTag::AccountDestructed,
                     operation::Target::CallContext => RwTableTag::CallContext,
+                    operation::Target::TxLog => RwTableTag::TxLog,
                 };
                 (tag, x.as_usize())
             })

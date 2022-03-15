@@ -106,6 +106,8 @@ pub enum Target {
     AccountDestructed,
     /// Means the target of the operation is the CallContext.
     CallContext,
+    /// Means the target of the operation is the tx log.
+    TxLog,
 }
 
 /// Trait used for Operation Kinds.
@@ -733,6 +735,68 @@ impl Op for CallContextOp {
     }
 }
 
+/// tx log Op
+/// 
+/// Represents a field parameter of the TxLogOp that can be accessed via EVM
+/// execution.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TxLogField {
+    /// contract address
+    Address,
+    /// topic of log
+    Topics,
+    /// data of log
+    Data,
+    /// topic included in block
+    BlockNumber,
+}
+
+/// Represents an CallContext read/write operation.
+#[derive(Clone, PartialEq, Eq)]
+pub struct TxLogOp {
+    ///TODO: chagnge to log_id later
+    pub log_index: u64,
+    /// topic index if field_tag is TxLogField::Topics or byte index if field_tag is TxLogField::Data 
+    pub index: usize,
+    /// field of CallContext
+    pub field_tag: TxLogField,
+    /// when it is topic field, value can be word type
+    pub value: Word,
+}
+
+impl fmt::Debug for TxLogOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("TxLogOp { ")?;
+        f.write_fmt(format_args!(
+            "log_index: {:?}, index: {:?}, field: {:?}, value: {:?}",
+            self.log_index, self.index, self.field_tag, self.value
+        ))?;
+        f.write_str(" }")
+    }
+}
+
+impl PartialOrd for TxLogOp {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TxLogOp {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (&self.log_index).cmp(&(&other.log_index))
+    }
+}
+
+impl Op for TxLogOp {
+    fn into_enum(self) -> OpEnum {
+        OpEnum::TxLog(self)
+    }
+
+    fn reverse(&self) -> Self {
+        unreachable!()
+    }
+}
+
 /// Generic enum that wraps over all the operation types possible.
 /// In particular [`StackOp`], [`MemoryOp`] and [`StorageOp`].
 #[derive(Debug, Clone)]
@@ -755,6 +819,8 @@ pub enum OpEnum {
     AccountDestructed(AccountDestructedOp),
     /// CallContext
     CallContext(CallContextOp),
+    /// TxLog
+    TxLog(TxLogOp),
 }
 
 /// Operation is a Wrapper over a type that implements Op with a RWCounter.

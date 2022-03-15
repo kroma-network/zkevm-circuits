@@ -20,6 +20,7 @@ pub enum ExecutionState {
     // Internal state
     BeginTx,
     CopyToMemory,
+    CopyToLog,
     // Opcode successful cases
     STOP,
     ADD, // ADD, SUB

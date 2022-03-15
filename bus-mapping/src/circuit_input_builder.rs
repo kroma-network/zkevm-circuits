@@ -5,7 +5,7 @@ use crate::exec_trace::OperationRef;
 use crate::geth_errors::*;
 use crate::operation::container::OperationContainer;
 use crate::operation::{
-    AccountField, CallContextField, MemoryOp, Op, OpEnum, Operation, RWCounter, StackOp, Target, RW,
+    AccountField, CallContextField, TxLogOp, TxLogField, MemoryOp, Op, OpEnum, Operation, RWCounter, StackOp, Target, RW,
 };
 use crate::state_db::{self, CodeDB, StateDB};
 use crate::Error;
@@ -98,6 +98,8 @@ pub enum ExecState {
     BeginTx,
     /// Virtual step Copy To Memory
     CopyToMemory,
+    /// Virtual step Copy To Memory
+    CopyToLog,
 }
 
 /// Auxiliary data of Execution step
@@ -115,6 +117,17 @@ pub enum StepAuxiliaryData {
         src_addr_end: u64,
         /// If from transaction
         from_tx: bool,
+        /// Selectors
+        selectors: Vec<u8>,
+    },
+    /// Auxiliary data of Copy memory data to log
+    CopyToLog {
+        /// Source start address
+        src_addr: u64,
+        /// Bytes left
+        bytes_left: u64,
+        /// Source end address
+        src_addr_end: u64,
         /// Selectors
         selectors: Vec<u8>,
     },
@@ -775,6 +788,32 @@ impl<'a> CircuitInputStateRef<'a> {
             StackOp {
                 call_id,
                 address,
+                value,
+            },
+        );
+    }
+
+
+    /// Push a [`TxLogOp`] into the [`OperationContainer`] with the next
+    /// [`RWCounter`] , and then adds a reference to
+    /// the stored operation ([`OperationRef`]) inside the bus-mapping
+    /// instance of the current [`ExecStep`].  Then increase the `block_ctx`
+    /// [`RWCounter`] by one.
+    pub fn push_log_op(
+        &mut self,
+        step: &mut ExecStep,
+        log_index: u64,
+        index:usize,
+        field: TxLogField,
+        value: Word,
+    ) {
+        self.push_op(
+            step,
+            RW::WRITE,
+            TxLogOp {
+                log_index,
+                index,
+                field_tag: field,
                 value,
             },
         );

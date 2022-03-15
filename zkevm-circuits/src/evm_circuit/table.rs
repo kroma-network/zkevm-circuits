@@ -138,6 +138,7 @@ pub enum RwTableTag {
     Account,
     AccountDestructed,
     CallContext,
+    TxLog,
 }
 
 impl RwTableTag {
