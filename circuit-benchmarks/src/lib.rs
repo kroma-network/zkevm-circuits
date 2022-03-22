@@ -2,6 +2,9 @@
 pub mod evm_circuit;
 
 #[cfg(feature = "benches")]
+pub mod evm_circuit_halo2ecc;
+
+#[cfg(feature = "benches")]
 pub mod state_circuit;
 
 #[cfg(test)]

@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+num-bigint = { version = "0.4", features = ["rand"] }
 ff = "0.11"
-halo2_proofs = { git = "https://github.com/appliedzkp/halo2.git", tag = "v2022_03_06" }
+halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", rev = "3f6196fed5a61b7f86eb56848b4193d7a7b830d9" }
 pairing = { git = 'https://github.com/appliedzkp/pairing', package = "pairing_bn256" }
 ark-std = { version = "0.3", features = ["print-trace"] }
 zkevm-circuits = { path = "../zkevm-circuits" }
@@ -17,6 +18,8 @@ rand_xorshift = "0.3"
 rand = "0.8"
 itertools = "0.10"
 eth-types = { path = "../eth-types" }
+halo2-snark-aggregator = { git = 'https://github.com/scroll-tech/halo2-snark-aggregator.git', branch = 'main' }
+rand_pcg = "0.3.1"
 
 [features]
 default = []

@@ -54,13 +54,17 @@ mod evm_circ_benches {
     use super::*;
     use crate::bench_params::DEGREE;
     use ark_std::{end_timer, start_timer};
-    use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, SingleVerifier};
+    use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof_check, SingleVerifier};
     use halo2_proofs::{
         poly::commitment::{Params, ParamsVerifier},
         transcript::{Blake2bRead, Blake2bWrite, Challenge255},
     };
+    use halo2_snark_aggregator::arith::code::{FieldCode, PointCode};
+    use halo2_snark_aggregator::verify::halo2::verify::query::IVerifierParams;
+    use pairing::arithmetic::CurveAffine;
     use pairing::bn256::{Bn256, Fr, G1Affine};
     use rand::SeedableRng;
+    use rand_pcg::Pcg32;
     use rand_xorshift::XorShiftRng;
     use std::env::var;
 
@@ -110,16 +114,43 @@ mod evm_circ_benches {
         let mut verifier_transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
         let strategy = SingleVerifier::new(&verifier_params);
 
+        use halo2_snark_aggregator::verify::halo2::verify::*;
+
+        let params: Params<G1Affine> = Params::<G1Affine>::unsafe_setup_rng::<Bn256, _>(
+            verifier_params.k,
+            Pcg32::seed_from_u64(42),
+        );
+        let params_verifier: ParamsVerifier<Bn256> = params.verifier(DEGREE * 2).unwrap();
+
+        let fc = FieldCode::<<G1Affine as CurveAffine>::ScalarExt>::default();
+        let pc = PointCode::<G1Affine>::default();
+
         // Bench verification time
         let start3 = start_timer!(|| "EVM Proof verification");
-        verify_proof(
+
+        let param = VerifierParams::from_transcript(
+            &fc,
+            &pc,
+            &mut (),
+            Fr::zero(),
+            &[&[]],
+            pk.get_vk(),
+            &params_verifier,
+            &mut verifier_transcript,
+        )
+        .unwrap();
+        param.queries(&fc, &mut ()).unwrap();
+
+        let mut verifier_transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+        assert!(verify_proof_check(
             &verifier_params,
             pk.get_vk(),
             strategy,
             &[&[]],
             &mut verifier_transcript,
-        )
-        .unwrap();
+            |queries| sanity_check_fn(&param, queries),
+        ).is_ok());
+
         end_timer!(start3);
     }
 }
