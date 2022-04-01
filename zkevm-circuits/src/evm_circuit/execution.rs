@@ -615,7 +615,7 @@ impl<F: Field> ExecutionConfig<F> {
                 assign_exec_step!(self.end_block_gadget)
             }
             // opcode
-            ExecutionState::ADD => assign_exec_step!(self.add_sub_gadget),
+            ExecutionState::ADD_SUB => assign_exec_step!(self.add_sub_gadget),
             ExecutionState::BITWISE => assign_exec_step!(self.bitwise_gadget),
             ExecutionState::BYTE => assign_exec_step!(self.byte_gadget),
             ExecutionState::CALLDATACOPY => {
@@ -646,7 +646,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::JUMPI => assign_exec_step!(self.jumpi_gadget),
             ExecutionState::MEMORY => assign_exec_step!(self.memory_gadget),
             ExecutionState::MSIZE => assign_exec_step!(self.msize_gadget),
-            ExecutionState::MUL => assign_exec_step!(self.mul_div_mod_gadget),
+            ExecutionState::MUL_DIV_MOD => assign_exec_step!(self.mul_div_mod_gadget),
             ExecutionState::NUMBER => {
                 assign_exec_step!(self.number_gadget)
             }
