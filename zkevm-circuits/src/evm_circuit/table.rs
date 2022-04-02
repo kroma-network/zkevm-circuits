@@ -213,7 +213,7 @@ pub enum CallContextFieldTag {
     StackPointer,
     GasLeft,
     MemorySize,
-    StateWriteCounter,
+    ReversibleWriteCounter,
 }
 
 impl_expr!(FixedTableTag);

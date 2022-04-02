@@ -982,8 +982,8 @@ impl From<&operation::OperationContainer> for RwMap {
                         CallContextField::StackPointer => CallContextFieldTag::StackPointer,
                         CallContextField::GasLeft => CallContextFieldTag::GasLeft,
                         CallContextField::MemorySize => CallContextFieldTag::MemorySize,
-                        CallContextField::StateWriteCounter => {
-                            CallContextFieldTag::StateWriteCounter
+                        CallContextField::ReversibleWriteCounter => {
+                            CallContextFieldTag::ReversibleWriteCounter
                         }
                     },
                     value: op.op().value,
@@ -1090,8 +1090,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::EQ | OpcodeId::LT | OpcodeId::GT => ExecutionState::CMP,
                     OpcodeId::SLT | OpcodeId::SGT => ExecutionState::SCMP,
                     OpcodeId::SIGNEXTEND => ExecutionState::SIGNEXTEND,
-                    // TODO: Convert REVERT and RETURN to their own ExecutionState.
-                    OpcodeId::STOP | OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::STOP,
+                    OpcodeId::STOP => ExecutionState::STOP,
                     OpcodeId::AND => ExecutionState::BITWISE,
                     OpcodeId::XOR => ExecutionState::BITWISE,
                     OpcodeId::OR => ExecutionState::BITWISE,
@@ -1127,6 +1126,8 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::ORIGIN => ExecutionState::ORIGIN,
                     OpcodeId::CODECOPY => ExecutionState::CODECOPY,
                     OpcodeId::CALLDATALOAD => ExecutionState::CALLDATALOAD,
+                    // TODO: Convert REVERT to its own ExecutionState.
+                    OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::RETURN,
                     _ => unimplemented!("unimplemented opcode {:?}", op),
                 }
             }
