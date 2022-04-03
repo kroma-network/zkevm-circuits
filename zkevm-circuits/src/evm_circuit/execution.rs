@@ -46,6 +46,7 @@ mod number;
 mod pc;
 mod pop;
 mod push;
+mod sdiv_smod;
 mod selfbalance;
 mod signed_comparator;
 mod signextend;
@@ -84,6 +85,7 @@ use number::NumberGadget;
 use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
+use sdiv_smod::SignedDivModGadget;
 use selfbalance::SelfbalanceGadget;
 use signed_comparator::SignedComparatorGadget;
 use signextend::SignextendGadget;
@@ -148,6 +150,7 @@ pub(crate) struct ExecutionConfig<F> {
     pc_gadget: PcGadget<F>,
     pop_gadget: PopGadget<F>,
     push_gadget: PushGadget<F>,
+    sdiv_smod_gadget: SignedDivModGadget<F>,
     selfbalance_gadget: SelfbalanceGadget<F>,
     signed_comparator_gadget: SignedComparatorGadget<F>,
     signextend_gadget: SignextendGadget<F>,
@@ -368,6 +371,7 @@ impl<F: Field> ExecutionConfig<F> {
             pc_gadget: configure_gadget!(),
             pop_gadget: configure_gadget!(),
             push_gadget: configure_gadget!(),
+            sdiv_smod_gadget: configure_gadget!(),
             selfbalance_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
             signextend_gadget: configure_gadget!(),
@@ -656,6 +660,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::SCMP => {
                 assign_exec_step!(self.signed_comparator_gadget)
             }
+            ExecutionState::SDIV_SMOD => assign_exec_step!(self.sdiv_smod_gadget),
             ExecutionState::SELFBALANCE => assign_exec_step!(self.selfbalance_gadget),
             ExecutionState::SIGNEXTEND => {
                 assign_exec_step!(self.signextend_gadget)
