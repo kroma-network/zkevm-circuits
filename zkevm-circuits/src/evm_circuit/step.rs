@@ -24,10 +24,9 @@ pub enum ExecutionState {
     CopyToMemory,
     // Opcode successful cases
     STOP,
-    ADD, // ADD, SUB
-    MUL, // MUL, DIV, MOD
-    SDIV,
-    SMOD,
+    ADD,  // ADD, SUB
+    MUL,  // MUL, DIV, MOD
+    SDIV, // SDIV, SMOD
     ADDMOD,
     MULMOD,
     EXP,
@@ -143,7 +142,6 @@ impl ExecutionState {
             Self::ADD,
             Self::MUL,
             Self::SDIV,
-            Self::SMOD,
             Self::ADDMOD,
             Self::MULMOD,
             Self::EXP,
@@ -288,8 +286,7 @@ impl ExecutionState {
             Self::STOP => vec![OpcodeId::STOP],
             Self::ADD => vec![OpcodeId::ADD, OpcodeId::SUB],
             Self::MUL => vec![OpcodeId::MUL, OpcodeId::DIV, OpcodeId::MOD],
-            Self::SDIV => vec![OpcodeId::SDIV],
-            Self::SMOD => vec![OpcodeId::SMOD],
+            Self::SDIV => vec![OpcodeId::SDIV, OpcodeId::SMOD],
             Self::ADDMOD => vec![OpcodeId::ADDMOD],
             Self::MULMOD => vec![OpcodeId::MULMOD],
             Self::EXP => vec![OpcodeId::EXP],
