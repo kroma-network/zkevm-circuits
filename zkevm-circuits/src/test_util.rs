@@ -6,6 +6,7 @@ use bus_mapping::mock::BlockData;
 use eth_types::geth_types::GethData;
 use halo2_proofs::dev::{MockProver, VerifyFailure};
 use mock::TestContext;
+use pairing::arithmetic::BaseExt;
 use pairing::bn256::Fr;
 
 #[cfg(test)]
@@ -90,9 +91,18 @@ pub fn test_circuits_using_witness_block(
     // public input, since randomness in state circuit and evm
     // circuit must be same
     if config.enable_state_circuit_test {
-        let state_circuit =
-            StateCircuit::<Fr, true, 2000, 200, 1023, 2000>::new(block.randomness, &block.rws);
-        let prover = MockProver::<Fr>::run(12, &state_circuit, vec![]).unwrap();
+        let state_circuit = StateCircuit::new(block.randomness, block.rws.clone());
+
+        let power_of_randomness: Vec<_> = (1..32)
+            .map(|exp| {
+                vec![
+                    block.randomness.pow(&[exp, 0, 0, 0]);
+                    20 // number of rows in the rw table.
+                ]
+            })
+            .collect();
+
+        let prover = MockProver::<Fr>::run(18, &state_circuit, power_of_randomness).unwrap();
         prover.verify()?;
     }
 
