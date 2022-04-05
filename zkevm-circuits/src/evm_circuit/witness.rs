@@ -1094,6 +1094,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::JUMPDEST => ExecutionState::JUMPDEST,
                     OpcodeId::JUMP => ExecutionState::JUMP,
                     OpcodeId::JUMPI => ExecutionState::JUMPI,
+                    OpcodeId::GASPRICE => ExecutionState::GASPRICE,
                     OpcodeId::PC => ExecutionState::PC,
                     OpcodeId::MSIZE => ExecutionState::MSIZE,
                     OpcodeId::CALLER => ExecutionState::CALLER,
@@ -1107,6 +1108,9 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::SLOAD => ExecutionState::SLOAD,
                     OpcodeId::SSTORE => ExecutionState::SSTORE,
                     OpcodeId::CALLDATACOPY => ExecutionState::CALLDATACOPY,
+                    OpcodeId::ISZERO => ExecutionState::ISZERO,
+                    OpcodeId::CALL => ExecutionState::CALL,
+                    OpcodeId::ORIGIN => ExecutionState::ORIGIN,
                     _ => unimplemented!("unimplemented opcode {:?}", op),
                 }
             }
@@ -1226,6 +1230,7 @@ fn tx_convert(tx: &circuit_input_builder::Transaction, id: usize, is_last_tx: bo
             .collect(),
     }
 }
+
 pub fn block_convert(
     block: &circuit_input_builder::Block,
     code_db: &bus_mapping::state_db::CodeDB,

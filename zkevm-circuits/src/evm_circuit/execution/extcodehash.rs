@@ -6,38 +6,32 @@ use crate::{
         table::{AccountFieldTag, CallContextFieldTag},
         util::{
             common_gadget::SameContextGadget,
-            constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            from_bytes, Cell, RandomLinearCombination, Word,
+            constraint_builder::{
+                ConstraintBuilder, ReversionInfo, StepStateTransition, Transition::Delta,
+            },
+            from_bytes,
+            math_gadget::BatchedIsZeroGadget,
+            Cell, RandomLinearCombination, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
     util::Expr,
 };
-use eth_types::ToLittleEndian;
 use eth_types::{evm_types::GasCost, Field, ToAddress, ToScalar, U256};
-use ethers_core::utils::keccak256;
 use halo2_proofs::{circuit::Region, plonk::Error};
-use lazy_static::lazy_static;
-
-lazy_static! {
-    static ref EMPTY_CODE_HASH_LE_BYTES: [u8; 32] = U256::from(keccak256(&[])).to_le_bytes();
-}
+use keccak256::EMPTY_HASH_LE;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ExtcodehashGadget<F> {
     same_context: SameContextGadget<F>,
     external_address: RandomLinearCombination<F, N_BYTES_ACCOUNT_ADDRESS>,
     tx_id: Cell<F>,
-    is_persistent: Cell<F>,
-    rw_counter_end_of_reversion: Cell<F>,
+    reversion_info: ReversionInfo<F>,
     is_warm: Cell<F>,
     nonce: Cell<F>,
     balance: Cell<F>,
     code_hash: Cell<F>,
-    is_empty: Cell<F>, // boolean for if the external account is empty
-    nonempty_witness: Cell<F>, /* if the account isn't empty, will witness that by holding
-                        * inverse of one of balance, nonce, or RLC(code hash) -
-                        * RLC(EMPTY_CODE_HASH_LE_BYTES) */
+    is_empty: BatchedIsZeroGadget<F, 3>, // boolean for if the external account is empty
 }
 
 impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
@@ -49,12 +43,8 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
         let external_address = cb.query_rlc();
         cb.stack_pop(external_address.expr());
 
-        let [tx_id, rw_counter_end_of_reversion, is_persistent] = [
-            CallContextFieldTag::TxId,
-            CallContextFieldTag::RwCounterEndOfReversion,
-            CallContextFieldTag::IsPersistent,
-        ]
-        .map(|tag| cb.call_context(None, tag));
+        let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
+        let mut reversion_info = cb.reversion_info(None);
 
         let is_warm = cb.query_bool();
         cb.account_access_list_write(
@@ -62,13 +52,7 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
             from_bytes::expr(&external_address.cells),
             1.expr(),
             is_warm.expr(),
-            Some(
-                (
-                    &is_persistent,
-                    rw_counter_end_of_reversion.expr() - cb.curr.state.state_write_counter.expr(),
-                )
-                    .into(),
-            ),
+            Some(&mut reversion_info),
         );
 
         let nonce = cb.query_cell();
@@ -90,41 +74,27 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
             code_hash.expr(),
         );
 
-        let is_empty = cb.query_bool();
-        cb.require_zero(
-            "is_empty is 0 when nonce is non-zero",
-            is_empty.expr() * nonce.expr(),
+        let empty_code_hash_rlc = Word::random_linear_combine_expr(
+            (*EMPTY_HASH_LE).map(|byte| byte.expr()),
+            cb.power_of_randomness(),
         );
         // Note that balance is RLC encoded, but RLC(x) = 0 iff x = 0, so we don't need
         // go to the work of writing out the RLC expression
-        cb.require_zero(
-            "is_empty is 0 when balance is non-zero",
-            is_empty.expr() * balance.expr(),
-        );
-        let empty_code_hash_rlc = Word::random_linear_combine_expr(
-            EMPTY_CODE_HASH_LE_BYTES.map(|x| x.expr()),
-            cb.power_of_randomness(),
-        );
-        cb.require_zero(
-            "is_empty is 0 when code_hash is non-zero",
-            is_empty.expr() * (code_hash.expr() - empty_code_hash_rlc.clone()),
-        );
-
-        let nonempty_witness = cb.query_cell();
-        cb.require_zero(
-            "is_empty is 1 if nonce, balance, and (code_hash - empty_code_hash_rlc) are all zero",
-            (1.expr() - is_empty.expr())
-                * (1.expr() - nonce.expr() * nonempty_witness.expr())
-                * (1.expr() - balance.expr() * nonempty_witness.expr())
-                * (1.expr() - (code_hash.expr() - empty_code_hash_rlc) * nonempty_witness.expr()),
+        let is_empty = BatchedIsZeroGadget::construct(
+            cb,
+            [
+                nonce.expr(),
+                balance.expr(),
+                code_hash.expr() - empty_code_hash_rlc,
+            ],
         );
 
         // The stack push is 0 if the external account is empty. Otherwise, it's the
         // code hash
         cb.stack_push((1.expr() - is_empty.expr()) * code_hash.expr());
 
-        let gas_cost = is_warm.expr() * GasCost::WARM_STORAGE_READ_COST.expr()
-            + (1.expr() - is_warm.expr()) * GasCost::COLD_ACCOUNT_ACCESS_COST.expr();
+        let gas_cost = is_warm.expr() * GasCost::WARM_ACCESS.expr()
+            + (1.expr() - is_warm.expr()) * GasCost::COLD_ACCOUNT_ACCESS.expr();
         let step_state_transition = StepStateTransition {
             rw_counter: Delta(cb.rw_counter_offset()),
             program_counter: Delta(1.expr()),
@@ -141,14 +111,12 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
             same_context,
             external_address,
             tx_id,
-            is_persistent,
-            rw_counter_end_of_reversion,
+            reversion_info,
             is_warm,
             nonce,
             balance,
             code_hash,
             is_empty,
-            nonempty_witness,
         }
     }
 
@@ -171,17 +139,16 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
 
         self.tx_id
             .assign(region, offset, U256::from(tx.id).to_scalar())?;
-        self.is_persistent
-            .assign(region, offset, Some(F::from(call.is_persistent as u64)))?;
-        self.rw_counter_end_of_reversion.assign(
+        self.reversion_info.assign(
             region,
             offset,
-            Some(F::from(call.rw_counter_end_of_reversion as u64)),
+            call.rw_counter_end_of_reversion,
+            call.is_persistent,
         )?;
 
         let is_warm = match GasCost::from(step.gas_cost) {
-            GasCost::COLD_ACCOUNT_ACCESS_COST => 0,
-            GasCost::WARM_STORAGE_READ_COST => 1,
+            GasCost::COLD_ACCOUNT_ACCESS => 0,
+            GasCost::WARM_ACCESS => 1,
             _ => unreachable!(),
         };
         self.is_warm
@@ -192,22 +159,17 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
                 .table_assignment(block.randomness)
                 .value
         });
+
         self.nonce.assign(region, offset, Some(nonce))?;
         self.balance.assign(region, offset, Some(balance))?;
         self.code_hash.assign(region, offset, Some(code_hash))?;
 
-        let empty_code_hash_rlc =
-            Word::random_linear_combine(*EMPTY_CODE_HASH_LE_BYTES, block.randomness);
-
-        if let Some(inverse) = Option::from(nonce.invert())
-            .or_else(|| balance.invert().into())
-            .or_else(|| (code_hash - empty_code_hash_rlc).invert().into())
-        {
-            self.nonempty_witness
-                .assign(region, offset, Some(inverse))?;
-        } else {
-            self.is_empty.assign(region, offset, Some(F::one()))?;
-        }
+        let empty_code_hash_rlc = Word::random_linear_combine(*EMPTY_HASH_LE, block.randomness);
+        self.is_empty.assign(
+            region,
+            offset,
+            [nonce, balance, code_hash - empty_code_hash_rlc],
+        )?;
 
         Ok(())
     }
@@ -221,10 +183,12 @@ mod test {
     };
     use bus_mapping::mock::BlockData;
     use eth_types::{
-        address, bytecode, geth_types::Account, Address, Bytecode, Bytes, ToWord, U256,
+        address, bytecode,
+        geth_types::{Account, GethData},
+        Address, Bytecode, Bytes, ToWord, Word, U256,
     };
     use lazy_static::lazy_static;
-    use mock::new_single_tx_trace_accounts;
+    use mock::TestContext;
 
     lazy_static! {
         static ref EXTERNAL_ADDRESS: Address =
@@ -243,7 +207,7 @@ mod test {
         if is_warm {
             code.append(&bytecode! {
                 PUSH20(external_address.to_word())
-                EXTCODEHASH // TODO: change this to BALANCE once it's implemented
+                EXTCODEHASH // TODO: Change this to BALANCE once is implemented
                 POP
             });
         }
@@ -254,23 +218,38 @@ mod test {
             STOP
         });
 
-        let mut accounts = vec![Account {
-            address: Address::default(), // This is the address of the executing account
-            code: Bytes::from(code.to_vec()),
-            ..Default::default()
-        }];
-        if let Some(external_account) = external_account {
-            accounts.push(external_account)
-        }
+        // Execute the bytecode and get trace
+        let block: GethData = TestContext::<3, 1>::new(
+            None,
+            |accs| {
+                accs[0]
+                    .address(address!("0x000000000000000000000000000000000000cafe"))
+                    .balance(Word::from(1u64 << 20))
+                    .code(code);
 
-        // execute the bytecode and get trace
-        let geth_data = new_single_tx_trace_accounts(accounts).unwrap();
-        let block = BlockData::new_from_geth_data(geth_data);
+                accs[1].address(external_address);
+                if let Some(external_account) = external_account {
+                    accs[1]
+                        .balance(external_account.balance)
+                        .nonce(external_account.nonce)
+                        .code(external_account.code);
+                }
+                accs[2]
+                    .address(address!("0x0000000000000000000000000000000000000010"))
+                    .balance(Word::from(1u64 << 20));
+            },
+            |mut txs, accs| {
+                txs[0].to(accs[0].address).from(accs[2].address);
+            },
+            |block, _tx| block.number(0xcafeu64),
+        )
+        .unwrap()
+        .into();
 
-        let mut builder = block.new_circuit_input_builder();
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
             .handle_block(&block.eth_block, &block.geth_traces)
-            .unwrap();
+            .expect("could not handle block tx");
 
         test_circuits_using_witness_block(
             block_convert(&builder.block, &builder.code_db),

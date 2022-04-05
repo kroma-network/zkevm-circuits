@@ -2,8 +2,10 @@ use crate::{
     evm_circuit::{table::FixedTableTag, witness::Block},
     state_circuit::StateCircuit,
 };
-use eth_types::evm_types::Gas;
+use bus_mapping::mock::BlockData;
+use eth_types::geth_types::GethData;
 use halo2_proofs::dev::{MockProver, VerifyFailure};
+use mock::TestContext;
 use pairing::bn256::Fr;
 
 pub enum FixedTableConfig {
@@ -49,29 +51,21 @@ impl Default for BytecodeTestConfig {
     }
 }
 
-pub fn run_test_circuits(bytecode: eth_types::Bytecode) -> Result<(), Vec<VerifyFailure>> {
-    test_circuits_using_bytecode(bytecode, BytecodeTestConfig::default(), None)
-}
-
-pub fn test_circuits_using_bytecode(
-    bytecode: eth_types::Bytecode,
-    config: BytecodeTestConfig,
-    call_data: Option<Vec<u8>>,
+pub fn run_test_circuits<const NACC: usize, const NTX: usize>(
+    test_ctx: TestContext<NACC, NTX>,
+    config: Option<BytecodeTestConfig>,
 ) -> Result<(), Vec<VerifyFailure>> {
-    // execute the bytecode and get trace
-    let block_trace = bus_mapping::mock::BlockData::new_from_geth_data(
-        mock::new_single_tx_trace_code_gas(&bytecode, Gas(config.gas_limit), call_data).unwrap(),
-    );
-    let mut builder = block_trace.new_circuit_input_builder();
+    let block: GethData = test_ctx.into();
+    let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder
-        .handle_block(&block_trace.eth_block, &block_trace.geth_traces)
+        .handle_block(&block.eth_block, &block.geth_traces)
         .unwrap();
 
     // build a witness block from trace result
     let block = crate::evm_circuit::witness::block_convert(&builder.block, &builder.code_db);
 
     // finish required tests according to config using this witness block
-    test_circuits_using_witness_block(block, config)
+    test_circuits_using_witness_block(block, config.unwrap_or_default())
 }
 
 pub fn test_circuits_using_witness_block(
