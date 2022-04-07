@@ -5,13 +5,15 @@ use crate::{
         util::{
             common_gadget::SameContextGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::ShlWordsGadget,
+            math_gadget::{ShlWordsGadget},
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
     util::Expr,
 };
-use halo2::{arithmetic::FieldExt, circuit::Region, plonk::Error};
+
+use eth_types::Field;
+use halo2_proofs::{circuit::Region, plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ShlGadget<F> {
@@ -19,7 +21,7 @@ pub(crate) struct ShlGadget<F> {
     shl_words: ShlWordsGadget<F>,
 }
 
-impl<F: FieldExt> ExecutionGadget<F> for ShlGadget<F> {
+impl<F: Field> ExecutionGadget<F> for ShlGadget<F> {
     const NAME: &'static str = "SHL";
 
     const EXECUTION_STATE: ExecutionState = ExecutionState::SHL;
@@ -41,7 +43,7 @@ impl<F: FieldExt> ExecutionGadget<F> for ShlGadget<F> {
             stack_pointer: Delta(1.expr()),
             ..Default::default()
         };
-        let same_context = SameContextGadget::construct(cb, opcode, step_state_transition, None);
+        let same_context = SameContextGadget::construct(cb, opcode, step_state_transition);
 
         Self {
             same_context,
@@ -54,8 +56,8 @@ impl<F: FieldExt> ExecutionGadget<F> for ShlGadget<F> {
         region: &mut Region<'_, F>,
         offset: usize,
         block: &Block<F>,
-        _: &Transaction<F>,
-        _: &Call<F>,
+        _: &Transaction,
+        _: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
         self.same_context.assign_exec_step(region, offset, step)?;
@@ -71,6 +73,7 @@ mod test {
     use crate::test_util::run_test_circuits;
     use eth_types::evm_types::OpcodeId;
     use eth_types::{bytecode, Word};
+    use mock::TestContext;
     use rand::Rng;
 
     fn test_ok(opcode: OpcodeId, a: Word, shift: Word) {
@@ -81,7 +84,13 @@ mod test {
             .write_op(opcode)
             STOP
         };
-        assert_eq!(run_test_circuits(bytecode), Ok(()));
+        assert_eq!(
+            run_test_circuits(
+                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                None
+            ),
+            Ok(())
+        );
     }
 
     #[test]

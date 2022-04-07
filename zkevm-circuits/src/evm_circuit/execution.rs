@@ -93,6 +93,7 @@ use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
 use selfbalance::SelfbalanceGadget;
+use shl::ShlGadget;
 use shr::ShrGadget;
 use signed_comparator::SignedComparatorGadget;
 use signextend::SignextendGadget;
@@ -161,6 +162,7 @@ pub(crate) struct ExecutionConfig<F> {
     pop_gadget: PopGadget<F>,
     push_gadget: PushGadget<F>,
     selfbalance_gadget: SelfbalanceGadget<F>,
+    shl_gadget: ShlGadget<F>,
     shr_gadget: ShrGadget<F>,
     signed_comparator_gadget: SignedComparatorGadget<F>,
     signextend_gadget: SignextendGadget<F>,
@@ -385,6 +387,7 @@ impl<F: Field> ExecutionConfig<F> {
             pop_gadget: configure_gadget!(),
             push_gadget: configure_gadget!(),
             selfbalance_gadget: configure_gadget!(),
+            shl_gadget: configure_gadget!(),
             shr_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
             signextend_gadget: configure_gadget!(),
@@ -631,7 +634,6 @@ impl<F: Field> ExecutionConfig<F> {
             // opcode
             ExecutionState::ADD_SUB => assign_exec_step!(self.add_sub_gadget),
             ExecutionState::BITWISE => assign_exec_step!(self.bitwise_gadget),
-            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::BYTE => assign_exec_step!(self.byte_gadget),
             ExecutionState::CALL => assign_exec_step!(self.call_gadget),
             ExecutionState::CALLDATACOPY => assign_exec_step!(self.calldatacopy_gadget),
@@ -661,6 +663,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::SELFBALANCE => assign_exec_step!(self.selfbalance_gadget),
             ExecutionState::SIGNEXTEND => assign_exec_step!(self.signextend_gadget),
             ExecutionState::SLOAD => assign_exec_step!(self.sload_gadget),
+            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::SHR => assign_exec_step!(self.shr_gadget),
             ExecutionState::SSTORE => assign_exec_step!(self.sstore_gadget),
             ExecutionState::STOP => assign_exec_step!(self.stop_gadget),

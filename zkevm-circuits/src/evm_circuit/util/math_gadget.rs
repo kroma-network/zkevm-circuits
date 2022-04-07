@@ -3,8 +3,7 @@ use crate::{
         table::{FixedTableTag, Lookup},
         util::{
             self, constraint_builder::ConstraintBuilder, from_bytes, pow_of_two, pow_of_two_expr,
-        select, split_u256, split_u256_limb64, sum, Cell,
-        },
+            select, split_u256, split_u256_limb64, sum, Cell,
         },
     },
     util::Expr,
@@ -1254,7 +1253,7 @@ pub struct ShlWordsGadget<F> {
     // is_zero will check combination of shift[1..32] == 0
     is_zero: IsZeroGadget<F>,
 }
-impl<F: FieldExt> ShlWordsGadget<F> {
+impl<F: Field> ShlWordsGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
         a: util::Word<F>,
@@ -1313,7 +1312,7 @@ impl<F: FieldExt> ShlWordsGadget<F> {
         for transplacement in (0_usize)..(4_usize) {
             // generate the polynomial depends on the shift_div64
             let select_transplacement_polynomial =
-                generate_lagrange_base_polynomial(shift_div64.clone(), transplacement as u64, 4u64);
+                generate_lagrange_base_polynomial(shift_div64.expr(), transplacement, 0..4);
             for idx in 0..(4 - transplacement) {
                 let tmpidx = idx + transplacement;
                 let merge_a = if idx == (0_usize) {
@@ -1359,8 +1358,8 @@ impl<F: FieldExt> ShlWordsGadget<F> {
         for digit_transplacement in 0..8 {
             let select_transplacement_polynomial = generate_lagrange_base_polynomial(
                 shift_mod64_div8.clone(),
-                digit_transplacement as u64,
-                8u64,
+                digit_transplacement,
+                0..8,
             );
             for virtual_idx in 0..4 {
                 for idx in (digit_transplacement + 1)..8 {
@@ -1383,8 +1382,8 @@ impl<F: FieldExt> ShlWordsGadget<F> {
             for digit_transplacement in 0..8 {
                 let select_transplacement_polynomial = generate_lagrange_base_polynomial(
                     shift_mod64_div8.clone(),
-                    digit_transplacement as u64,
-                    8u64,
+                    digit_transplacement,
+                    0..8,
                 );
                 let nowidx = (virtual_idx * 8 + digit_transplacement) as usize;
                 slice_bits_polynomial[0] = slice_bits_polynomial[0].clone()
