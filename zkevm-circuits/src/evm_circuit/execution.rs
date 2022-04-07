@@ -50,6 +50,7 @@ mod pc;
 mod pop;
 mod push;
 mod selfbalance;
+mod shl;
 mod shr;
 mod signed_comparator;
 mod signextend;
@@ -630,6 +631,7 @@ impl<F: Field> ExecutionConfig<F> {
             // opcode
             ExecutionState::ADD_SUB => assign_exec_step!(self.add_sub_gadget),
             ExecutionState::BITWISE => assign_exec_step!(self.bitwise_gadget),
+            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::BYTE => assign_exec_step!(self.byte_gadget),
             ExecutionState::CALL => assign_exec_step!(self.call_gadget),
             ExecutionState::CALLDATACOPY => assign_exec_step!(self.calldatacopy_gadget),
