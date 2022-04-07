@@ -5,7 +5,7 @@ use crate::{
         util::{
             common_gadget::SameContextGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::{ShlWordsGadget},
+            math_gadget::ShlWordsGadget,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
