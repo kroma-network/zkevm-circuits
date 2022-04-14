@@ -9,17 +9,21 @@ use crate::{
                 ConstraintBuilder, StepStateTransition,
                 Transition::{Delta, Same},
             },
+            math_gadget::IsZeroGadget,
             Cell,
         },
-        witness::{Block, Call, ExecStep, Transaction},
+        witness::{Block, Call, CodeSource, ExecStep, Transaction},
     },
     util::Expr,
 };
+use bus_mapping::evm::OpcodeId;
 use eth_types::Field;
 use halo2_proofs::{circuit::Region, plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct StopGadget<F> {
+    code_size: Cell<F>,
+    is_out_of_range: IsZeroGadget<F>,
     opcode: Cell<F>,
     restore_context: RestoreContextGadget<F>,
 }
@@ -30,9 +34,21 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
     const EXECUTION_STATE: ExecutionState = ExecutionState::STOP;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
-        // TODO: Check if opcode fetching is out of range.
+        let code_size = cb.bytecode_length(cb.curr.state.code_source.expr());
+        let is_out_of_range =
+            IsZeroGadget::construct(cb, code_size.expr() - cb.curr.state.program_counter.expr());
         let opcode = cb.query_cell();
-        cb.opcode_lookup(opcode.expr(), 1.expr());
+        cb.condition(1.expr() - is_out_of_range.expr(), |cb| {
+            cb.opcode_lookup(opcode.expr(), 1.expr());
+        });
+
+        // We do the responsible opcode check explicitly here because we're not using
+        // the `SameContextGadget` for `STOP`.
+        cb.require_equal(
+            "Opcode should be STOP",
+            opcode.expr(),
+            OpcodeId::STOP.expr(),
+        );
 
         // Call ends with STOP must be successful
         cb.call_context_lookup(false.expr(), None, CallContextFieldTag::IsSuccess, 1.expr());
@@ -68,6 +84,8 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
         });
 
         Self {
+            code_size,
+            is_out_of_range,
             opcode,
             restore_context,
         }
@@ -82,6 +100,23 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        let code = block
+            .bytecodes
+            .iter()
+            .find(|b| {
+                let CodeSource::Account(code_source) = &call.code_source;
+                b.hash == *code_source
+            })
+            .expect("could not find current environment's bytecode");
+        self.code_size
+            .assign(region, offset, Some(F::from(code.bytes.len() as u64)))?;
+
+        self.is_out_of_range.assign(
+            region,
+            offset,
+            F::from(code.bytes.len() as u64) - F::from(step.program_counter),
+        )?;
+
         let opcode = step.opcode.unwrap();
         self.opcode
             .assign(region, offset, Some(F::from(opcode.as_u64())))?;
@@ -181,10 +216,9 @@ mod test {
                 PUSH1(0)
                 STOP
             },
-            /* TODO: Enable this when opcode fetching out of range is handled
-             * bytecode! {
-             *     PUSH1(0)
-             * }, */
+            bytecode! {
+                PUSH1(0)
+            },
         ];
         let is_roots = vec![true, false];
         for (bytecode, is_root) in bytecodes.into_iter().cartesian_product(is_roots) {
