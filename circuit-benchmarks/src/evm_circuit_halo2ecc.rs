@@ -179,7 +179,7 @@ mod evm_halo2_snark_aggregator_circ_benches {
 
     #[cfg_attr(not(feature = "benches"), ignore)]
     #[test]
-    fn bench_evm_halo2_snark_aggregator_circuit_prover() {
+    fn bench_evm_halo2ecc_circuit_prover() {
         const K: u32 = 20 as u32;
         let circuit = TestEvmCircuitEccCircuit::<G1Affine> {
             test_case: TestCase::Normal,
