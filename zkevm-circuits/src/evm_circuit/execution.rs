@@ -289,7 +289,7 @@ impl<F: Field> ExecutionConfig<F> {
                     .map(move |(name, poly)| (name, (1.expr() - q_step_last.clone()) * poly))
             };
 
-            let _first_step_check = {
+            let first_step_check = {
                 let begin_tx_selector =
                     step_curr.execution_state_selector([ExecutionState::BeginTx]);
                 iter::once((
@@ -298,7 +298,7 @@ impl<F: Field> ExecutionConfig<F> {
                 ))
             };
 
-            let _last_step_check = {
+            let last_step_check = {
                 let end_block_selector =
                     step_curr.execution_state_selector([ExecutionState::EndBlock]);
                 iter::once((
@@ -311,9 +311,8 @@ impl<F: Field> ExecutionConfig<F> {
                 .chain(bool_checks)
                 .chain(execution_state_transition)
                 .map(move |(name, poly)| (name, q_step.clone() * poly))
-                // TODO: Enable these after test of CALLDATACOPY is complete.
-                // .chain(first_step_check)
-                // .chain(last_step_check)
+                .chain(first_step_check)
+                .chain(last_step_check)
         });
 
         // Use qs_byte_lookup as selector to do byte range lookup on each advice
