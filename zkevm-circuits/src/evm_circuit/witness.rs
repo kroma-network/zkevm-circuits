@@ -13,6 +13,7 @@ use bus_mapping::operation::{self, AccountField, CallContextField};
 use eth_types::evm_types::OpcodeId;
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
 use halo2_proofs::arithmetic::{BaseExt, FieldExt};
+use itertools::Itertools;
 use pairing::bn256::Fr as Fp;
 use sha3::{Digest, Keccak256};
 use std::{collections::HashMap, convert::TryInto, iter};
@@ -1269,7 +1270,10 @@ pub fn block_convert(
             .flat_map(|tx| {
                 tx.calls()
                     .iter()
-                    .map(|call| Bytecode::new(code_db.0.get(&call.code_hash).unwrap().to_vec()))
+                    .map(|call| call.code_hash)
+                    .unique()
+                    .into_iter()
+                    .map(|code_hash| Bytecode::new(code_db.0.get(&code_hash).unwrap().to_vec()))
             })
             .collect(),
     }
