@@ -146,15 +146,17 @@ pub enum TxContextFieldTag {
     CallData,
 }
 
+// Keep the sequence consistent with OpcodeId for scalar
 #[derive(Clone, Copy, Debug)]
 pub enum BlockContextFieldTag {
     Coinbase = 1,
-    GasLimit,
-    Number,
     Timestamp,
+    Number,
     Difficulty,
-    BaseFee,
+    GasLimit,
+    BaseFee = 8,
     BlockHash,
+    ChainId,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -168,6 +170,7 @@ pub enum RwTableTag {
     Account,
     AccountDestructed,
     CallContext,
+    TxLog,
 }
 
 impl RwTableTag {
@@ -191,7 +194,21 @@ pub enum AccountFieldTag {
     CodeHash,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum BytecodeFieldTag {
+    Length,
+    Byte,
+    Padding,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TxLogFieldTag {
+    Address = 1,
+    Topic,
+    Data,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum CallContextFieldTag {
     RwCounterEndOfReversion = 1,
     CallerId,
@@ -226,8 +243,10 @@ impl_expr!(FixedTableTag);
 impl_expr!(TxContextFieldTag);
 impl_expr!(RwTableTag);
 impl_expr!(AccountFieldTag);
+impl_expr!(BytecodeFieldTag);
 impl_expr!(CallContextFieldTag);
 impl_expr!(BlockContextFieldTag);
+impl_expr!(TxLogFieldTag);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Table {
@@ -279,13 +298,16 @@ pub(crate) enum Lookup<F> {
     Bytecode {
         /// Hash to specify which code to read.
         hash: Expression<F>,
+        /// Tag to specify whether its the bytecode length or byte value in the
+        /// bytecode.
+        tag: Expression<F>,
         /// Index to specify which byte of bytecode.
         index: Expression<F>,
-        /// Value of the index.
-        value: Expression<F>,
         /// A boolean value to specify if the value is executable opcode or the
         /// data portion of PUSH* operations.
         is_code: Expression<F>,
+        /// Value corresponding to the tag.
+        value: Expression<F>,
     },
     /// Lookup to block table, which contains constants of this block.
     Block {
@@ -338,11 +360,18 @@ impl<F: FieldExt> Lookup<F> {
             .concat(),
             Self::Bytecode {
                 hash,
+                tag,
                 index,
-                value,
                 is_code,
+                value,
             } => {
-                vec![hash.clone(), index.clone(), value.clone(), is_code.clone()]
+                vec![
+                    hash.clone(),
+                    tag.clone(),
+                    index.clone(),
+                    is_code.clone(),
+                    value.clone(),
+                ]
             }
             Self::Block {
                 field_tag,

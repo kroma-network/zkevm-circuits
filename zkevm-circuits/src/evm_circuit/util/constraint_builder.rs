@@ -3,8 +3,8 @@ use crate::{
         param::STACK_CAPACITY,
         step::{ExecutionState, Preset, Step},
         table::{
-            AccountFieldTag, CallContextFieldTag, FixedTableTag, Lookup, RwTableTag,
-            TxContextFieldTag,
+            AccountFieldTag, BytecodeFieldTag, CallContextFieldTag, FixedTableTag, Lookup,
+            RwTableTag, TxContextFieldTag, TxLogFieldTag,
         },
         util::{Cell, RandomLinearCombination, Word},
     },
@@ -13,7 +13,10 @@ use crate::{
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::Region,
-    plonk::{Error, Expression},
+    plonk::{
+        Error,
+        Expression::{self, Constant},
+    },
 };
 use std::convert::TryInto;
 
@@ -57,6 +60,7 @@ pub(crate) struct StepStateTransition<F: FieldExt> {
     pub(crate) gas_left: Transition<Expression<F>>,
     pub(crate) memory_word_size: Transition<Expression<F>>,
     pub(crate) reversible_write_counter: Transition<Expression<F>>,
+    pub(crate) log_id: Transition<Expression<F>>,
 }
 
 impl<F: FieldExt> StepStateTransition<F> {
@@ -81,6 +85,7 @@ impl<F: FieldExt> StepStateTransition<F> {
             gas_left: Transition::Any,
             memory_word_size: Transition::Any,
             reversible_write_counter: Transition::Any,
+            log_id: Transition::Any,
         }
     }
 }
@@ -248,6 +253,7 @@ pub(crate) struct ConstraintBuilder<'a, F> {
     rw_counter_offset: Expression<F>,
     program_counter_offset: usize,
     stack_pointer_offset: i32,
+    log_id_offset: usize,
     in_next_step: bool,
     condition: Option<Expression<F>>,
 }
@@ -272,6 +278,7 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
             rw_counter_offset: 0.expr(),
             program_counter_offset: 0,
             stack_pointer_offset: 0,
+            log_id_offset: 0,
             in_next_step: false,
             condition: None,
         }
@@ -346,6 +353,10 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
 
     pub(crate) fn stack_pointer_offset(&self) -> i32 {
         self.stack_pointer_offset
+    }
+
+    pub(crate) fn log_id_offset(&self) -> usize {
+        self.log_id_offset
     }
 
     // Query
@@ -496,6 +507,7 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
         constrain!(gas_left);
         constrain!(memory_word_size);
         constrain!(reversible_write_counter);
+        constrain!(log_id);
     }
 
     // Fixed
@@ -546,12 +558,49 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
             "Opcode lookup",
             Lookup::Bytecode {
                 hash: self.curr.state.code_source.expr(),
+                tag: BytecodeFieldTag::Byte.expr(),
                 index,
-                value: opcode,
                 is_code,
+                value: opcode,
             }
             .conditional(1.expr() - is_root_create),
         );
+    }
+
+    // Bytecode table
+
+    pub(crate) fn bytecode_lookup(
+        &mut self,
+        code_hash: Expression<F>,
+        index: Expression<F>,
+        is_code: Expression<F>,
+        value: Expression<F>,
+    ) {
+        self.add_lookup(
+            "Bytecode (byte) lookup",
+            Lookup::Bytecode {
+                hash: code_hash,
+                tag: BytecodeFieldTag::Byte.expr(),
+                index,
+                is_code,
+                value,
+            },
+        )
+    }
+
+    pub(crate) fn bytecode_length(&mut self, code_hash: Expression<F>) -> Cell<F> {
+        let cell = self.query_cell();
+        self.add_lookup(
+            "Bytecode (length)",
+            Lookup::Bytecode {
+                hash: code_hash,
+                tag: BytecodeFieldTag::Length.expr(),
+                index: 0.expr(),
+                is_code: 0.expr(),
+                value: cell.expr(),
+            },
+        );
+        cell
     }
 
     // Tx context
@@ -652,8 +701,19 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
             tag,
             values,
         );
-        self.rw_counter_offset =
-            self.rw_counter_offset.clone() + self.cb.condition.clone().unwrap_or_else(|| 1.expr());
+        // Manually constant folding is used here, since halo2 cannot do this
+        // automatically. Better error message will be printed during circuit
+        // debugging.
+        self.rw_counter_offset = match &self.cb.condition {
+            None => {
+                if let Constant(v) = self.rw_counter_offset {
+                    Constant(v + F::from(1u64))
+                } else {
+                    self.rw_counter_offset.clone() + 1i32.expr()
+                }
+            }
+            Some(c) => self.rw_counter_offset.clone() + c.clone(),
+        };
     }
 
     fn reversible_write(
@@ -1028,6 +1088,29 @@ impl<'a, F: FieldExt> ConstraintBuilder<'a, F> {
         );
     }
 
+    pub(crate) fn tx_log_lookup(
+        &mut self,
+        tx_id: Expression<F>,
+        tag: TxLogFieldTag,
+        index: Expression<F>,
+        value: Expression<F>,
+    ) {
+        self.rw_lookup(
+            "log data lookup",
+            1.expr(),
+            RwTableTag::TxLog,
+            [
+                tx_id,
+                self.curr.state.log_id.expr(),
+                tag.expr(),
+                index,
+                value,
+                0.expr(),
+                0.expr(),
+                0.expr(),
+            ],
+        );
+    }
     // Validation
 
     pub(crate) fn validate_degree(&self, degree: usize, name: &'static str) {

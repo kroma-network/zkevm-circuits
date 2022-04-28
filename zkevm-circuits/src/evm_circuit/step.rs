@@ -22,7 +22,9 @@ pub enum ExecutionState {
     BeginTx,
     EndTx,
     EndBlock,
+    CopyCodeToMemory,
     CopyToMemory,
+    CopyToLog,
     // Opcode successful cases
     STOP,
     ADD_SUB,     // ADD, SUB
@@ -60,14 +62,11 @@ pub enum ExecutionState {
     RETURNDATACOPY,
     EXTCODEHASH,
     BLOCKHASH,
-    COINBASE,
-    TIMESTAMP,
-    NUMBER,
-    DIFFICULTY,
-    GASLIMIT,
+    BLOCKCTXU64,  // TIMESTAMP, NUMBER, GASLIMIT
+    BLOCKCTXU160, // COINBASE
+    BLOCKCTXU256, // DIFFICULTY, BASEFEE
     CHAINID,
     SELFBALANCE,
-    BASEFEE,
     POP,
     MEMORY, // MLOAD, MSTORE, MSTORE8
     SLOAD,
@@ -139,7 +138,9 @@ impl ExecutionState {
             Self::BeginTx,
             Self::EndTx,
             Self::EndBlock,
+            Self::CopyCodeToMemory,
             Self::CopyToMemory,
+            Self::CopyToLog,
             Self::STOP,
             Self::ADD_SUB,
             Self::MUL_DIV_MOD,
@@ -176,14 +177,11 @@ impl ExecutionState {
             Self::RETURNDATACOPY,
             Self::EXTCODEHASH,
             Self::BLOCKHASH,
-            Self::COINBASE,
-            Self::TIMESTAMP,
-            Self::NUMBER,
-            Self::DIFFICULTY,
-            Self::GASLIMIT,
+            Self::BLOCKCTXU64,
+            Self::BLOCKCTXU160,
+            Self::BLOCKCTXU256,
             Self::CHAINID,
             Self::SELFBALANCE,
-            Self::BASEFEE,
             Self::POP,
             Self::MEMORY,
             Self::SLOAD,
@@ -322,14 +320,11 @@ impl ExecutionState {
             Self::RETURNDATACOPY => vec![OpcodeId::RETURNDATACOPY],
             Self::EXTCODEHASH => vec![OpcodeId::EXTCODEHASH],
             Self::BLOCKHASH => vec![OpcodeId::BLOCKHASH],
-            Self::COINBASE => vec![OpcodeId::COINBASE],
-            Self::TIMESTAMP => vec![OpcodeId::TIMESTAMP],
-            Self::NUMBER => vec![OpcodeId::NUMBER],
-            Self::DIFFICULTY => vec![OpcodeId::DIFFICULTY],
-            Self::GASLIMIT => vec![OpcodeId::GASLIMIT],
+            Self::BLOCKCTXU64 => vec![OpcodeId::TIMESTAMP, OpcodeId::NUMBER, OpcodeId::GASLIMIT],
+            Self::BLOCKCTXU160 => vec![OpcodeId::COINBASE],
+            Self::BLOCKCTXU256 => vec![OpcodeId::DIFFICULTY, OpcodeId::BASEFEE],
             Self::CHAINID => vec![OpcodeId::CHAINID],
             Self::SELFBALANCE => vec![OpcodeId::SELFBALANCE],
-            Self::BASEFEE => vec![OpcodeId::BASEFEE],
             Self::POP => vec![OpcodeId::POP],
             Self::MEMORY => {
                 vec![OpcodeId::MLOAD, OpcodeId::MSTORE, OpcodeId::MSTORE8]
@@ -465,6 +460,8 @@ pub(crate) struct StepState<F> {
     pub(crate) memory_word_size: Cell<F>,
     /// The counter for reversible writes
     pub(crate) reversible_write_counter: Cell<F>,
+    /// The counter for log index
+    pub(crate) log_id: Cell<F>,
 }
 
 #[derive(Clone, Debug)]
@@ -512,6 +509,7 @@ impl<F: FieldExt> Step<F> {
                 gas_left: cells.pop_front().unwrap(),
                 memory_word_size: cells.pop_front().unwrap(),
                 reversible_write_counter: cells.pop_front().unwrap(),
+                log_id: cells.pop_front().unwrap(),
             }
         };
 
@@ -611,6 +609,9 @@ impl<F: FieldExt> Step<F> {
             offset,
             Some(F::from(step.reversible_write_counter as u64)),
         )?;
+        self.state
+            .log_id
+            .assign(region, offset, Some(F::from(step.log_id as u64)))?;
         Ok(())
     }
 }

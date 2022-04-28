@@ -8,6 +8,12 @@ use halo2_proofs::dev::{MockProver, VerifyFailure};
 use mock::TestContext;
 use pairing::bn256::Fr;
 
+#[cfg(test)]
+#[ctor::ctor]
+fn init_env_logger() {
+    // Enable RUST_LOG during tests
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error")).init();
+}
 pub enum FixedTableConfig {
     Incomplete,
     Complete,
@@ -20,8 +26,10 @@ pub fn get_fixed_table(conf: FixedTableConfig) -> Vec<FixedTableTag> {
                 FixedTableTag::Range5,
                 FixedTableTag::Range16,
                 FixedTableTag::Range32,
+                FixedTableTag::Range64,
                 FixedTableTag::Range256,
                 FixedTableTag::Range512,
+                FixedTableTag::Range1024,
                 FixedTableTag::SignByte,
                 FixedTableTag::ResponsibleOpcode,
                 FixedTableTag::Bitslevel,
