@@ -12,6 +12,8 @@ pub(crate) mod constraint_builder;
 pub(crate) mod math_gadget;
 pub(crate) mod memory_gadget;
 
+pub(crate) mod gupeng;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Cell<F> {
     // expression for constraint

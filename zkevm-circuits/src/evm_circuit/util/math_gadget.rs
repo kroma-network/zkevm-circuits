@@ -902,6 +902,7 @@ impl<F: Field> MulAddWordsGadget<F> {
     }
 }
 
+// gupeng
 #[derive(Clone, Debug)]
 pub struct ShrWordsGadget<F> {
     a: util::Word<F>,
@@ -1231,6 +1232,7 @@ impl<F: Field> ShrWordsGadget<F> {
     }
 }
 
+// gupeng
 #[derive(Clone, Debug)]
 pub struct ShlWordsGadget<F> {
     a: util::Word<F>,

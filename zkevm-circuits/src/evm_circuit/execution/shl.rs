@@ -5,7 +5,7 @@ use crate::{
         util::{
             common_gadget::SameContextGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::ShlWordsGadget,
+            gupeng::ShiftWordsGadget,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
@@ -19,7 +19,7 @@ use halo2_proofs::{circuit::Region, plonk::Error};
 #[derive(Clone, Debug)]
 pub(crate) struct ShlGadget<F> {
     same_context: SameContextGadget<F>,
-    shl_words: ShlWordsGadget<F>,
+    shift_words: ShiftWordsGadget<F>,
 }
 
 impl<F: Field> ExecutionGadget<F> for ShlGadget<F> {
@@ -35,8 +35,8 @@ impl<F: Field> ExecutionGadget<F> for ShlGadget<F> {
 
         cb.stack_pop(shift.expr());
         cb.stack_pop(a.expr());
-        let shl_words = ShlWordsGadget::construct(cb, a, shift);
-        cb.stack_push(shl_words.b().expr());
+        let shift_words = ShiftWordsGadget::construct(cb, opcode.expr(), a, shift);
+        cb.stack_push(shift_words.b().expr());
 
         let step_state_transition = StepStateTransition {
             rw_counter: Delta(3.expr()),
@@ -49,7 +49,7 @@ impl<F: Field> ExecutionGadget<F> for ShlGadget<F> {
 
         Self {
             same_context,
-            shl_words,
+            shift_words,
         }
     }
 
@@ -65,7 +65,7 @@ impl<F: Field> ExecutionGadget<F> for ShlGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
         let indices = [step.rw_indices[0], step.rw_indices[1], step.rw_indices[2]];
         let [shift, a, b] = indices.map(|idx| block.rws[idx].stack_value());
-        self.shl_words.assign(region, offset, a, shift, b)
+        self.shift_words.assign(region, offset, a, shift, b)
     }
 }
 
