@@ -740,6 +740,10 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::SSTORE => assign_exec_step!(self.sstore_gadget),
             ExecutionState::STOP => assign_exec_step!(self.stop_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
+            // ..
+            ExecutionState::DUMMY => {
+                // do nothing
+            }
             // errors
             ExecutionState::ErrorOutOfGasStaticMemoryExpansion => {
                 assign_exec_step!(self.error_oog_static_memory_gadget)

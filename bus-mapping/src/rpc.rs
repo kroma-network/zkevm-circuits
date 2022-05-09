@@ -124,6 +124,7 @@ impl<P: JsonRpcClient> GethClient<P> {
     ) -> Result<Vec<GethExecTrace>, Error> {
         let num = serialize(&block_num);
         let cfg = serialize(&GethLoggerConfig::default());
+        log::info!("debug_traceBlockByNumber {}", serde_json::to_string(&[num.clone(), cfg.clone()]).unwrap());
         let resp: ResultGethExecTraces = self
             .0
             .request("debug_traceBlockByNumber", [num, cfg])

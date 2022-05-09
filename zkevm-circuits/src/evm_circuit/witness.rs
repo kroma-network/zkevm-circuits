@@ -1152,7 +1152,10 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::CALLDATALOAD => ExecutionState::CALLDATALOAD,
                     // TODO: Convert REVERT to its own ExecutionState.
                     OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::RETURN,
-                    _ => unimplemented!("unimplemented opcode {:?}", op),
+                    _ => {
+                        log::warn!("unimplemented opcode {:?}", op);
+                        ExecutionState::DUMMY
+                    }
                 }
             }
             circuit_input_builder::ExecState::BeginTx => ExecutionState::BeginTx,
@@ -1236,7 +1239,7 @@ fn tx_convert(tx: &circuit_input_builder::Transaction, id: usize, is_last_tx: bo
                     circuit_input_builder::CodeSource::Address(_) => {
                         CodeSource::Account(call.code_hash.to_word())
                     }
-                    _ => unimplemented!(),
+                    _ => unimplemented!("invalid code source {:#?}", call.code_source),
                 },
                 rw_counter_end_of_reversion: call.rw_counter_end_of_reversion,
                 caller_id: call.caller_id,

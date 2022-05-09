@@ -5,7 +5,7 @@ use halo2_proofs::{circuit::Layouter, plonk::*};
 
 mod execution;
 pub mod param;
-mod step;
+pub mod step;
 pub(crate) mod util;
 
 pub mod table;

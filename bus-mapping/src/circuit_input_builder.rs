@@ -138,8 +138,21 @@ impl<'a> CircuitInputBuilder {
         eth_block: &EthBlock,
         geth_traces: &[eth_types::GethExecTrace],
     ) -> Result<(), Error> {
+        log::info!(
+            "tx num {}, trace num {}",
+            eth_block.transactions.len(),
+            geth_traces.len()
+        );
         for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
             let geth_trace = &geth_traces[tx_index];
+            if geth_trace.struct_logs.is_empty() {
+                log::warn!("Native transfer transaction is left unimplemented");
+                continue;
+            }
+            if tx.to.is_none() {
+                log::warn!("Creation transaction is left unimplemented");
+                continue;
+            }
             self.handle_tx(tx, geth_trace, tx_index + 1 == eth_block.transactions.len())?;
         }
         self.set_value_ops_call_context_rwc_eor();
@@ -174,8 +187,6 @@ impl<'a> CircuitInputBuilder {
         // - op: None
         // Generate BeginTx step
         let mut begin_tx_step = gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
-        println!("tx.gas {:#?}, step0: {:#?}", tx, geth_trace.struct_logs[0]);
-        log::info!("tx.gas {:#?}, step0: {:#?}", tx, geth_trace.struct_logs[0]);
         begin_tx_step.gas_cost = GasCost(tx.gas - geth_trace.struct_logs[0].gas.0);
         tx.steps_mut().push(begin_tx_step);
 
@@ -238,6 +249,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
     pub async fn new(client: GethClient<P>) -> Result<Self, Error> {
         let chain_id = client.get_chain_id().await?;
 
+        log::info!("chain id {}", chain_id);
         Ok(Self {
             cli: client,
             chain_id: chain_id.into(),
@@ -251,8 +263,12 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         &self,
         block_num: u64,
     ) -> Result<(EthBlock, Vec<eth_types::GethExecTrace>), Error> {
+        log::info!("WITNESS: fetching block");
         let eth_block = self.cli.get_block_by_number(block_num.into()).await?;
+        log::info!("WITNESS: block done");
+        
         let geth_traces = self.cli.trace_block_by_number(block_num.into()).await?;
+        log::info!("WITNESS: trace done");
         Ok((eth_block, geth_traces))
     }
 
@@ -292,9 +308,12 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         Error,
     > {
         let mut proofs = Vec::new();
-        for (address, key_set) in access_set.state {
+        log::info!("WITNESS: fetching {} accounts", access_set.state.len());
+        for (idx, (address, key_set)) in access_set.state.into_iter().enumerate() {
             let mut keys: Vec<Word> = key_set.iter().cloned().collect();
             keys.sort();
+
+        log::info!("WITNESS: fetching {}th account with {} keys", idx, keys.len());
             let proof = self
                 .cli
                 .get_proof(address, keys, (block_num - 1).into())
@@ -303,6 +322,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
             proofs.push(proof);
         }
         let mut codes: HashMap<Address, Vec<u8>> = HashMap::new();
+        log::info!("WITNESS: fetching {} bytecodes", access_set.code.len());
         for address in access_set.code {
             let code = self
                 .cli
@@ -362,8 +382,11 @@ impl<P: JsonRpcClient> BuilderClient<P> {
     /// Perform all the steps to generate the circuit inputs
     pub async fn gen_inputs(&self, block_num: u64) -> Result<CircuitInputBuilder, Error> {
         let (eth_block, geth_traces) = self.get_block(block_num).await?;
+        log::info!("WITNESS: block done");
         let access_set = self.get_state_accesses(&eth_block, &geth_traces)?;
+        log::info!("WITNESS: access_set done");
         let (proofs, codes) = self.get_state(block_num, access_set).await?;
+        log::info!("WITNESS: proofs done");
         let (state_db, code_db) = self.build_state_code_db(proofs, codes);
         let builder = self.gen_inputs_from_state(state_db, code_db, &eth_block, &geth_traces)?;
         Ok(builder)

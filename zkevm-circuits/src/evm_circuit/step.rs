@@ -90,6 +90,9 @@ pub enum ExecutionState {
     STATICCALL,
     REVERT,
     SELFDESTRUCT,
+
+    DUMMY,
+
     // Error cases
     ErrorInvalidOpcode,
     ErrorStackOverflow,
@@ -170,6 +173,7 @@ impl ExecutionState {
             Self::CALLDATACOPY,
             Self::CODESIZE,
             Self::CODECOPY,
+            Self::DUMMY,
             Self::GASPRICE,
             Self::EXTCODESIZE,
             Self::EXTCODECOPY,
