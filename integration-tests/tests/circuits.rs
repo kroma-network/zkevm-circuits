@@ -3,14 +3,17 @@
 use bus_mapping::circuit_input_builder::BuilderClient;
 use bus_mapping::operation::OperationContainer;
 use halo2_proofs::dev::MockProver;
-use integration_tests::{get_client, log_init, GenDataOutput, START_BLOCK, END_BLOCK};
+use integration_tests::{get_client, log_init, GenDataOutput, END_BLOCK, START_BLOCK};
 use lazy_static::lazy_static;
 use log::trace;
 use zkevm_circuits::evm_circuit::witness::RwMap;
 use zkevm_circuits::evm_circuit::{
-    test::run_test_circuit_complete_fixed_table, witness::block_convert,
+    test::run_test_circuit_complete_fixed_table, 
+    test::run_test_circuit_incomplete_fixed_table, 
+    witness::block_convert,
 };
 use zkevm_circuits::state_circuit::StateCircuit;
+use zkevm_circuits::evm_circuit::step::ExecutionState;
 
 lazy_static! {
     pub static ref GEN_DATA: GenDataOutput = GenDataOutput::load();
@@ -19,8 +22,8 @@ lazy_static! {
 #[tokio::test]
 async fn test_evm_circuit_all_block() {
     log_init();
-    let start : usize = *START_BLOCK;
-    let end: usize  = *END_BLOCK;
+    let start: usize = *START_BLOCK;
+    let end: usize = *END_BLOCK;
     for blk in start..=end {
         test_evm_circuit_block(blk as u64).await;
     }
@@ -29,11 +32,28 @@ async fn test_evm_circuit_all_block() {
 async fn test_evm_circuit_block(block_num: u64) {
     log::info!("test evm circuit, block number: {}", block_num);
     let cli = get_client();
+    log::info!("client");
     let cli = BuilderClient::new(cli).await.unwrap();
+    log::info!("client2");
     let builder = cli.gen_inputs(block_num).await.unwrap();
-
+    log::info!("builder");
+    if builder.block.txs.is_empty() {
+        log::info!("skip empty block");
+        return;
+    }
     let block = block_convert(&builder.block, &builder.code_db);
-    run_test_circuit_complete_fixed_table(block).expect("evm_circuit verification failed");
+
+    log::info!("block");
+    let need_bitwise_lookup = block.txs.iter().any(|tx| {
+        tx.steps
+            .iter()
+            .any(|step| step.execution_state == ExecutionState::BITWISE)
+    });
+    if need_bitwise_lookup {
+        run_test_circuit_complete_fixed_table(block).expect("evm_circuit verification failed");
+    } else {
+        run_test_circuit_incomplete_fixed_table(block).expect("evm_circuit verification failed");
+    }
 }
 
 async fn test_state_circuit_block(block_num: u64) {
