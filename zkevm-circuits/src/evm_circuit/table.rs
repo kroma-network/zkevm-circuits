@@ -41,8 +41,6 @@ pub enum FixedTableTag {
 }
 
 impl FixedTableTag {
-            Self::Bitslevel,
-            Self::Pow64,
     pub fn build<F: FieldExt>(&self) -> Box<dyn Iterator<Item = [F; 4]>> {
         let tag = F::from(*self as u64);
         match self {

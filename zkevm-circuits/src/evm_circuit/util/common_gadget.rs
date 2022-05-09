@@ -164,6 +164,7 @@ impl<F: Field> RestoreContextGadget<F> {
             gas_left: To(gas_left.expr()),
             memory_word_size: To(caller_memory_word_size.expr()),
             reversible_write_counter: To(reversible_write_counter),
+            log_id: To(0.expr()),
         });
 
         Self {
