@@ -199,7 +199,7 @@ impl<F: Field> ExecutionConfig<F> {
     where
         TxTable: LookupTable<F, 4>,
         RwTable: LookupTable<F, 11>,
-        BytecodeTable: LookupTable<F, 4>,
+        BytecodeTable: LookupTable<F, 5>,
         BlockTable: LookupTable<F, 3>,
     {
         let q_step = meta.complex_selector();
@@ -496,7 +496,7 @@ impl<F: Field> ExecutionConfig<F> {
     ) where
         TxTable: LookupTable<F, 4>,
         RwTable: LookupTable<F, 11>,
-        BytecodeTable: LookupTable<F, 4>,
+        BytecodeTable: LookupTable<F, 5>,
         BlockTable: LookupTable<F, 3>,
     {
         // Because one and only one ExecutionState is enabled at a step, we then
