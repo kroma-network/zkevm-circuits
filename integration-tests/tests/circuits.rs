@@ -27,7 +27,7 @@ async fn test_evm_circuit_block(block_num: u64) {
 
 async fn test_state_circuit_block(block_num: u64) {
     use halo2_proofs::arithmetic::BaseExt;
-    use pairing::bn256::Fr;
+    use halo2_proofs::pairing::bn256::Fr;
 
     let cli = get_client();
     let cli = BuilderClient::new(cli).await.unwrap();
@@ -54,7 +54,7 @@ async fn test_state_circuit_block(block_num: u64) {
     let circuit = StateCircuit::<Fr>::new(randomness, rw_map);
     let power_of_randomness = circuit.instance();
 
-    use pairing::bn256::Fr as Fp;
+    use halo2_proofs::pairing::bn256::Fr as Fp;
     let prover = MockProver::<Fp>::run(DEGREE as u32, &circuit, power_of_randomness).unwrap();
     prover.verify().expect("state_circuit verification failed");
 }
