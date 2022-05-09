@@ -36,9 +36,13 @@ pub enum FixedTableTag {
     BitwiseOr,
     BitwiseXor,
     ResponsibleOpcode,
+    Bitslevel,
+    Pow64,
 }
 
 impl FixedTableTag {
+            Self::Bitslevel,
+            Self::Pow64,
     pub fn build<F: FieldExt>(&self) -> Box<dyn Iterator<Item = [F; 4]>> {
         let tag = F::from(*self as u64);
         match self {
@@ -95,6 +99,17 @@ impl FixedTableTag {
                         })
                 }))
             }
+            Self::Bitslevel => Box::new((0..9).flat_map(move |level| {
+                (0..(1 << level)).map(move |idx| [tag, F::from(level), F::from(idx), F::zero()])
+            })),
+            Self::Pow64 => Box::new((0..64).map(move |idx| {
+                [
+                    tag,
+                    F::from(idx),
+                    F::from_u128(1u128 << idx),
+                    F::from_u128(1u128 << (64 - idx)),
+                ]
+            })),
         }
     }
 }
