@@ -422,7 +422,7 @@ pub mod test {
         let k = k.max(log2_ceil(
             64 + block.txs.iter().map(|tx| tx.steps.len()).sum::<usize>() * STEP_HEIGHT,
         ));
-        log::debug!("evm circuit uses k = {}", k);
+        log::info!("evm circuit uses k = {}", k);
 
         let (active_gate_rows, active_lookup_rows) = EvmCircuit::get_active_rows(&block);
         let mut block = block;

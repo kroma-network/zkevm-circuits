@@ -174,6 +174,8 @@ impl<'a> CircuitInputBuilder {
         // - op: None
         // Generate BeginTx step
         let mut begin_tx_step = gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+        println!("tx.gas {:#?}, step0: {:#?}", tx, geth_trace.struct_logs[0]);
+        log::info!("tx.gas {:#?}, step0: {:#?}", tx, geth_trace.struct_logs[0]);
         begin_tx_step.gas_cost = GasCost(tx.gas - geth_trace.struct_logs[0].gas.0);
         tx.steps_mut().push(begin_tx_step);
 

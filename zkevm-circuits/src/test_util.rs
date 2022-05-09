@@ -13,7 +13,7 @@ use strum::IntoEnumIterator;
 #[ctor::ctor]
 fn init_env_logger() {
     // Enable RUST_LOG during tests
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 }
 pub enum FixedTableConfig {
     Incomplete,

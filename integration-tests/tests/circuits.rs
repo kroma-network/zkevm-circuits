@@ -3,7 +3,7 @@
 use bus_mapping::circuit_input_builder::BuilderClient;
 use bus_mapping::operation::OperationContainer;
 use halo2_proofs::dev::MockProver;
-use integration_tests::{get_client, log_init, GenDataOutput};
+use integration_tests::{get_client, log_init, GenDataOutput, START_BLOCK, END_BLOCK};
 use lazy_static::lazy_static;
 use log::trace;
 use zkevm_circuits::evm_circuit::witness::RwMap;
@@ -14,6 +14,16 @@ use zkevm_circuits::state_circuit::StateCircuit;
 
 lazy_static! {
     pub static ref GEN_DATA: GenDataOutput = GenDataOutput::load();
+}
+
+#[tokio::test]
+async fn test_evm_circuit_all_block() {
+    log_init();
+    let start : usize = *START_BLOCK;
+    let end: usize  = *END_BLOCK;
+    for blk in start..=end {
+        test_evm_circuit_block(blk as u64).await;
+    }
 }
 
 async fn test_evm_circuit_block(block_num: u64) {
