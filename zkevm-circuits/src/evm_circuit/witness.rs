@@ -17,7 +17,7 @@ use eth_types::evm_types::OpcodeId;
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
 use eth_types::{ToAddress, U256};
 use halo2_proofs::arithmetic::{BaseExt, FieldExt};
-use halo2_proofs::pairing::bn256::Fr as Fp;
+use itertools::Itertools;
 use sha3::{Digest, Keccak256};
 use std::{collections::HashMap, convert::TryInto, iter};
 
@@ -994,8 +994,8 @@ impl From<&operation::OperationContainer> for RwMap {
                         CallContextField::StackPointer => CallContextFieldTag::StackPointer,
                         CallContextField::GasLeft => CallContextFieldTag::GasLeft,
                         CallContextField::MemorySize => CallContextFieldTag::MemorySize,
-                        CallContextField::StateWriteCounter => {
-                            CallContextFieldTag::StateWriteCounter
+                        CallContextField::ReversibleWriteCounter => {
+                            CallContextFieldTag::ReversibleWriteCounter
                         }
                     },
                     value: op.op().value,
@@ -1107,8 +1107,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::SLT | OpcodeId::SGT => ExecutionState::SCMP,
                     OpcodeId::SHL => ExecutionState::SHL,
                     OpcodeId::SIGNEXTEND => ExecutionState::SIGNEXTEND,
-                    // TODO: Convert REVERT and RETURN to their own ExecutionState.
-                    OpcodeId::STOP | OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::STOP,
+                    OpcodeId::STOP => ExecutionState::STOP,
                     OpcodeId::AND => ExecutionState::BITWISE,
                     OpcodeId::XOR => ExecutionState::BITWISE,
                     OpcodeId::OR => ExecutionState::BITWISE,
@@ -1144,6 +1143,8 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::ORIGIN => ExecutionState::ORIGIN,
                     OpcodeId::CODECOPY => ExecutionState::CODECOPY,
                     OpcodeId::CALLDATALOAD => ExecutionState::CALLDATALOAD,
+                    // TODO: Convert REVERT to its own ExecutionState.
+                    OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::RETURN,
                     _ => unimplemented!("unimplemented opcode {:?}", op),
                 }
             }
@@ -1286,7 +1287,10 @@ pub fn block_convert(
             .flat_map(|tx| {
                 tx.calls()
                     .iter()
-                    .map(|call| Bytecode::new(code_db.0.get(&call.code_hash).unwrap().to_vec()))
+                    .map(|call| call.code_hash)
+                    .unique()
+                    .into_iter()
+                    .map(|code_hash| Bytecode::new(code_db.0.get(&code_hash).unwrap().to_vec()))
             })
             .collect(),
     }

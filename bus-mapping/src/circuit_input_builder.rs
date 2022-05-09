@@ -27,6 +27,29 @@ pub use input_state_ref::CircuitInputStateRef;
 use std::collections::HashMap;
 pub use transaction::{Transaction, TransactionContext};
 
+    /// Return the index of the caller (the second last call in the call stack).
+    fn caller_index(&self) -> Result<usize, Error> {
+        self.caller_ctx().map(|call| call.index)
+    }
+
+        self.call_ctx().map(|call| call.index)
+    }
+
+    fn caller_ctx(&self) -> Result<&CallContext, Error> {
+            .checked_sub(2)
+            .map(|idx| &self.calls[idx])
+    /// Reference to the caller's Call
+    pub fn caller(&self) -> Result<&Call, Error> {
+        self.tx_ctx
+            .caller_index()
+            .map(|caller_idx| &self.tx.calls[caller_idx])
+    }
+
+    }
+
+    /// Reference to the current CallContext
+    pub fn caller_ctx(&self) -> Result<&CallContext, Error> {
+        self.tx_ctx.caller_ctx()
 /// Builder to generate a complete circuit input from data gathered from a geth
 /// instance. This structure is the centre of the crate and is intended to be
 /// the only entry point to it. The `CircuitInputBuilder` works in several
