@@ -41,6 +41,28 @@ pub enum FixedTableTag {
 }
 
 impl FixedTableTag {
+    // TODO(mason) derive with strum instead.
+    pub fn iterator() -> impl Iterator<Item = Self> {
+        [
+            Self::Range5,
+            Self::Range16,
+            Self::Range32,
+            Self::Range64,
+            Self::Range256,
+            Self::Range512,
+            Self::Range1024,
+            Self::SignByte,
+            Self::BitwiseAnd,
+            Self::BitwiseOr,
+            Self::BitwiseXor,
+            Self::ResponsibleOpcode,
+            Self::Bitslevel,
+            Self::Pow64,
+        ]
+        .iter()
+        .copied()
+    }
+
     pub fn build<F: FieldExt>(&self) -> Box<dyn Iterator<Item = [F; 4]>> {
         let tag = F::from(*self as u64);
         match self {

@@ -33,6 +33,7 @@ mod codecopy;
 mod comparator;
 mod copy_code_to_memory;
 mod copy_to_log;
+mod dummy;
 mod dup;
 mod end_block;
 mod end_tx;
@@ -80,6 +81,7 @@ use codecopy::CodeCopyGadget;
 use comparator::ComparatorGadget;
 use copy_code_to_memory::CopyCodeToMemoryGadget;
 use copy_to_log::CopyToLogGadget;
+use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
 use end_tx::EndTxGadget;
@@ -174,6 +176,7 @@ pub(crate) struct ExecutionConfig<F> {
     push_gadget: PushGadget<F>,
     return_gadget: ReturnGadget<F>,
     selfbalance_gadget: SelfbalanceGadget<F>,
+    sha3_gadget: DummyGadget<F, 2, 1, { ExecutionState::SHA3 }>,
     shl_gadget: ShlGadget<F>,
     shr_gadget: ShrGadget<F>,
     signed_comparator_gadget: SignedComparatorGadget<F>,
@@ -404,6 +407,7 @@ impl<F: Field> ExecutionConfig<F> {
             push_gadget: configure_gadget!(),
             return_gadget: configure_gadget!(),
             selfbalance_gadget: configure_gadget!(),
+            sha3_gadget: configure_gadget!(),
             shl_gadget: configure_gadget!(),
             shr_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
@@ -567,27 +571,59 @@ impl<F: Field> ExecutionConfig<F> {
         layouter: &mut impl Layouter<F>,
         block: &Block<F>,
     ) -> Result<(), Error> {
+        //println!("assign_block start");
         layouter.assign_region(
             || "Execution step",
             |mut region| {
+                // assign selectors
+                self.q_step_first.enable(&mut region, 0)?;
+                let slot_num = block.step_num_with_pad; // slot_num * STEP_HEIGHT < 2**degree - blinding_rows
+                for i in 0..slot_num {
+                    let offset = STEP_HEIGHT * i;
+                    self.q_step.enable(&mut region, offset)?;
+                }
+                self.q_step_last
+                    .enable(&mut region, (slot_num - 1) * STEP_HEIGHT)?;
+
+                // assign real witnesses
                 let mut offset = 0;
-
-                self.q_step_first.enable(&mut region, offset)?;
-
                 for transaction in &block.txs {
                     for step in &transaction.steps {
                         let call = &transaction.calls[step.call_index];
-
-                        self.q_step.enable(&mut region, offset)?;
                         self.assign_exec_step(&mut region, offset, block, transaction, call, step)?;
-
                         offset += STEP_HEIGHT;
                     }
                 }
+                // assign dummy witnesses
+                let fast = true;
+                while offset < slot_num * STEP_HEIGHT {
+                    if fast {
+                        self.step.state.execution_state[ExecutionState::EndBlock as usize].assign(
+                            &mut region,
+                            offset,
+                            Some(F::one()),
+                        )?;
+                    } else {
+                        self.assign_exec_step(
+                            &mut region,
+                            offset,
+                            block,
+                            &Default::default(),
+                            &Default::default(),
+                            &ExecStep {
+                                execution_state: ExecutionState::EndBlock,
+                                ..Default::default()
+                            },
+                        )?;
+                    }
+                    offset += STEP_HEIGHT;
+                }
+
                 Ok(())
             },
         )?;
 
+        //println!("assign_block done");
         // TODO: Pad leftover region to the desired capacity
         // TODO: Enable q_step_last
 
@@ -618,7 +654,9 @@ impl<F: Field> ExecutionConfig<F> {
                     }
                 }
 
-                self.q_step_last.enable(&mut region, offset - STEP_HEIGHT)?;
+                if offset >= STEP_HEIGHT {
+                    self.q_step_last.enable(&mut region, offset - STEP_HEIGHT)?;
+                }
 
                 Ok(())
             },
@@ -699,6 +737,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::SLOAD => assign_exec_step!(self.sload_gadget),
             ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::SHR => assign_exec_step!(self.shr_gadget),
+            ExecutionState::SHA3 => assign_exec_step!(self.sha3_gadget),
             ExecutionState::SSTORE => assign_exec_step!(self.sstore_gadget),
             ExecutionState::STOP => assign_exec_step!(self.stop_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),

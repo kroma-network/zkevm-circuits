@@ -1,12 +1,15 @@
 #![allow(missing_docs)]
-use crate::evm_circuit::{
-    param::{N_BYTES_WORD, STACK_CAPACITY},
-    step::ExecutionState,
-    table::{
-        AccountFieldTag, BlockContextFieldTag, BytecodeFieldTag, CallContextFieldTag, RwTableTag,
-        TxContextFieldTag, TxLogFieldTag,
+use crate::{
+    evm_circuit::{
+        param::{N_BYTES_WORD, STACK_CAPACITY},
+        step::ExecutionState,
+        table::{
+            AccountFieldTag, BlockContextFieldTag, BytecodeFieldTag, CallContextFieldTag,
+            RwTableTag, TxContextFieldTag, TxLogFieldTag,
+        },
+        util::RandomLinearCombination,
     },
-    util::RandomLinearCombination,
+    util::DEFAULT_RAND,
 };
 use bus_mapping::{
     circuit_input_builder::{self, StepAuxiliaryData},
@@ -16,7 +19,7 @@ use bus_mapping::{
 use eth_types::evm_types::OpcodeId;
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
 use eth_types::{ToAddress, U256};
-use halo2_proofs::arithmetic::{BaseExt, FieldExt};
+use halo2_proofs::arithmetic::{FieldExt};
 use halo2_proofs::pairing::bn256::Fr as Fp;
 use itertools::Itertools;
 use sha3::{Digest, Keccak256};
@@ -34,6 +37,8 @@ pub struct Block<F> {
     pub bytecodes: Vec<Bytecode>,
     /// The block context
     pub context: BlockContext,
+    /// ..
+    pub step_num_with_pad: usize,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -1273,7 +1278,7 @@ pub fn block_convert(
     code_db: &bus_mapping::state_db::CodeDB,
 ) -> Block<Fp> {
     Block {
-        randomness: Fp::rand(),
+        randomness: Fp::from_u128(DEFAULT_RAND),
         context: block.into(),
         rws: RwMap::from(&block.container),
         txs: block
@@ -1294,5 +1299,6 @@ pub fn block_convert(
                     .map(|code_hash| Bytecode::new(code_db.0.get(&code_hash).unwrap().to_vec()))
             })
             .collect(),
+        step_num_with_pad: 0,
     }
 }

@@ -20,7 +20,8 @@ pub use access::{Access, AccessSet, AccessValue, CodeSource};
 pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
-use eth_types::{self, Address, GethExecStep, GethExecTrace, Word};
+use eth_types::evm_types::GasCost;
+use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word};
 use ethers_providers::JsonRpcClient;
 pub use execution::{CopyDetails, ExecState, ExecStep, StepAuxiliaryData};
 pub use input_state_ref::CircuitInputStateRef;
@@ -159,11 +160,21 @@ impl<'a> CircuitInputBuilder {
         let mut tx = self.new_tx(eth_tx, !geth_trace.failed)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
 
+        if let Some(al) = &eth_tx.access_list {
+            for item in &al.0 {
+                self.sdb.add_account_to_access_list(item.address);
+                for k in &item.storage_keys {
+                    self.sdb
+                        .add_account_storage_to_access_list((item.address, (*k).to_word()));
+                }
+            }
+        }
         // TODO: Move into gen_associated_steps with
         // - execution_state: BeginTx
         // - op: None
         // Generate BeginTx step
-        let begin_tx_step = gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+        let mut begin_tx_step = gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+        begin_tx_step.gas_cost = GasCost(tx.gas - geth_trace.struct_logs[0].gas.0);
         tx.steps_mut().push(begin_tx_step);
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
