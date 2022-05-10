@@ -4,17 +4,18 @@ use crate::{
     evm::OpcodeId,
     operation::{
         AccountField, AccountOp, CallContextField, CallContextOp, TxAccessListAccountOp,
-        TxRefundOp, RW,
+        TxReceiptField, TxReceiptOp, TxRefundOp, RW,
     },
     Error,
 };
 use core::fmt::Debug;
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
-    GethExecStep, ToWord,
+    GethExecStep, ToWord, Word,
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
+use std::collections::HashMap;
 
 mod call;
 mod calldatacopy;
@@ -86,6 +87,10 @@ type FnGenAssociatedOps = fn(
 ) -> Result<Vec<ExecStep>, Error>;
 
 fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
+    if opcode_id.is_push() {
+        return StackOnlyOpcode::<0, 1>::gen_associated_ops;
+    }
+
     match opcode_id {
         OpcodeId::STOP => Stop::gen_associated_ops,
         OpcodeId::ADD => StackOnlyOpcode::<2, 1>::gen_associated_ops,
@@ -151,38 +156,6 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         OpcodeId::MSIZE => StackOnlyOpcode::<0, 1>::gen_associated_ops,
         OpcodeId::GAS => StackOnlyOpcode::<0, 1>::gen_associated_ops,
         OpcodeId::JUMPDEST => dummy_gen_associated_ops,
-        OpcodeId::PUSH1 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH2 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH3 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH4 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH5 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH6 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH7 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH8 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH9 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH10 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH11 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH12 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH13 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH14 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH15 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH16 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH17 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH18 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH19 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH20 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH21 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH22 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH23 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH24 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH25 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH26 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH27 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH28 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH29 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH30 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH31 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
-        OpcodeId::PUSH32 => StackOnlyOpcode::<0, 1>::gen_associated_ops,
         OpcodeId::DUP1 => Dup::<1>::gen_associated_ops,
         OpcodeId::DUP2 => Dup::<2>::gen_associated_ops,
         OpcodeId::DUP3 => Dup::<3>::gen_associated_ops,
@@ -428,7 +401,10 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
     }
 }
 
-pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+pub fn gen_end_tx_ops(
+    state: &mut CircuitInputStateRef,
+    cumulative_gas_used: &mut HashMap<usize, u64>,
+) -> Result<ExecStep, Error> {
     let mut exec_step = state.new_end_tx_step();
     let call = state.tx.calls()[0].clone();
 
@@ -439,6 +415,15 @@ pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
             call_id: call.call_id,
             field: CallContextField::TxId,
             value: state.tx_ctx.id().into(),
+        },
+    );
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        CallContextOp {
+            call_id: call.call_id,
+            field: CallContextField::IsPersistent,
+            value: Word::from(call.is_persistent as u8),
         },
     );
 
@@ -491,6 +476,56 @@ pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
             value_prev: coinbase_balance_prev,
         },
     );
+
+    // handle tx receipt tag
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        TxReceiptOp {
+            tx_id: state.tx_ctx.id(),
+            field: TxReceiptField::PostStateOrStatus,
+            value: call.is_persistent as u64,
+        },
+    );
+
+    let log_id = exec_step.log_id;
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        TxReceiptOp {
+            tx_id: state.tx_ctx.id(),
+            field: TxReceiptField::LogLength,
+            value: log_id as u64,
+        },
+    );
+
+    let gas_used = state.tx.gas - exec_step.gas_left.0;
+    let mut current_cumulative_gas_used: u64 = 0;
+    if state.tx_ctx.id() > 1 {
+        current_cumulative_gas_used = *cumulative_gas_used.get(&(state.tx_ctx.id() - 1)).unwrap();
+        // query pre tx cumulative gas
+        state.push_op(
+            &mut exec_step,
+            RW::READ,
+            TxReceiptOp {
+                tx_id: state.tx_ctx.id() - 1,
+                field: TxReceiptField::CumulativeGasUsed,
+                value: current_cumulative_gas_used,
+            },
+        );
+    }
+
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        TxReceiptOp {
+            tx_id: state.tx_ctx.id(),
+            field: TxReceiptField::CumulativeGasUsed,
+            value: current_cumulative_gas_used + gas_used,
+        },
+    );
+
+    cumulative_gas_used.insert(state.tx_ctx.id(), current_cumulative_gas_used + gas_used);
 
     if !state.tx_ctx.is_last_tx() {
         state.push_op(
