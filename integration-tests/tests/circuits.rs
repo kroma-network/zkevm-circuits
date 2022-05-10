@@ -6,14 +6,13 @@ use halo2_proofs::dev::MockProver;
 use integration_tests::{get_client, log_init, GenDataOutput, END_BLOCK, START_BLOCK};
 use lazy_static::lazy_static;
 use log::trace;
+use zkevm_circuits::evm_circuit::step::ExecutionState;
 use zkevm_circuits::evm_circuit::witness::RwMap;
 use zkevm_circuits::evm_circuit::{
-    test::run_test_circuit_complete_fixed_table, 
-    test::run_test_circuit_incomplete_fixed_table, 
+    test::run_test_circuit_complete_fixed_table, test::run_test_circuit_incomplete_fixed_table,
     witness::block_convert,
 };
 use zkevm_circuits::state_circuit::StateCircuit;
-use zkevm_circuits::evm_circuit::step::ExecutionState;
 
 lazy_static! {
     pub static ref GEN_DATA: GenDataOutput = GenDataOutput::load();

@@ -266,7 +266,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         log::info!("WITNESS: fetching block");
         let eth_block = self.cli.get_block_by_number(block_num.into()).await?;
         log::info!("WITNESS: block done");
-        
+
         let geth_traces = self.cli.trace_block_by_number(block_num.into()).await?;
         log::info!("WITNESS: trace done");
         Ok((eth_block, geth_traces))
@@ -313,7 +313,11 @@ impl<P: JsonRpcClient> BuilderClient<P> {
             let mut keys: Vec<Word> = key_set.iter().cloned().collect();
             keys.sort();
 
-        log::info!("WITNESS: fetching {}th account with {} keys", idx, keys.len());
+            log::info!(
+                "WITNESS: fetching {}th account with {} keys",
+                idx,
+                keys.len()
+            );
             let proof = self
                 .cli
                 .get_proof(address, keys, (block_num - 1).into())

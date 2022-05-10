@@ -170,7 +170,7 @@ mod tests {
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
 
         // Bench proof generation time
-        let proof_message = format!("EVM Proof generation with {} rows", degree);
+        let proof_message = format!("Keccak Proof generation with {} degree", degree);
         let start2 = start_timer!(|| proof_message);
         create_proof(
             &general_params,
