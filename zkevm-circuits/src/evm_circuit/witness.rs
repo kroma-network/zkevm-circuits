@@ -629,7 +629,7 @@ pub enum Rw {
     },
 }
 #[derive(Default, Clone, Copy, Debug)]
-pub struct RwRow<F: FieldExt> {
+pub struct RwRow<F> {
     pub rw_counter: u64,
     pub is_write: bool,
     pub tag: u64,
@@ -1488,7 +1488,7 @@ pub fn block_convert(
     code_db: &bus_mapping::state_db::CodeDB,
 ) -> Block<Fr> {
     Block {
-        randomness: Fr::rand(),
+        randomness: Fr::from(0x1234u64), //Fp::rand(),
         context: block.into(),
         rws: RwMap::from(&block.container),
         txs: block

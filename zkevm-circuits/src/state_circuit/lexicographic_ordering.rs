@@ -73,7 +73,7 @@ use std::ops::Mul;
 // = 480 bits
 
 #[derive(Clone)]
-pub struct Config<F: Field> {
+pub struct Config<F> {
     pub(crate) selector: Column<Fixed>,
     upper_limb_difference: Column<Advice>,
     pub(crate) upper_limb_difference_is_zero: IsZeroConfig<F>,

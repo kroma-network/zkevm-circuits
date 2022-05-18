@@ -75,7 +75,7 @@ impl<F: Field, const N: usize> Chip<F, N> {
         selector: Column<Fixed>,
         encoded: Column<Advice>,
         u8_lookup: Column<Fixed>,
-        power_of_randomness: [Column<Instance>; 31],
+        power_of_randomness: [Expression<F>; 31],
     ) -> Config<N> {
         let bytes = [0; N].map(|_| meta.advice_column());
 
@@ -91,10 +91,10 @@ impl<F: Field, const N: usize> Chip<F, N> {
             let selector = meta.query_fixed(selector, Rotation::cur());
             let encoded = meta.query_advice(encoded, Rotation::cur());
             let bytes = bytes.map(|c| meta.query_advice(c, Rotation::cur()));
-            let power_of_randomness: Vec<_> = power_of_randomness
-                .iter()
-                .map(|c| meta.query_instance(*c, Rotation::cur()))
-                .collect();
+            //let power_of_randomness: Vec<_> = power_of_randomness
+              //  .iter()
+                //.map(|c| meta.query_instance(*c, Rotation::cur()))
+                //.collect();
             vec![
                 selector * (encoded - RLC::random_linear_combine_expr(bytes, &power_of_randomness)),
             ]

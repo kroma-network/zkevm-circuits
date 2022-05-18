@@ -31,6 +31,7 @@ use multiple_precision_integer::{Chip as MpiChip, Config as MpiConfig, Queries a
 use random_linear_combination::{Chip as RlcChip, Config as RlcConfig, Queries as RlcQueries};
 #[cfg(test)]
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 const N_LIMBS_RW_COUNTER: usize = 2;
 const N_LIMBS_ACCOUNT_ADDRESS: usize = 10;
@@ -38,12 +39,12 @@ const N_LIMBS_ID: usize = 2;
 
 /// Config for StateCircuit
 #[derive(Clone)]
-pub struct StateConfig<F: Field> {
+pub struct StateConfig<F> {
     // Figure out why you get errors when this is Selector.
     // https://github.com/appliedzkp/zkevm-circuits/issues/407
     selector: Column<Fixed>,
 
-    rw_table: RwTable,
+    pub(crate) rw_table: RwTable,
 
     rw_counter_mpi: MpiConfig<u32, N_LIMBS_RW_COUNTER>,
     //is_write: Column<Advice>,
@@ -57,15 +58,15 @@ pub struct StateConfig<F: Field> {
     is_storage_key_unchanged: IsZeroConfig<F>,
 
     lookups: LookupsConfig,
-    power_of_randomness: [Column<Instance>; N_BYTES_WORD - 1],
+    //power_of_randomness: [Column<Instance>; N_BYTES_WORD - 1],
     lexicographic_ordering: LexicographicOrderingConfig<F>,
 }
 
 type Lookup<F> = (&'static str, Expression<F>, Expression<F>);
 
 /// State Circuit for proving RwTable is valid
-#[derive(Default)]
-pub struct StateCircuit<F: Field> {
+#[derive(Default, Clone)]
+pub struct StateCircuit<F> {
     pub(crate) randomness: F,
     // use rows rather than RwMap here mainly for testing
     pub(crate) rows: Vec<RwRow<F>>,
@@ -107,9 +108,6 @@ impl<F: Field> StateCircuit<F> {
     ) -> Result<(), Error> {
         region.assign_fixed(|| "selector", config.selector, offset, || Ok(F::one()))?;
 
-        config
-            .rw_table
-            .assign_row(region, offset, self.randomness, &row)?;
 
         config
             .rw_counter_mpi
@@ -172,7 +170,13 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let selector = meta.fixed_column();
         let lookups = LookupsChip::configure(meta);
-        let power_of_randomness = [0; N_BYTES_WORD - 1].map(|_| meta.instance_column());
+
+        let power_of_randomness: [Expression<F>; 31] = (1..32)
+        .map(|exp| Expression::Constant(F::from_u128(0x1234).pow(&[exp, 0, 0, 0])))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+        //let power_of_randomness = [0; N_BYTES_WORD - 1].map(|_| meta.instance_column());
 
         let rw_table = RwTable::construct(meta);
         let is_storage_key_unchanged_column = meta.advice_column();
@@ -229,7 +233,7 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
             lexicographic_ordering,
             is_storage_key_unchanged,
             lookups,
-            power_of_randomness,
+            //power_of_randomness,
             rw_table,
         };
 
@@ -268,6 +272,13 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
                 rows.insert(0, Rw::Start.table_assignment(self.randomness));
                 for (offset, row) in rows.iter().enumerate() {
                     println!("offset {} row {:#?}", offset, row);
+
+                    // assign rw table
+        config
+        .rw_table
+        .assign_row(&mut region, offset, self.randomness, &row)?;
+
+        // assign other parts
                     self.assign_row(
                         &config,
                         &mut region,
@@ -312,9 +323,11 @@ fn queries<F: Field>(meta: &mut VirtualCells<'_, F>, c: &StateConfig<F>) -> Quer
         value_col_prev: meta.query_advice(c.rw_table.value, Rotation::prev()),
         value_prev: meta.query_advice(c.rw_table.value_prev, Rotation::cur()),
         lookups: LookupsQueries::new(meta, c.lookups),
-        power_of_randomness: c
-            .power_of_randomness
-            .map(|c| meta.query_instance(c, Rotation::cur())),
+        power_of_randomness: (1..32)
+        .map(|exp| Expression::Constant(F::from_u128(0x1234).pow(&[exp, 0, 0, 0])))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap(),
         is_storage_key_unchanged: c.is_storage_key_unchanged.is_zero_expression.clone(),
         lexicographic_ordering_upper_limb_difference_is_zero: c
             .lexicographic_ordering

@@ -80,6 +80,11 @@ pub fn test_circuits_using_witness_block(
     block: Block<Fr>,
     config: BytecodeTestConfig,
 ) -> Result<(), Vec<VerifyFailure>> {
+
+    if config.enable_state_circuit_test {
+        crate::full_circuit::run_test_circuit(block.clone(), config.evm_circuit_lookup_tags)?;
+    }
+    /* 
     // run evm circuit test
     if config.enable_evm_circuit_test {
         crate::evm_circuit::test::run_test_circuit(block.clone(), config.evm_circuit_lookup_tags)?;
@@ -93,7 +98,10 @@ pub fn test_circuits_using_witness_block(
         let power_of_randomness = state_circuit.instance();
         let prover = MockProver::<Fr>::run(12, &state_circuit, power_of_randomness).unwrap();
         prover.verify_at_rows(0..state_circuit.rows.len(), 0..state_circuit.rows.len())?
+    
+    
     }
+    */
 
     Ok(())
 }

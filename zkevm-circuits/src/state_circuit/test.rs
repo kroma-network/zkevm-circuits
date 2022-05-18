@@ -19,7 +19,7 @@ use halo2_proofs::{
 };
 use std::collections::HashMap;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub enum AdviceColumn {
     IsWrite,
     Address,
