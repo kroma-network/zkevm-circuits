@@ -16,9 +16,10 @@ pub(crate) struct Extcodehash;
 impl Opcode for Extcodehash {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
-        steps: &[GethExecStep],
+        geth_steps: &[GethExecStep],
+        index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
-        let step = &steps[0];
+        let step = &geth_steps[index];
         let mut exec_step = state.new_step(step)?;
         let stack_address = step.stack.last_filled();
 
@@ -114,7 +115,7 @@ impl Opcode for Extcodehash {
             &mut exec_step,
             RW::WRITE,
             stack_address,
-            steps[1].stack.last()?,
+            geth_steps[index + 1].stack.last()?,
         )?;
 
         Ok(vec![exec_step])

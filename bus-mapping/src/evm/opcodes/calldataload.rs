@@ -14,8 +14,9 @@ impl Opcode for Calldataload {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
+        index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &geth_steps[0];
+        let geth_step = &geth_steps[index];
         let mut exec_step = state.new_step(geth_step)?;
 
         // fetch the top of the stack, i.e. offset in calldata to start reading 32-bytes

@@ -17,10 +17,11 @@ impl Opcode for Codecopy {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
+        index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &geth_steps[0];
+        let geth_step = &geth_steps[index];
         let mut exec_steps = vec![gen_codecopy_step(state, geth_step)?];
-        let memory_copy_steps = gen_memory_copy_steps(state, geth_steps)?;
+        let memory_copy_steps = gen_memory_copy_steps(state, geth_steps, index)?;
         exec_steps.extend(memory_copy_steps);
         Ok(exec_steps)
     }
@@ -87,10 +88,11 @@ fn gen_memory_copy_step(
 fn gen_memory_copy_steps(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
+    index: usize,
 ) -> Result<Vec<ExecStep>, Error> {
-    let dest_offset = geth_steps[0].stack.nth_last(0)?.as_u64();
-    let code_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
-    let length = geth_steps[0].stack.nth_last(2)?.as_u64();
+    let dest_offset = geth_steps[index].stack.nth_last(0)?.as_u64();
+    let code_offset = geth_steps[index].stack.nth_last(1)?.as_u64();
+    let length = geth_steps[index].stack.nth_last(2)?.as_u64();
 
     let code_source = state.call()?.code_hash;
     let code = state.code(code_source)?;
@@ -100,7 +102,7 @@ fn gen_memory_copy_steps(
     let mut copied = 0;
     let mut steps = vec![];
     while copied < length {
-        let mut exec_step = state.new_step(&geth_steps[1])?;
+        let mut exec_step = state.new_step(&geth_steps[index + 1])?;
         exec_step.exec_state = ExecState::CopyCodeToMemory;
         gen_memory_copy_step(
             state,

@@ -16,8 +16,9 @@ impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, 
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
+        index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &geth_steps[0];
+        let geth_step = &geth_steps[index];
         let mut exec_step = state.new_step(geth_step)?;
         // N_POP stack reads
         for i in 0..N_POP {
@@ -34,8 +35,8 @@ impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, 
             state.push_stack_op(
                 &mut exec_step,
                 RW::WRITE,
-                geth_steps[1].stack.nth_last_filled(N_PUSH - 1 - i),
-                geth_steps[1].stack.nth_last(N_PUSH - 1 - i)?,
+                geth_steps[index + 1].stack.nth_last_filled(N_PUSH - 1 - i),
+                geth_steps[index + 1].stack.nth_last(N_PUSH - 1 - i)?,
             )?;
         }
 
