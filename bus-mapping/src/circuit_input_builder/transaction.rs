@@ -146,6 +146,7 @@ impl TransactionContext {
             index: call_idx,
             reversible_write_counter: 0,
             call_data,
+            memory: vec![]
         });
     }
 
