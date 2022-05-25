@@ -17,6 +17,8 @@ impl Opcode for Calldataload {
         index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[index];
+        state.call_ctx_mut()?.memory = geth_step.memory.0.clone(); // FIXME: REMOVE AFTER IMPLEMENT RECONSTRUCT
+
         let mut exec_step = state.new_step(geth_step)?;
 
         // fetch the top of the stack, i.e. offset in calldata to start reading 32-bytes

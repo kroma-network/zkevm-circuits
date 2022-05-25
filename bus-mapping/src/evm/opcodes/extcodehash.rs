@@ -20,6 +20,8 @@ impl Opcode for Extcodehash {
         index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
         let step = &geth_steps[index];
+        state.call_ctx_mut()?.memory = step.memory.0.clone(); // FIXME: REMOVE AFTER IMPLEMENT RECONSTRUCT
+
         let mut exec_step = state.new_step(step)?;
         let stack_address = step.stack.last_filled();
 

@@ -19,6 +19,8 @@ impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, 
         index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[index];
+        state.call_ctx_mut()?.memory = geth_step.memory.0.clone(); // FIXME: REMOVE AFTER IMPLEMENT RECONSTRUCT
+
         let mut exec_step = state.new_step(geth_step)?;
         // N_POP stack reads
         for i in 0..N_POP {
