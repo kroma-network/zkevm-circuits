@@ -31,6 +31,29 @@ impl<const IS_MSTORE8: bool> Opcode for Mstore<IS_MSTORE8> {
         // First mem write -> 32 MemoryOp generated.
         let offset_addr: MemoryAddress = offset.try_into()?;
 
+        let mut memory = geth_step.memory.0.clone();
+        let minimal_length = offset_addr.0 + if IS_MSTORE8 { 8 } else { 32 };
+        if minimal_length > memory.len() {
+            let resize = if minimal_length % 32 == 0 {
+                minimal_length
+            } else {
+                (minimal_length / 32 + 1) * 32
+            };
+            memory.resize(resize, 0);
+        }
+
+        match IS_MSTORE8 {
+            true => {
+                let val = *value.to_le_bytes().first().unwrap();
+                memory[offset_addr.0] = val;
+            }
+            false => {
+                let bytes = value.to_be_bytes();
+                memory[offset_addr.0..].copy_from_slice(&bytes);
+            }
+        }
+        assert_eq!(memory, geth_steps[1].memory.0);
+
         match IS_MSTORE8 {
             true => {
                 // stack write operation for mstore8
