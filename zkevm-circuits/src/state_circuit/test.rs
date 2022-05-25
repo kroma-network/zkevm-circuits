@@ -30,10 +30,10 @@ pub enum AdviceColumn {
 impl AdviceColumn {
     pub fn value<F: Field>(&self, config: &StateConfig<F>) -> Column<Advice> {
         match self {
-            Self::IsWrite => config.is_write,
-            Self::Address => config.address.value,
-            Self::AddressLimb0 => config.address.limbs[0],
-            Self::AddressLimb1 => config.address.limbs[1],
+            Self::IsWrite => config.rw_table.is_write,
+            Self::Address => config.rw_table.address,
+            Self::AddressLimb0 => config.address_mpi.limbs[0],
+            Self::AddressLimb1 => config.address_mpi.limbs[1],
         }
     }
 }
@@ -54,7 +54,7 @@ fn test_state_circuit_ok(
     let circuit = StateCircuit::new(randomness, rw_map);
     let power_of_randomness = circuit.instance();
 
-    let prover = MockProver::<Fr>::run(19, &circuit, power_of_randomness).unwrap();
+    let prover = MockProver::<Fr>::run(12, &circuit, power_of_randomness).unwrap();
     let verify_result = prover.verify();
     assert_eq!(verify_result, Ok(()));
 }
@@ -102,7 +102,7 @@ fn state_circuit_simple_2() {
     );
 
     let storage_op_0 = Operation::new(
-        RWCounter::from(0),
+        RWCounter::from(1),
         RW::WRITE,
         StorageOp::new(
             U256::from(100).to_address(),
@@ -272,6 +272,7 @@ fn address_limb_mismatch() {
     assert_error_matches(result, "mpi value matches claimed limbs");
 }
 
+#[ignore = "u16 lookup"]
 #[test]
 fn address_limb_out_of_range() {
     let rows = vec![Rw::Account {
@@ -292,6 +293,7 @@ fn address_limb_out_of_range() {
     assert_error_matches(result, "mpi limb fits into u16");
 }
 
+#[ignore = "u16 lookup"]
 #[test]
 fn nonlexicographic_order_tag() {
     let first = Rw::Memory {
@@ -316,6 +318,7 @@ fn nonlexicographic_order_tag() {
     );
 }
 
+#[ignore = "u16 lookup"]
 #[test]
 fn nonlexicographic_order_rw_counter() {
     let first = Rw::CallContext {
@@ -342,6 +345,10 @@ fn nonlexicographic_order_rw_counter() {
 
 fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, usize), Fr>) -> MockProver<Fr> {
     let randomness = Fr::rand();
+    let rows = rows
+        .iter()
+        .map(|r| r.table_assignment(randomness))
+        .collect();
     let circuit = StateCircuit {
         randomness,
         rows,
@@ -349,12 +356,13 @@ fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, usize), Fr>) -> MockP
     };
     let power_of_randomness = circuit.instance();
 
-    MockProver::<Fr>::run(17, &circuit, power_of_randomness).unwrap()
+    MockProver::<Fr>::run(12, &circuit, power_of_randomness).unwrap()
 }
 
 fn verify(rows: Vec<Rw>) -> Result<(), Vec<VerifyFailure>> {
-    let n_rows = rows.len();
-    prover(rows, HashMap::new()).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
+    let _n_rows = rows.len();
+    prover(rows, HashMap::new()).verify()
+    //prover(rows, HashMap::new()).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
 }
 
 fn verify_with_overrides(
@@ -364,8 +372,9 @@ fn verify_with_overrides(
     // Sanity check that the original RwTable without overrides is valid.
     assert_eq!(verify(rows.clone()), Ok(()));
 
-    let n_rows = rows.len();
-    prover(rows, overrides).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
+    let _n_rows = rows.len();
+    prover(rows, overrides).verify()
+    //prover(rows, overrides).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
 }
 
 fn assert_error_matches(result: Result<(), Vec<VerifyFailure>>, name: &str) {
