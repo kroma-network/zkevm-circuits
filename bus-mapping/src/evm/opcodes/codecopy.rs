@@ -96,6 +96,33 @@ fn gen_memory_copy_steps(
     let code = state.code(code_source)?;
     let src_addr_end = code.len() as u64;
 
+    // TODO: COMPLETE MEMORY RECONSTRUCTION
+    let mut memory = geth_steps[0].memory.0.clone();
+    let minimal_length = (dest_offset + length) as usize;
+    if minimal_length > memory.len() {
+        let resize = if minimal_length % 32 == 0 {
+            minimal_length
+        } else {
+            (minimal_length / 32 + 1) * 32
+        };
+        memory.resize(resize, 0);
+    }
+
+    let mem_start = dest_offset as usize;
+    let mem_ends = mem_start + length as usize;
+    let code_start = code_offset as usize;
+    let code_ends = code_start + length as usize;
+    if code_ends < code.len() {
+        memory[mem_start..mem_ends].copy_from_slice(&code[code_start..code_ends]);
+    } else {
+        let actual_length = code.len() - code_start;
+        let mem_code_ends = mem_start + actual_length;
+        memory[mem_start..mem_code_ends].copy_from_slice(&code[code_start..]);
+        // since we already resize the memory, no need to copy 0s for out of bound bytes
+    }
+
+    assert_eq!(memory, geth_steps[1].memory.0);
+
     let code_source = code_source.to_word();
     let mut copied = 0;
     let mut steps = vec![];
