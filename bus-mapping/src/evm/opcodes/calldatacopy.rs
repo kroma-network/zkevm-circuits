@@ -159,6 +159,35 @@ fn gen_memory_copy_steps(
         call_data_offset + call_data_length,
     );
 
+    // TODO: COMPLETE MEMORY RECONSTRUCTION
+    let mut memory = geth_steps[0].memory.0.clone();
+    if length != 0 {
+        let minimal_length = memory_offset as usize + length;
+        if minimal_length > memory.len() {
+            let resize = if minimal_length % 32 == 0 {
+                minimal_length
+            } else {
+                (minimal_length / 32 + 1) * 32
+            };
+            memory.resize(resize, 0);
+        }
+
+        let mem_starts = memory_offset as usize;
+        let mem_ends = mem_starts + length as usize;
+        let data_starts = data_offset as usize;
+        let data_ends = data_starts + length as usize;
+        let call_data = &state.call_ctx()?.call_data;
+        if data_ends < call_data.len() {
+            memory[mem_starts..mem_ends].copy_from_slice(&call_data[data_starts..data_ends]);
+        } else {
+            let actual_length = call_data.len() - data_starts;
+            let mem_code_ends = mem_starts + actual_length;
+            memory[mem_starts..mem_code_ends].copy_from_slice(&call_data[data_starts..]);
+            // since we already resize the memory, no need to copy 0s for out of bound bytes
+        }
+    }
+    assert_eq!(memory, geth_steps[1].memory.0);
+
     let mut copied = 0;
     let mut steps = vec![];
     while copied < length {
