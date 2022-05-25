@@ -42,14 +42,16 @@ impl<const IS_MSTORE8: bool> Opcode for Mstore<IS_MSTORE8> {
             memory.resize(resize, 0);
         }
 
+        let mem_starts = offset_addr.0;
+
         match IS_MSTORE8 {
             true => {
                 let val = *value.to_le_bytes().first().unwrap();
-                memory[offset_addr.0] = val;
+                memory[mem_starts] = val;
             }
             false => {
                 let bytes = value.to_be_bytes();
-                memory[offset_addr.0..].copy_from_slice(&bytes);
+                memory[mem_starts..mem_starts+32].copy_from_slice(&bytes);
             }
         }
         assert_eq!(memory, geth_steps[1].memory.0);
