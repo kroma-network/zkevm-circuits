@@ -71,22 +71,19 @@ pub trait Opcode: Debug {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
-        index: usize,
     ) -> Result<Vec<ExecStep>, Error>;
 }
 
 fn dummy_gen_associated_ops(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
-    index: usize
 ) -> Result<Vec<ExecStep>, Error> {
-    Ok(vec![state.new_step(&geth_steps[index])?])
+    Ok(vec![state.new_step(&geth_steps[0])?])
 }
 
 type FnGenAssociatedOps = fn(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
-    index: usize
 ) -> Result<Vec<ExecStep>, Error>;
 
 fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
@@ -231,10 +228,9 @@ pub fn gen_associated_ops(
     opcode_id: &OpcodeId,
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
-    index: usize,
 ) -> Result<Vec<ExecStep>, Error> {
     let fn_gen_associated_ops = fn_gen_associated_ops(opcode_id);
-    fn_gen_associated_ops(state, geth_steps, index)
+    fn_gen_associated_ops(state, geth_steps)
 }
 
 pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
@@ -537,9 +533,8 @@ pub fn gen_end_tx_ops(
 fn dummy_gen_call_ops(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
-    index: usize,
 ) -> Result<Vec<ExecStep>, Error> {
-    let geth_step = &geth_steps[index];
+    let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
 
     let tx_id = state.tx_ctx.id();
@@ -581,9 +576,8 @@ fn dummy_gen_call_ops(
 fn dummy_gen_create_ops(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
-    index: usize
 ) -> Result<Vec<ExecStep>, Error> {
-    let geth_step = &geth_steps[index];
+    let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
 
     let tx_id = state.tx_ctx.id();
@@ -651,9 +645,8 @@ fn dummy_gen_create_ops(
 fn dummy_gen_selfdestruct_ops(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
-    index: usize
 ) -> Result<Vec<ExecStep>, Error> {
-    let geth_step = &geth_steps[index];
+    let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
     let sender = state.call()?.address;
     let receiver = geth_step.stack.last()?.to_address();

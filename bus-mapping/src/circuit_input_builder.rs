@@ -180,8 +180,7 @@ impl<'a> CircuitInputBuilder {
             let exec_steps = gen_associated_ops(
                 &geth_step.op,
                 &mut state_ref,
-                &geth_trace.struct_logs,
-                index,
+                &geth_trace.struct_logs[index..],
             )?;
             tx.steps_mut().extend(exec_steps);
         }

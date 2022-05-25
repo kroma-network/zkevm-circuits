@@ -12,9 +12,8 @@ impl<const N: usize> Opcode for Dup<N> {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
-        index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &geth_steps[index];
+        let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
 
         let stack_value_read = geth_step.stack.nth_last(N - 1)?;

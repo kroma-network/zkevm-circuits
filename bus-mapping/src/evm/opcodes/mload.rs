@@ -17,9 +17,8 @@ impl Opcode for Mload {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
-        index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &geth_steps[index];
+        let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
         //
         // First stack read
@@ -34,7 +33,7 @@ impl Opcode for Mload {
         let mut mem_read_addr: MemoryAddress = stack_value_read.try_into()?;
         // Accesses to memory that hasn't been initialized are valid, and return
         // 0.
-        let mem_read_value = geth_steps[index + 1].memory.read_word(mem_read_addr);
+        let mem_read_value = geth_steps[1].memory.read_word(mem_read_addr);
 
         //
         // First stack write
