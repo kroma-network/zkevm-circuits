@@ -108,16 +108,16 @@ fn gen_memory_copy_steps(
         memory.resize(resize, 0);
     }
 
-    let mem_start = dest_offset as usize;
-    let mem_ends = mem_start + length as usize;
-    let code_start = code_offset as usize;
-    let code_ends = code_start + length as usize;
+    let mem_starts = dest_offset as usize;
+    let mem_ends = mem_starts + length as usize;
+    let code_starts = code_offset as usize;
+    let code_ends = code_starts + length as usize;
     if code_ends < code.len() {
-        memory[mem_start..mem_ends].copy_from_slice(&code[code_start..code_ends]);
+        memory[mem_starts..mem_ends].copy_from_slice(&code[code_starts..code_ends]);
     } else {
-        let actual_length = code.len() - code_start;
-        let mem_code_ends = mem_start + actual_length;
-        memory[mem_start..mem_code_ends].copy_from_slice(&code[code_start..]);
+        let actual_length = code.len() - code_starts;
+        let mem_code_ends = mem_starts + actual_length;
+        memory[mem_starts..mem_code_ends].copy_from_slice(&code[code_starts..]);
         // since we already resize the memory, no need to copy 0s for out of bound bytes
     }
 
