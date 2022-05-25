@@ -20,8 +20,6 @@ impl Opcode for Codecopy {
         index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[index];
-        state.call_ctx_mut()?.memory = geth_step.memory.0.clone(); // FIXME: REMOVE AFTER IMPLEMENT RECONSTRUCT
-
         let mut exec_steps = vec![gen_codecopy_step(state, geth_step)?];
         let memory_copy_steps = gen_memory_copy_steps(state, geth_steps, index)?;
         exec_steps.extend(memory_copy_steps);

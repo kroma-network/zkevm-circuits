@@ -19,8 +19,6 @@ impl Opcode for Stop {
         index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[index];
-        state.call_ctx_mut()?.memory = geth_step.memory.0.clone(); // FIXME: REMOVE AFTER IMPLEMENT RECONSTRUCT
-
         let exec_step = state.new_step(geth_step)?;
         state.handle_return(geth_step)?;
         Ok(vec![exec_step])

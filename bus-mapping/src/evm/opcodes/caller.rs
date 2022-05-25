@@ -16,8 +16,6 @@ impl Opcode for Caller {
         index: usize,
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[index];
-        state.call_ctx_mut()?.memory = geth_step.memory.0.clone(); // FIXME: REMOVE AFTER IMPLEMENT RECONSTRUCT
-
         let mut exec_step = state.new_step(geth_step)?;
         // Get caller_address result from next step
         let value = geth_steps[index + 1].stack.last()?;
