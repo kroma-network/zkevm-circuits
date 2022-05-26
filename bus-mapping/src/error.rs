@@ -23,6 +23,8 @@ pub enum Error {
     AccountNotFound(Address),
     /// Storage key not found in the StateDB
     StorageKeyNotFound(Address, Word),
+    /// Address not found in the CodeDB,
+    AddressNotFound(Address),
     /// Code not found in the CodeDB
     CodeNotFound(H256),
     /// Unable to figure out error at a [`GethExecStep`]

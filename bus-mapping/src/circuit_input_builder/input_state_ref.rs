@@ -14,10 +14,7 @@ use crate::{
     state_db::{CodeDB, StateDB},
     Error,
 };
-use eth_types::{
-    evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress},
-    Address, GethExecStep, ToAddress, ToBigEndian, Word, H256,
-};
+use eth_types::{evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress}, Address, GethExecStep, ToAddress, ToBigEndian, Word, H256, Hash};
 use ethers_core::utils::{get_contract_address, get_create2_address};
 
 /// Reference to the internal state of the CircuitInputBuilder in a particular
@@ -323,10 +320,18 @@ impl<'a> CircuitInputStateRef<'a> {
         self.transfer_with_fee(step, sender, receiver, value, Word::zero())
     }
 
+    pub fn code_hash(&self, address: Address) -> Result<Hash, Error> {
+        self.code_db
+            .address_hash
+            .get(&address)
+            .copied()
+            .ok_or(Error::AccountNotFound(address))
+    }
+
     /// Fetch and return code for the given code hash from the code DB.
     pub fn code(&self, code_hash: H256) -> Result<Vec<u8>, Error> {
         self.code_db
-            .0
+            .hash_code
             .get(&code_hash)
             .cloned()
             .ok_or(Error::CodeNotFound(code_hash))
@@ -441,7 +446,7 @@ impl<'a> CircuitInputStateRef<'a> {
         let (code_source, code_hash) = match kind {
             CallKind::Create | CallKind::Create2 => {
                 let init_code = get_create_init_code(step)?;
-                let code_hash = self.code_db.insert(init_code.to_vec());
+                let code_hash = self.code_db.insert(None, init_code.to_vec());
                 (CodeSource::Memory, code_hash)
             }
             _ => {
@@ -641,7 +646,7 @@ impl<'a> CircuitInputStateRef<'a> {
             let code = step
                 .memory
                 .read_chunk(offset.low_u64().into(), length.low_u64().into());
-            let code_hash = self.code_db.insert(code);
+            let code_hash = self.code_db.insert(None, code);
             let (found, callee_account) = self.sdb.get_account_mut(&call.address);
             if !found {
                 return Err(Error::AccountNotFound(call.address));

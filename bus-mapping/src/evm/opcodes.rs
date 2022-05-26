@@ -26,6 +26,7 @@ mod callvalue;
 mod chainid;
 mod codecopy;
 mod dup;
+mod extcodecopy;
 mod extcodehash;
 mod gasprice;
 mod mload;
@@ -58,6 +59,7 @@ use sstore::Sstore;
 use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
 use swap::Swap;
+use crate::evm::opcodes::extcodecopy::Extcodecopy;
 
 /// Generic opcode trait which defines the logic of the
 /// [`Operation`](crate::operation::Operation) that should be generated for one
@@ -131,7 +133,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         OpcodeId::GASPRICE => GasPrice::gen_associated_ops,
         OpcodeId::CODECOPY => Codecopy::gen_associated_ops,
         // OpcodeId::EXTCODESIZE => {},
-        // OpcodeId::EXTCODECOPY => {},
+        OpcodeId::EXTCODECOPY => Extcodecopy::gen_associated_ops,
         // OpcodeId::RETURNDATASIZE => {},
         // OpcodeId::RETURNDATACOPY => {},
         OpcodeId::EXTCODEHASH => Extcodehash::gen_associated_ops,
