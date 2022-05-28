@@ -130,6 +130,7 @@ fn gen_memory_copy_steps(
     }
 
     assert_eq!(memory, geth_steps[1].memory.0);
+    state.call()?.memory = memory = memory;
 
     let code_source = code_hash.to_word();
     let mut copied = 0;
