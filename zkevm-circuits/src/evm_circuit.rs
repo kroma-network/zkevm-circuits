@@ -241,7 +241,6 @@ pub mod test {
             layouter.assign_region(
                 || "rw table",
                 |mut region| {
-                    rws.check_rw_counter_sanity();
                     self.rw_table.assign(&mut region, randomness, rws)?;
                     Ok(())
                 },

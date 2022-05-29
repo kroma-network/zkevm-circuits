@@ -685,16 +685,16 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         if let Some(reversion_info) = reversion_info {
             // Revert if is_persistent is 0
             self.condition(1.expr() - reversion_info.is_persistent(), |cb| {
-                let mut new_values = values.clone();
-                new_values.value_prev = values.value;
-                new_values.value = values.value_prev;
-
                 cb.rw_lookup_with_counter(
                     name,
                     reversion_info.rw_counter_of_reversion(),
                     true.expr(),
                     tag,
-                    new_values,
+                    RwValues {
+                        value_prev: values.value,
+                        value: values.value_prev,
+                        ..values
+                    },
                 )
             });
         }

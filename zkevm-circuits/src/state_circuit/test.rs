@@ -19,7 +19,7 @@ use halo2_proofs::{
 };
 use std::collections::HashMap;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub enum AdviceColumn {
     IsWrite,
     Address,
@@ -212,6 +212,7 @@ fn lexicographic_ordering_test_2() {
 #[test]
 fn first_access_for_stack_is_write() {
     let rows = vec![
+        Rw::Start,
         Rw::Stack {
             rw_counter: 24,
             is_write: true,
@@ -234,6 +235,7 @@ fn first_access_for_stack_is_write() {
 #[test]
 fn diff_1_problem_repro() {
     let rows = vec![
+        Rw::Start,
         Rw::Account {
             rw_counter: 1,
             is_write: true,
@@ -257,14 +259,17 @@ fn diff_1_problem_repro() {
 
 #[test]
 fn address_limb_mismatch() {
-    let rows = vec![Rw::Account {
-        rw_counter: 1,
-        is_write: false,
-        account_address: address!("0x000000000000000000000000000000000cafe002"),
-        field_tag: AccountFieldTag::CodeHash,
-        value: U256::zero(),
-        value_prev: U256::zero(),
-    }];
+    let rows = vec![
+        Rw::Start,
+        Rw::Account {
+            rw_counter: 1,
+            is_write: false,
+            account_address: address!("0x000000000000000000000000000000000cafe002"),
+            field_tag: AccountFieldTag::CodeHash,
+            value: U256::zero(),
+            value_prev: U256::zero(),
+        },
+    ];
     let overrides = HashMap::from([((AdviceColumn::Address, 1), Fr::from(10))]);
 
     let result = verify_with_overrides(rows, overrides);
@@ -275,14 +280,17 @@ fn address_limb_mismatch() {
 #[ignore = "u16 lookup"]
 #[test]
 fn address_limb_out_of_range() {
-    let rows = vec![Rw::Account {
-        rw_counter: 1,
-        is_write: false,
-        account_address: address!("0x0000000000000000000000000000000000010000"),
-        field_tag: AccountFieldTag::CodeHash,
-        value: U256::zero(),
-        value_prev: U256::zero(),
-    }];
+    let rows = vec![
+        Rw::Start,
+        Rw::Account {
+            rw_counter: 1,
+            is_write: false,
+            account_address: address!("0x0000000000000000000000000000000000010000"),
+            field_tag: AccountFieldTag::CodeHash,
+            value: U256::zero(),
+            value_prev: U256::zero(),
+        },
+    ];
     let overrides = HashMap::from([
         ((AdviceColumn::AddressLimb0, 1), Fr::from(1 << 16)),
         ((AdviceColumn::AddressLimb1, 1), Fr::zero()),
@@ -311,9 +319,9 @@ fn nonlexicographic_order_tag() {
         value: U256::one(),
     };
 
-    assert_eq!(verify(vec![first, second]), Ok(()));
+    assert_eq!(verify(vec![Rw::Start, first, second]), Ok(()));
     assert_error_matches(
-        verify(vec![second, first]),
+        verify(vec![Rw::Start, second, first]),
         "upper_limb_difference fits into u16",
     );
 }
@@ -336,9 +344,9 @@ fn nonlexicographic_order_rw_counter() {
         value: U256::one(),
     };
 
-    assert_eq!(verify(vec![first, second]), Ok(()));
+    assert_eq!(verify(vec![Rw::Start, first, second]), Ok(()));
     assert_error_matches(
-        verify(vec![second, first]),
+        verify(vec![Rw::Start, second, first]),
         "upper_limb_difference is zero or lower_limb_difference fits into u16",
     );
 }

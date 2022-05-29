@@ -1,9 +1,6 @@
 use super::{N_LIMBS_ACCOUNT_ADDRESS, N_LIMBS_ID, N_LIMBS_RW_COUNTER};
 use crate::{
-    evm_circuit::{
-        param::N_BYTES_WORD,
-        witness::{Rw, RwKeys},
-    },
+    evm_circuit::{param::N_BYTES_WORD, witness::RwRow},
     rw_table::RwTable,
     util::Expr,
 };
@@ -73,7 +70,7 @@ use std::ops::Mul;
 // = 480 bits
 
 #[derive(Clone)]
-pub struct Config<F: Field> {
+pub struct Config<F> {
     pub(crate) selector: Column<Fixed>,
     upper_limb_difference: Column<Advice>,
     pub(crate) upper_limb_difference_is_zero: IsZeroConfig<F>,
@@ -107,7 +104,7 @@ impl<F: Field> Chip<F> {
         address_limbs: [Column<Advice>; N_LIMBS_ACCOUNT_ADDRESS],
         storage_key_bytes: [Column<Advice>; N_BYTES_WORD],
         rw_counter_limbs: [Column<Advice>; N_LIMBS_RW_COUNTER],
-        rw_table: RwTable,
+        _rw_table: RwTable,
         //u16_range: Column<Fixed>,
     ) -> Config<F> {
         let selector = meta.fixed_column();
@@ -181,10 +178,10 @@ impl<F: Field> Chip<F> {
             let lower_limb_difference = meta.query_advice(lower_limb_difference, Rotation::cur());
             vec![
                 selector
-                    * (lower_limb_difference_possible_values(cur, prev)
+                    * lower_limb_difference_possible_values(cur, prev)
                         .iter()
                         .map(|e| lower_limb_difference.clone() - e.clone())
-                        .fold(1.expr(), Expression::mul)),
+                        .fold(1.expr(), Expression::mul),
             ]
         });
         assert!(meta.degree() <= 16);
@@ -211,8 +208,7 @@ impl<F: Field> Chip<F> {
         assert!(meta.degree() <= 16);
         meta.create_gate("lower_limb_difference is not zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
-            let rw_counter = meta.query_advice(rw_table.rw_counter, Rotation::cur());
-            vec![(selector * lower_limb_difference_is_zero * rw_counter)]
+            vec![(selector * lower_limb_difference_is_zero)]
         });
         assert!(meta.degree() <= 16);
 
@@ -223,8 +219,8 @@ impl<F: Field> Chip<F> {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        cur: &RwKeys,
-        prev: &RwKeys,
+        cur: &RwRow<F>,
+        prev: &RwRow<F>,
     ) -> Result<(), Error> {
         region.assign_fixed(
             || "upper_limb_difference",
@@ -240,13 +236,9 @@ impl<F: Field> Chip<F> {
         let lower_limb_difference_is_zero_chip =
             IsZeroChip::construct(self.config.lower_limb_difference_is_zero.clone());
 
-        let cur_be_limbs = rw_keys_to_be_limbs(cur);
-        let prev_be_limbs = rw_keys_to_be_limbs(prev);
+        let cur_be_limbs = rw_to_be_limbs(cur);
+        let prev_be_limbs = rw_to_be_limbs(prev);
 
-        //println!(
-        //  "l assign offset {} cur limbs {:?} prev {:?}",
-        // offset, cur_be_limbs, prev_be_limbs
-        //);
         let find_result = cur_be_limbs
             .iter()
             .zip(&prev_be_limbs)
@@ -259,7 +251,6 @@ impl<F: Field> Chip<F> {
         };
 
         let mut upper_limb_difference = F::from(*cur_limb as u64) - F::from(*prev_limb as u64);
-
         let mut lower_limb_difference = lower_limb_difference_value(&cur_be_limbs, &prev_be_limbs);
         if index >= 15 {
             lower_limb_difference = upper_limb_difference;
@@ -340,21 +331,17 @@ impl<F: Field> Queries<F> {
     }
 }
 
-pub(super) fn rw_to_be_limbs(row: &Rw) -> Vec<u16> {
-    rw_keys_to_be_limbs(&row.rw_keys())
-}
-
-pub(super) fn rw_keys_to_be_limbs(rw_keys: &RwKeys) -> Vec<u16> {
+fn rw_to_be_limbs<F: Field>(row: &RwRow<F>) -> Vec<u16> {
     let mut be_bytes = vec![];
-    be_bytes.extend_from_slice(&(rw_keys.id as u32).to_be_bytes());
-    be_bytes.extend_from_slice(&(rw_keys.address.0));
-    be_bytes.extend_from_slice(&(rw_keys.storage_key.to_be_bytes()));
-    be_bytes.extend_from_slice(&((rw_keys.rw_counter as u32).to_be_bytes()));
+    be_bytes.extend_from_slice(&(row.id as u32).to_be_bytes());
+    be_bytes.extend_from_slice(&(row.address.0));
+    be_bytes.extend_from_slice(&(row.storage_key.to_be_bytes()));
+    be_bytes.extend_from_slice(&((row.rw_counter as u32).to_be_bytes()));
 
     // check that the first byte of id is not used, and overwrites it with packed
     // tags.
     assert_eq!(be_bytes[0], 0);
-    be_bytes[0] = rw_keys.field_tag as u8 + ((rw_keys.tag as u8) << 4);
+    be_bytes[0] = row.field_tag as u8 + ((row.tag as u8) << 4);
 
     be_bytes
         .iter()
@@ -398,11 +385,5 @@ fn lower_limb_difference_value<F: Field>(cur_limbs: &[u16], prev_limbs: &[u16]) 
 fn be_limbs_to_value<F: Field>(limbs: &[u16]) -> F {
     limbs.iter().fold(F::zero(), |result, &limb| {
         result * F::from(1u64 << 16) + F::from(limb as u64)
-    })
-}
-
-fn be_limbs_to_exp<F: Field>(limbs: &[Expression<F>]) -> Expression<F> {
-    limbs.iter().fold(0u64.expr(), |result, limb| {
-        result * F::from(1u64 << 16) + limb.clone()
     })
 }

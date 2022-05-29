@@ -6,7 +6,7 @@ use super::{
 use crate::evm_circuit::{
     param::N_BYTES_WORD,
     table::{AccountFieldTag, RwTableTag},
-    util::{math_gadget::generate_lagrange_base_polynomial, not, select},
+    util::{math_gadget::generate_lagrange_base_polynomial, not, or},
 };
 use crate::util::Expr;
 use eth_types::Field;
@@ -26,7 +26,7 @@ pub struct Queries<F: Field> {
     pub field_tag: Expression<F>,
     pub storage_key: RlcQueries<F, N_BYTES_WORD>,
     pub value: Expression<F>,
-    pub value_col_prev: Expression<F>,
+    pub value_at_prev_rotation: Expression<F>,
     pub value_prev: Expression<F>,
     pub lookups: LookupsQueries<F>,
     pub power_of_randomness: [Expression<F>; N_BYTES_WORD - 1],
@@ -103,21 +103,22 @@ impl<F: Field> ConstraintBuilder<F> {
         self.require_in_set("tag in RwTableTag range", q.tag(), set::<F, RwTableTag>());
         self.require_boolean("is_write is boolean", q.is_write());
 
-        // TODO: move this into constraints of each tx type?
         self.condition(
-            q.tag_matches_multi(vec![
-                RwTableTag::Account,
+            q.multi_tag_match(vec![
+                RwTableTag::Memory,
+                RwTableTag::Stack,
                 RwTableTag::AccountStorage,
+                RwTableTag::Account,
                 RwTableTag::TxAccessListAccount,
                 RwTableTag::TxAccessListAccountStorage,
                 RwTableTag::AccountDestructed,
                 RwTableTag::TxRefund,
-            ]) * q.not_first_access(),
+            ]) * not::expr(q.first_access()),
             |cb| {
                 cb.require_equal(
-                    "prev should be correct general",
+                    "value_prev should be equal to value at prev rotation",
                     q.value_prev.clone(),
-                    q.value_col_prev.clone(),
+                    q.value_at_prev_rotation.clone(),
                 );
             },
         );
@@ -143,6 +144,10 @@ impl<F: Field> ConstraintBuilder<F> {
             "memory value is a byte",
             (q.value.clone(), q.lookups.u8.clone()),
         );
+        self.require_zero(
+            "prev_value is 0 when keys changed",
+            q.first_access() * q.value_prev.clone(),
+        );
     }
 
     fn build_stack_constraints(&mut self, q: &Queries<F>) {
@@ -162,6 +167,10 @@ impl<F: Field> ConstraintBuilder<F> {
                 q.address_change(),
             )
         });
+        self.require_zero(
+            "prev_value is 0 when keys changed",
+            q.first_access() * q.value_prev.clone(),
+        );
     }
 
     fn build_account_storage_constraints(&mut self, q: &Queries<F>) {
@@ -178,13 +187,7 @@ impl<F: Field> ConstraintBuilder<F> {
         //     // cb.require_zero("first access rw_counter is 0",
         // q.rw_counter.value.clone()); })
 
-        self.condition(q.not_first_access(), |cb| {
-            cb.require_equal(
-                "prev should be correct storage",
-                q.value_prev.clone(),
-                q.value_col_prev.clone(),
-            )
-        });
+        // TODO: value_prev == committed_value when keys changed
     }
     fn build_tx_access_list_account_constraints(&mut self, q: &Queries<F>) {
         self.require_zero("field_tag is 0 for TxAccessListAccount", q.field_tag());
@@ -199,11 +202,6 @@ impl<F: Field> ConstraintBuilder<F> {
         self.require_zero(
             "field_tag is 0 for TxAccessListAccountStorage",
             q.field_tag(),
-        );
-        self.require_equal(
-            "prev should be correct al",
-            q.value_prev.clone(),
-            select::expr(q.first_access(), 0.expr(), q.value_col_prev.clone()),
         );
         // TODO: Missing constraints
     }
@@ -335,7 +333,7 @@ impl<F: Field> Queries<F> {
             RwTableTag::iter().map(|x| x as usize),
         )
     }
-    fn tag_matches_multi(&self, target_tags: Vec<RwTableTag>) -> Expression<F> {
+    fn multi_tag_match(&self, target_tags: Vec<RwTableTag>) -> Expression<F> {
         let mut numerator = 1u64.expr();
         for unmatched_tag in RwTableTag::iter() {
             if !target_tags.contains(&unmatched_tag) {
@@ -347,17 +345,13 @@ impl<F: Field> Queries<F> {
 
     fn first_access(&self) -> Expression<F> {
         // upper diff changed OR storage key changed
-        not::expr(
-            self.lexicographic_ordering_upper_limb_difference_is_zero
-                .clone()
-                * self.is_storage_key_unchanged.clone(),
-        )
-    }
-
-    fn not_first_access(&self) -> Expression<F> {
-        self.lexicographic_ordering_upper_limb_difference_is_zero
-            .clone()
-            * self.is_storage_key_unchanged.clone()
+        or::expr(&[
+            not::expr(
+                self.lexicographic_ordering_upper_limb_difference_is_zero
+                    .clone(),
+            ),
+            not::expr(self.is_storage_key_unchanged.clone()),
+        ])
     }
 
     fn address_change(&self) -> Expression<F> {

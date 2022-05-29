@@ -244,10 +244,7 @@ pub(crate) enum Table {
 }
 
 #[derive(Clone, Debug)]
-pub struct RwValues<F>
-where
-    F: Field,
-{
+pub struct RwValues<F> {
     pub id: Expression<F>,
     pub address: Expression<F>,
     pub field_tag: Expression<F>,
@@ -283,29 +280,8 @@ impl<F: Field> RwValues<F> {
     }
 }
 
-impl<F> From<[Expression<F>; 8]> for RwValues<F>
-where
-    F: Field,
-{
-    fn from(exps: [Expression<F>; 8]) -> Self {
-        Self {
-            id: exps[0].clone(),
-            address: exps[1].clone(),
-            field_tag: exps[2].clone(),
-            storage_key: exps[3].clone(),
-            value: exps[4].clone(),
-            value_prev: exps[5].clone(),
-            aux1: exps[6].clone(),
-            aux2: exps[7].clone(),
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
-pub(crate) enum Lookup<F>
-where
-    F: Field,
-{
+pub(crate) enum Lookup<F> {
     /// Lookup to fixed table, which contains serveral pre-built tables such as
     /// range tables or bitwise tables.
     Fixed {

@@ -431,8 +431,9 @@ impl RwMap {
         });
         sorted
     }
+
+    // check rw_counter is continous and starting from 1
     pub fn check_rw_counter_sanity(&self) {
-        // check rw_counter is continous and starting from 1
         for (idx, rw_counter) in self
             .0
             .values()
@@ -444,52 +445,12 @@ impl RwMap {
             debug_assert_eq!(idx, rw_counter - 1);
         }
     }
-    pub fn normalize_rw_rows<F>(
-        rows: Vec<RwRow<F>>,
-        randomness: F,
-    ) -> (HashMap<usize, usize>, Vec<RwRow<F>>)
-    where
-        F: Field,
-    {
-        let mut rw_rows: Vec<RwRow<F>> = Vec::new();
-        let mut colid_map = HashMap::new();
-        let mut rows = rows;
-        rows.insert(0, Rw::Start.table_assignment(randomness));
-        for (idx, row) in rows.into_iter().enumerate() {
-            // check if we need to insert an initial row before the real row
-            // TODO: is it needed for rw types which don't have value_prev(like CallContext)
-            // to have initial row?
-            if idx != 0 {
-                // skip START
-                let need_initial_row = match rw_rows.last() {
-                    None => true,
-                    Some(prev_row) => !row.rw_keys().is_same_access(&prev_row.rw_keys()),
-                };
-                if need_initial_row {
-                    // need to insert a initial row
-                    let initial_row = RwRow::<F> {
-                        rw_counter: 0,
-                        value: row.value_prev,
-                        ..row
-                    };
-                    rw_rows.push(initial_row);
-                    colid_map.insert(idx, rw_rows.len() - 1);
-                }
-            }
-            rw_rows.push(row);
-            colid_map.insert(idx, rw_rows.len() - 1);
-        }
-        (colid_map, rw_rows)
-    }
     pub fn table_assignments<F>(&self, randomness: F) -> Vec<RwRow<F>>
     where
         F: Field,
     {
+        self.check_rw_counter_sanity();
         let mut rows: Vec<Rw> = self.0.values().flatten().cloned().collect();
-        //let mut rows: Vec<Rw> = once(&Rw::Start)
-        //   .chain(self.0.values().flatten())
-        // .cloned()
-        //.collect();
 
         rows.sort_by_key(|row| {
             (
@@ -502,15 +463,14 @@ impl RwMap {
             )
         });
 
-        let rows: Vec<RwRow<F>> = rows
-            .iter()
+        iter::once(Rw::Start)
+            .chain(rows.into_iter())
             .map(|r| r.table_assignment(randomness))
-            .collect();
-        rows
-        //Self::normalize_rw_rows(rows, randomness)
+            .collect()
     }
 }
 
+/*
 #[derive(Default, Debug)]
 pub struct RwKeys {
     // FIXME: in state circuit, tag and field_tag are encoded as u8
@@ -531,7 +491,7 @@ impl RwKeys {
             && self.storage_key == other.storage_key
     }
 }
-
+*/
 #[derive(Clone, Copy, Debug)]
 pub enum Rw {
     Start,
@@ -629,7 +589,7 @@ pub enum Rw {
     },
 }
 #[derive(Default, Clone, Copy, Debug)]
-pub struct RwRow<F: FieldExt> {
+pub struct RwRow<F> {
     pub rw_counter: u64,
     pub is_write: bool,
     pub tag: u64,
@@ -642,87 +602,7 @@ pub struct RwRow<F: FieldExt> {
     pub aux1: F,
     pub aux2: F,
 }
-
-impl<F> RwRow<F>
-where
-    F: FieldExt,
-{
-    pub fn rw_keys(&self) -> RwKeys {
-        // TODO: fix the "as" conversion
-        RwKeys {
-            tag: self.tag,
-            field_tag: self.field_tag,
-            id: self.id as usize,
-            address: self.address,
-            storage_key: self.storage_key,
-            rw_counter: self.rw_counter as usize,
-        }
-    }
-}
-
-/*
-impl<F: FieldExt> From<[F; 11]> for RwRow<F> {
-    fn from(row: [F; 11]) -> Self {
-        Self {
-            rw_counter: row[0],
-            is_write: row[1],
-            tag: row[2],
-            key1: row[3],
-            key2: row[4],
-            key3: row[5],
-            key4: row[6],
-            value: row[7],
-            value_prev: row[8],
-            aux1: row[9],
-            aux2: row[10],
-        }
-    }
-}
-*/
 impl Rw {
-    pub fn rw_keys(&self) -> RwKeys {
-        RwKeys {
-            tag: self.tag() as u64,
-            field_tag: self.field_tag().unwrap_or_default(),
-            id: self.id().unwrap_or_default(),
-            address: self.address().unwrap_or_default(),
-            storage_key: self.storage_key().unwrap_or_default(),
-            rw_counter: self.rw_counter(),
-        }
-    }
-    /*
-    pub fn initial_row(&self) -> Self {
-
-    // rw_counter == 0 means this is an "initial row"
-    initial_row.rw_counter = 0;
-        match self {
-            rw @ Self::Account{..} => {
-                let mut new_rw = rw.clone();
-                new_rw.rw_counter = 0;
-                new_rw
-            }
-            Self::AccountStorage { value_prev, .. } => {
-                Some(RandomLinearCombination::random_linear_combine(
-                    value_prev.to_le_bytes(),
-                    randomness,
-                ))
-            }
-            Self::TxAccessListAccount { is_warm_prev, .. }
-            | Self::TxAccessListAccountStorage { is_warm_prev, .. } => {
-                Some(F::from(*is_warm_prev as u64))
-            }
-            Self::AccountDestructed {
-                is_destructed_prev, ..
-            } => Some(F::from(*is_destructed_prev as u64)),
-            Self::TxRefund { value_prev, .. } => Some(F::from(*value_prev)),
-            Self::Stack { .. }
-            | Self::Memory { .. }
-            | Self::CallContext { .. }
-            | Self::TxLog { .. }
-            | Self::TxReceipt { .. } => None,
-        }
-    }
-    */
     pub fn tx_access_list_value_pair(&self) -> (bool, bool) {
         match self {
             Self::TxAccessListAccount {
@@ -818,12 +698,12 @@ impl Rw {
 
     pub fn table_assignment<F: Field>(&self, randomness: F) -> RwRow<F> {
         RwRow {
-            rw_counter: (self.rw_counter() as u64),
-            is_write: (self.is_write()),
-            tag: (self.tag() as u64),
-            id: (self.id().unwrap_or_default() as u64),
+            rw_counter: self.rw_counter() as u64,
+            is_write: self.is_write(),
+            tag: self.tag() as u64,
+            id: self.id().unwrap_or_default() as u64,
             address: self.address().unwrap_or_default(),
-            field_tag: (self.field_tag().unwrap_or_default() as u64),
+            field_tag: self.field_tag().unwrap_or_default() as u64,
             storage_key: self.storage_key().unwrap_or_default(),
             value: self.value_assignment(randomness),
             value_prev: self.value_prev_assignment(randomness).unwrap_or_default(),
