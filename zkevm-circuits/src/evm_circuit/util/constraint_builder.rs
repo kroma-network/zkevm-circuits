@@ -54,7 +54,7 @@ pub(crate) struct StepStateTransition<F: FieldExt> {
     pub(crate) call_id: Transition<Expression<F>>,
     pub(crate) is_root: Transition<Expression<F>>,
     pub(crate) is_create: Transition<Expression<F>>,
-    pub(crate) code_source: Transition<Expression<F>>,
+    pub(crate) code_hash: Transition<Expression<F>>,
     pub(crate) program_counter: Transition<Expression<F>>,
     pub(crate) stack_pointer: Transition<Expression<F>>,
     pub(crate) gas_left: Transition<Expression<F>>,
@@ -79,7 +79,7 @@ impl<F: FieldExt> StepStateTransition<F> {
             call_id: Transition::Any,
             is_root: Transition::Any,
             is_create: Transition::Any,
-            code_source: Transition::Any,
+            code_hash: Transition::Any,
             program_counter: Transition::Any,
             stack_pointer: Transition::Any,
             gas_left: Transition::Any,
@@ -453,7 +453,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         constrain!(call_id);
         constrain!(is_root);
         constrain!(is_create);
-        constrain!(code_source);
+        constrain!(code_hash);
         constrain!(program_counter);
         constrain!(stack_pointer);
         constrain!(gas_left);
@@ -509,7 +509,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         self.add_lookup(
             "Opcode lookup",
             Lookup::Bytecode {
-                hash: self.curr.state.code_source.expr(),
+                hash: self.curr.state.code_hash.expr(),
                 tag: BytecodeFieldTag::Byte.expr(),
                 index,
                 is_code,
