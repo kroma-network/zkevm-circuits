@@ -38,7 +38,7 @@ const N_LIMBS_ID: usize = 2;
 
 /// Config for StateCircuit
 #[derive(Clone)]
-pub struct StateConfig<F> {
+pub struct StateConfig<F, const QUICK_CHECK: bool> {
     // Figure out why you get errors when this is Selector.
     // https://github.com/appliedzkp/zkevm-circuits/issues/407
     selector: Column<Fixed>,
@@ -49,7 +49,7 @@ pub struct StateConfig<F> {
     storage_key_rlc: RlcConfig<N_BYTES_WORD>,
     is_id_unchanged: IsZeroConfig<F>,
     is_storage_key_unchanged: IsZeroConfig<F>,
-    lookups: LookupsConfig,
+    lookups: LookupsConfig<QUICK_CHECK>,
     power_of_randomness: [Column<Instance>; N_BYTES_WORD - 1],
     lexicographic_ordering: LexicographicOrderingConfig<F>,
 }
@@ -58,14 +58,14 @@ type Lookup<F> = (&'static str, Expression<F>, Expression<F>);
 
 /// State Circuit for proving RwTable is valid
 #[derive(Default)]
-pub struct StateCircuit<F> {
+pub struct StateCircuit<F, const QUICK_CHECK: bool> {
     pub(crate) randomness: F,
     pub(crate) rows: Vec<RwRow<F>>,
     #[cfg(test)]
     overrides: HashMap<(test::AdviceColumn, usize), F>,
 }
 
-impl<F: Field> StateCircuit<F> {
+impl<F: Field, const QUICK_CHECK: bool> StateCircuit<F, QUICK_CHECK> {
     /// make a new state circuit from an RwMap
     pub fn new(randomness: F, rw_map: RwMap) -> Self {
         let rows = rw_map.table_assignments(randomness);
@@ -75,6 +75,14 @@ impl<F: Field> StateCircuit<F> {
             #[cfg(test)]
             overrides: HashMap::new(),
         }
+    }
+    /// estimate k needed to prover
+    pub fn estimate_k(&self) -> u32 {
+        let log2_ceil = |n| u32::BITS - (n as u32).leading_zeros() - (n & (n - 1) == 0) as u32;
+        let k = if QUICK_CHECK { 12 } else { 18 };
+        let k = k.max(log2_ceil(64 + self.rows.len()));
+        log::debug!("state circuit uses k = {}", k);
+        k
     }
 
     /// powers of randomness for instance columns
@@ -86,7 +94,7 @@ impl<F: Field> StateCircuit<F> {
     #[allow(clippy::too_many_arguments)]
     fn assign_row(
         &self,
-        config: &StateConfig<F>,
+        config: &StateConfig<F, QUICK_CHECK>,
         region: &mut Region<F>,
         is_storage_key_unchanged: &IsZeroChip<F>,
         is_id_unchanged: &IsZeroChip<F>,
@@ -106,7 +114,6 @@ impl<F: Field> StateCircuit<F> {
             .assign(region, offset, row.rw_counter as u32)?;
         config.id_mpi.assign(region, offset, row.id as u32)?;
         config.address_mpi.assign(region, offset, row.address)?;
-
         config
             .storage_key_rlc
             .assign(region, offset, self.randomness, row.storage_key)?;
@@ -146,8 +153,8 @@ impl<F: Field> StateCircuit<F> {
     }
 }
 
-impl<F: Field> Circuit<F> for StateCircuit<F> {
-    type Config = StateConfig<F>;
+impl<F: Field, const QUICK_CHECK: bool> Circuit<F> for StateCircuit<F, QUICK_CHECK> {
+    type Config = StateConfig<F, QUICK_CHECK>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -162,16 +169,16 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
         let rw_table = RwTable::construct(meta);
         let is_storage_key_unchanged_column = meta.advice_column();
         let is_id_unchanged_column = meta.advice_column();
-        let id_mpi = MpiChip::configure(meta, rw_table.id, selector);
-        let address_mpi = MpiChip::configure(meta, rw_table.address, selector);
+        let id_mpi = MpiChip::configure(meta, rw_table.id, selector, lookups);
+        let address_mpi = MpiChip::configure(meta, rw_table.address, selector, lookups);
         let storage_key_rlc = RlcChip::configure(
             meta,
             selector,
             rw_table.storage_key,
-            lookups.u8,
+            lookups,
             power_of_randomness,
         );
-        let rw_counter_mpi = MpiChip::configure(meta, rw_table.rw_counter, selector);
+        let rw_counter_mpi = MpiChip::configure(meta, rw_table.rw_counter, selector, lookups);
 
         let lexicographic_ordering = LexicographicOrderingChip::configure(
             meta,
@@ -181,8 +188,7 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
             address_mpi.limbs,
             storage_key_rlc.bytes,
             rw_counter_mpi.limbs,
-            rw_table,
-            //lookups.u16,
+            lookups,
         );
 
         let is_id_unchanged = IsZeroChip::configure(
@@ -248,6 +254,7 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
             || "rw table",
             |mut region| {
                 for (offset, row) in self.rows.iter().enumerate() {
+                    log::trace!("state citcuit assign offset:{} row:{:#?}", offset, row);
                     self.assign_row(
                         &config,
                         &mut region,
@@ -276,7 +283,10 @@ impl<F: Field> Circuit<F> for StateCircuit<F> {
     }
 }
 
-fn queries<F: Field>(meta: &mut VirtualCells<'_, F>, c: &StateConfig<F>) -> Queries<F> {
+fn queries<F: Field, const QUICK_CHECK: bool>(
+    meta: &mut VirtualCells<'_, F>,
+    c: &StateConfig<F, QUICK_CHECK>,
+) -> Queries<F> {
     Queries {
         selector: meta.query_fixed(c.selector, Rotation::cur()),
         rw_counter: MpiQueries::new(meta, c.rw_counter_mpi),

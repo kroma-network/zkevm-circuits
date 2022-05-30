@@ -68,6 +68,7 @@ impl RwTable {
         randomness: F,
         rw_map: &RwMap,
     ) -> Result<Vec<RwRow<F>>, Error> {
+        rw_map.check_rw_counter_sanity();
         let rows = rw_map.table_assignments(randomness);
         for (offset, row) in rows.iter().enumerate() {
             self.assign_row(region, offset, randomness, row)?;

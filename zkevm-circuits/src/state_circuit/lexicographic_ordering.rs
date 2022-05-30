@@ -1,7 +1,6 @@
-use super::{N_LIMBS_ACCOUNT_ADDRESS, N_LIMBS_ID, N_LIMBS_RW_COUNTER};
+use super::{lookups, N_LIMBS_ACCOUNT_ADDRESS, N_LIMBS_ID, N_LIMBS_RW_COUNTER};
 use crate::{
     evm_circuit::{param::N_BYTES_WORD, witness::RwRow},
-    rw_table::RwTable,
     util::Expr,
 };
 use eth_types::{Field, ToBigEndian};
@@ -96,7 +95,7 @@ impl<F: Field> Chip<F> {
 
     #[allow(clippy::too_many_arguments)]
     // TODO: fix this to not have too many arguments?
-    pub fn configure(
+    pub fn configure<const QUICK_CHECK: bool>(
         meta: &mut ConstraintSystem<F>,
         tag: Column<Advice>,
         field_tag: Column<Advice>,
@@ -104,8 +103,7 @@ impl<F: Field> Chip<F> {
         address_limbs: [Column<Advice>; N_LIMBS_ACCOUNT_ADDRESS],
         storage_key_bytes: [Column<Advice>; N_BYTES_WORD],
         rw_counter_limbs: [Column<Advice>; N_LIMBS_RW_COUNTER],
-        _rw_table: RwTable,
-        //u16_range: Column<Fixed>,
+        lookup: lookups::Config<QUICK_CHECK>,
     ) -> Config<F> {
         let selector = meta.fixed_column();
         let [upper_limb_difference, upper_limb_difference_inverse, lower_limb_difference, lower_limb_difference_inverse] =
@@ -185,26 +183,19 @@ impl<F: Field> Chip<F> {
             ]
         });
         assert!(meta.degree() <= 16);
-        /*
-        meta.lookup_any("upper_limb_difference fits into u16", |meta| {
-            let upper_limb_difference = meta.query_advice(upper_limb_difference, Rotation::cur());
-            vec![(
-                upper_limb_difference,
-                meta.query_fixed(u16_range, Rotation::cur()),
-            )]
+        lookup.range_check_u16(meta, "upper_limb_difference fits into u16", |meta| {
+            meta.query_advice(upper_limb_difference, Rotation::cur())
         });
-        meta.lookup_any(
+        lookup.range_check_u16(
+            meta,
             "upper_limb_difference is zero or lower_limb_difference fits into u16",
             |meta| {
                 let lower_limb_difference =
                     meta.query_advice(lower_limb_difference, Rotation::cur());
-                vec![(
-                    upper_limb_difference_is_zero * lower_limb_difference,
-                    meta.query_fixed(u16_range, Rotation::cur()),
-                )]
+                upper_limb_difference_is_zero * lower_limb_difference
             },
         );
-        */
+
         assert!(meta.degree() <= 16);
         meta.create_gate("lower_limb_difference is not zero", |meta| {
             let selector = meta.query_fixed(selector, Rotation::cur());
@@ -256,10 +247,6 @@ impl<F: Field> Chip<F> {
             lower_limb_difference = upper_limb_difference;
             upper_limb_difference = F::zero();
         }
-        //println!(
-        //  "assign offset {} index {} upper_limb_difference {:#?} lower_limb_difference
-        // {:#?}", offset, index, upper_limb_difference, lower_limb_difference
-        //);
 
         region.assign_advice(
             || "upper_limb_difference",

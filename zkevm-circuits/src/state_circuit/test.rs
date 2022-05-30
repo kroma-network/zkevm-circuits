@@ -28,7 +28,10 @@ pub enum AdviceColumn {
 }
 
 impl AdviceColumn {
-    pub fn value<F: Field>(&self, config: &StateConfig<F>) -> Column<Advice> {
+    pub fn value<F: Field, const QUICK_CHECK: bool>(
+        &self,
+        config: &StateConfig<F, QUICK_CHECK>,
+    ) -> Column<Advice> {
         match self {
             Self::IsWrite => config.rw_table.is_write,
             Self::Address => config.rw_table.address,
@@ -51,10 +54,11 @@ fn test_state_circuit_ok(
     });
 
     let randomness = Fr::rand();
-    let circuit = StateCircuit::new(randomness, rw_map);
+    let circuit = StateCircuit::<_, false>::new(randomness, rw_map);
     let power_of_randomness = circuit.instance();
 
-    let prover = MockProver::<Fr>::run(12, &circuit, power_of_randomness).unwrap();
+    let prover =
+        MockProver::<Fr>::run(circuit.estimate_k(), &circuit, power_of_randomness).unwrap();
     let verify_result = prover.verify();
     assert_eq!(verify_result, Ok(()));
 }
@@ -62,7 +66,7 @@ fn test_state_circuit_ok(
 #[test]
 fn degree() {
     let mut meta = ConstraintSystem::<Fr>::default();
-    StateCircuit::configure(&mut meta);
+    StateCircuit::<_, false>::configure(&mut meta);
     assert_eq!(meta.degree(), 18);
 }
 
@@ -357,14 +361,14 @@ fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, usize), Fr>) -> MockP
         .iter()
         .map(|r| r.table_assignment(randomness))
         .collect();
-    let circuit = StateCircuit {
+    let circuit = StateCircuit::<_, false> {
         randomness,
         rows,
         overrides,
     };
     let power_of_randomness = circuit.instance();
 
-    MockProver::<Fr>::run(12, &circuit, power_of_randomness).unwrap()
+    MockProver::<Fr>::run(circuit.estimate_k(), &circuit, power_of_randomness).unwrap()
 }
 
 fn verify(rows: Vec<Rw>) -> Result<(), Vec<VerifyFailure>> {

@@ -449,7 +449,6 @@ impl RwMap {
     where
         F: Field,
     {
-        self.check_rw_counter_sanity();
         let mut rows: Vec<Rw> = self.0.values().flatten().cloned().collect();
 
         rows.sort_by_key(|row| {
@@ -470,28 +469,6 @@ impl RwMap {
     }
 }
 
-/*
-#[derive(Default, Debug)]
-pub struct RwKeys {
-    // FIXME: in state circuit, tag and field_tag are encoded as u8
-    pub tag: u64,
-    pub field_tag: u64,
-    pub id: usize,
-    pub address: Address,
-    pub storage_key: Word,
-    pub rw_counter: usize,
-}
-
-impl RwKeys {
-    pub fn is_same_access(&self, other: &RwKeys) -> bool {
-        self.tag == other.tag
-            && self.field_tag == other.field_tag
-            && self.id == other.id
-            && self.address == other.address
-            && self.storage_key == other.storage_key
-    }
-}
-*/
 #[derive(Clone, Copy, Debug)]
 pub enum Rw {
     Start,

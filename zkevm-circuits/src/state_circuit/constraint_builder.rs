@@ -103,10 +103,19 @@ impl<F: Field> ConstraintBuilder<F> {
         self.require_in_set("tag in RwTableTag range", q.tag(), set::<F, RwTableTag>());
         self.require_boolean("is_write is boolean", q.is_write());
 
+        // Only reversible rws have `value_prev`
+        // There are no need to constain MemoryRw and StackRw since the 'read
+        // consistency' part of the spec are enough for them to behave
+        // correctly. Among these 6 Rws whose `value_prev` need to be
+        // constrained, `AccountStorage` and `Account` are related to storage
+        // and they should be connected with MPT cricuit later to check the
+        // `value_prev`. Default values of `TxAccessListAccount` and
+        // `TxAccessListAccountStorage` should be `false` indicating "not
+        // accessed yet". We can process `AccountDestructed` since we probably
+        // will not support this feature. `TxRefund` may be moved out of rw table in the future. See https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/395
+        // for more details.
         self.condition(
             q.multi_tag_match(vec![
-                RwTableTag::Memory,
-                RwTableTag::Stack,
                 RwTableTag::AccountStorage,
                 RwTableTag::Account,
                 RwTableTag::TxAccessListAccount,
@@ -143,10 +152,6 @@ impl<F: Field> ConstraintBuilder<F> {
         self.add_lookup(
             "memory value is a byte",
             (q.value.clone(), q.lookups.u8.clone()),
-        );
-        self.require_zero(
-            "prev_value is 0 when keys changed",
-            q.first_access() * q.value_prev.clone(),
         );
     }
 
@@ -195,6 +200,10 @@ impl<F: Field> ConstraintBuilder<F> {
             "storage_key is 0 for TxAccessListAccount",
             q.storage_key.encoded.clone(),
         );
+        self.require_zero(
+            "prev_value is 0 when keys changed",
+            q.first_access() * q.value_prev.clone(),
+        );
         // TODO: Missing constraints
     }
 
@@ -202,6 +211,10 @@ impl<F: Field> ConstraintBuilder<F> {
         self.require_zero(
             "field_tag is 0 for TxAccessListAccountStorage",
             q.field_tag(),
+        );
+        self.require_zero(
+            "prev_value is 0 when keys changed",
+            q.first_access() * q.value_prev.clone(),
         );
         // TODO: Missing constraints
     }

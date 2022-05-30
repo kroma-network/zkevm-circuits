@@ -61,7 +61,7 @@ pub async fn compute_proof(
 
     {
         // generate state_circuit proof
-        let circuit = StateCircuit::new(block.randomness, block.rws);
+        let circuit = StateCircuit::<_, false>::new(block.randomness, block.rws);
 
         // TODO: same quest like in the first scope
         let vk = keygen_vk(params, &circuit)?;
