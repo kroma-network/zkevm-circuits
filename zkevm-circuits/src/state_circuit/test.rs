@@ -54,7 +54,7 @@ fn test_state_circuit_ok(
     });
 
     let randomness = Fr::rand();
-    let circuit = StateCircuit::<_, false>::new(randomness, rw_map);
+    let circuit = StateCircuit::new(randomness, rw_map);
     let power_of_randomness = circuit.instance();
 
     let prover =
@@ -66,7 +66,7 @@ fn test_state_circuit_ok(
 #[test]
 fn degree() {
     let mut meta = ConstraintSystem::<Fr>::default();
-    StateCircuit::<_, false>::configure(&mut meta);
+    StateCircuit::configure(&mut meta);
     assert_eq!(meta.degree(), 18);
 }
 
@@ -311,7 +311,7 @@ fn nonlexicographic_order_tag() {
         is_write: false,
         call_id: 1,
         memory_address: 10,
-        byte: 12,
+        byte: 0,
     };
     let second = Rw::CallContext {
         rw_counter: 2,
@@ -358,7 +358,7 @@ fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, usize), Fr>) -> MockP
         .iter()
         .map(|r| r.table_assignment(randomness))
         .collect();
-    let circuit = StateCircuit::<_, false> {
+    let circuit = StateCircuit {
         randomness,
         rows,
         overrides,
@@ -369,9 +369,8 @@ fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, usize), Fr>) -> MockP
 }
 
 fn verify(rows: Vec<Rw>) -> Result<(), Vec<VerifyFailure>> {
-    let _n_rows = rows.len();
-    prover(rows, HashMap::new()).verify()
-    //prover(rows, HashMap::new()).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
+    let n_rows = rows.len();
+    prover(rows, HashMap::new()).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
 }
 
 fn verify_with_overrides(
@@ -381,9 +380,8 @@ fn verify_with_overrides(
     // Sanity check that the original RwTable without overrides is valid.
     assert_eq!(verify(rows.clone()), Ok(()));
 
-    let _n_rows = rows.len();
-    prover(rows, overrides).verify()
-    //prover(rows, overrides).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
+    let n_rows = rows.len();
+    prover(rows, overrides).verify_at_rows(0..n_rows + 1, 0..n_rows + 1)
 }
 
 fn assert_error_matches(result: Result<(), Vec<VerifyFailure>>, name: &str) {

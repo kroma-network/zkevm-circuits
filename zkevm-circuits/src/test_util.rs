@@ -1,6 +1,6 @@
 use crate::{
     evm_circuit::{table::FixedTableTag, witness::Block},
-    state_circuit::StateCircuit,
+    state_circuit::StateCircuitBase,
 };
 use bus_mapping::mock::BlockData;
 use eth_types::geth_types::GethData;
@@ -89,7 +89,7 @@ pub fn test_circuits_using_witness_block(
     // TODO: use randomness as one of the circuit public input, since randomness in
     // state circuit and evm circuit must be same
     if config.enable_state_circuit_test {
-        let state_circuit = StateCircuit::<_, true>::new(block.randomness, block.rws);
+        let state_circuit = StateCircuitBase::<_, true>::new(block.randomness, block.rws);
         let power_of_randomness = state_circuit.instance();
         let prover = MockProver::<Fr>::run(
             state_circuit.estimate_k(),

@@ -57,15 +57,24 @@ pub struct StateConfig<F, const QUICK_CHECK: bool> {
 type Lookup<F> = (&'static str, Expression<F>, Expression<F>);
 
 /// State Circuit for proving RwTable is valid
+pub type StateCircuit<F> = StateCircuitBase<F, false>;
+/// StateCircuit with lexicographic ordering u16 lookup disabled to allow
+/// smaller `k`. It is almost impossible to trigger u16 lookup verification
+/// error. So StateCircuitLight can be used in opcode gadgets test.
+/// Normal opcodes constaints error can still be captured but cost much less
+/// time.
+pub type StateCircuitLight<F> = StateCircuitBase<F, true>;
+
+/// State Circuit for proving RwTable is valid
 #[derive(Default)]
-pub struct StateCircuit<F, const QUICK_CHECK: bool> {
+pub struct StateCircuitBase<F, const QUICK_CHECK: bool> {
     pub(crate) randomness: F,
     pub(crate) rows: Vec<RwRow<F>>,
     #[cfg(test)]
     overrides: HashMap<(test::AdviceColumn, usize), F>,
 }
 
-impl<F: Field, const QUICK_CHECK: bool> StateCircuit<F, QUICK_CHECK> {
+impl<F: Field, const QUICK_CHECK: bool> StateCircuitBase<F, QUICK_CHECK> {
     /// make a new state circuit from an RwMap
     pub fn new(randomness: F, rw_map: RwMap) -> Self {
         let rows = rw_map.table_assignments(randomness);
@@ -153,7 +162,7 @@ impl<F: Field, const QUICK_CHECK: bool> StateCircuit<F, QUICK_CHECK> {
     }
 }
 
-impl<F: Field, const QUICK_CHECK: bool> Circuit<F> for StateCircuit<F, QUICK_CHECK> {
+impl<F: Field, const QUICK_CHECK: bool> Circuit<F> for StateCircuitBase<F, QUICK_CHECK> {
     type Config = StateConfig<F, QUICK_CHECK>;
     type FloorPlanner = SimpleFloorPlanner;
 

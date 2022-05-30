@@ -242,6 +242,7 @@ pub mod test {
             layouter.assign_region(
                 || "rw table",
                 |mut region| {
+                    rws.check_rw_counter_sanity();
                     self.rw_table.assign(&mut region, randomness, rws)?;
                     Ok(())
                 },
@@ -365,29 +366,17 @@ pub mod test {
                 fixed_table_tags,
             }
         }
+
         pub fn estimate_k(&self) -> u32 {
             let log2_ceil = |n| u32::BITS - (n as u32).leading_zeros() - (n & (n - 1) == 0) as u32;
 
-            let k = if self.fixed_table_tags.iter().any(|tag| {
-                matches!(
-                    tag,
-                    FixedTableTag::BitwiseAnd
-                        | FixedTableTag::BitwiseOr
-                        | FixedTableTag::BitwiseXor
-                )
-            }) {
-                18
-            } else {
-                12
-            };
-            /*
             let k = log2_ceil(
-                    64 + self.fixed_table_tags
-                        .iter()
-                        .map(|tag| tag.build::<F>().count())
-                        .sum::<usize>(),
-                );
-                */
+                64 + self
+                    .fixed_table_tags
+                    .iter()
+                    .map(|tag| tag.build::<F>().count())
+                    .sum::<usize>(),
+            );
 
             let num_rows_required_for_steps = TestCircuit::get_num_rows_required(&self.block);
             let k = k.max(log2_ceil(64 + num_rows_required_for_steps));
