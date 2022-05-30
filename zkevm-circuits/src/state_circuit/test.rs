@@ -281,7 +281,6 @@ fn address_limb_mismatch() {
     assert_error_matches(result, "mpi value matches claimed limbs");
 }
 
-#[ignore = "u16 lookup"]
 #[test]
 fn address_limb_out_of_range() {
     let rows = vec![
@@ -305,7 +304,6 @@ fn address_limb_out_of_range() {
     assert_error_matches(result, "mpi limb fits into u16");
 }
 
-#[ignore = "u16 lookup"]
 #[test]
 fn nonlexicographic_order_tag() {
     let first = Rw::Memory {
@@ -330,7 +328,6 @@ fn nonlexicographic_order_tag() {
     );
 }
 
-#[ignore = "u16 lookup"]
 #[test]
 fn nonlexicographic_order_rw_counter() {
     let first = Rw::CallContext {
