@@ -6,7 +6,7 @@ use super::{
 use crate::evm_circuit::{
     param::N_BYTES_WORD,
     table::{AccountFieldTag, RwTableTag},
-    util::{math_gadget::generate_lagrange_base_polynomial, not, or},
+    util::{math_gadget::generate_lagrange_base_polynomial, not, or, select},
 };
 use crate::util::Expr;
 use eth_types::Field;
@@ -19,6 +19,7 @@ pub struct Queries<F: Field> {
     pub rw_counter: MpiQueries<F, N_LIMBS_RW_COUNTER>,
     pub is_write: Expression<F>,
     pub tag: Expression<F>,
+    pub aux2: Expression<F>,
     pub prev_tag: Expression<F>,
     pub id: MpiQueries<F, N_LIMBS_ID>,
     pub is_id_unchanged: Expression<F>,
@@ -119,22 +120,24 @@ impl<F: Field> ConstraintBuilder<F> {
         // will not support this feature, it is skipped now.
         // (4) `TxRefund`: Default values should be '0'. BTW it may be moved out of rw table in the future. See https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/395
         // for more details.
-        self.condition(
-            q.multi_tag_match(vec![
-                RwTableTag::AccountStorage,
-                RwTableTag::Account,
-                RwTableTag::TxAccessListAccount,
-                RwTableTag::TxAccessListAccountStorage,
-                RwTableTag::AccountDestructed,
-                RwTableTag::TxRefund,
-            ]) * not::expr(q.first_access()),
-            |cb| {
-                cb.require_equal(
-                    "value_prev should be equal to value at prev rotation",
-                    q.value_prev.clone(),
+        self.require_equal(
+            "prev value",
+            q.value_prev.clone(),
+            (q.tag_matches(RwTableTag::TxAccessListAccount)
+                + q.tag_matches(RwTableTag::TxAccessListAccountStorage)
+                + q.tag_matches(RwTableTag::AccountDestructed)
+                + q.tag_matches(RwTableTag::TxRefund))
+                * select::expr(
+                    q.first_access(),
+                    0u64.expr(),
                     q.value_at_prev_rotation.clone(),
-                );
-            },
+                )
+                + (q.tag_matches(RwTableTag::Account) + q.tag_matches(RwTableTag::AccountStorage))
+                    * select::expr(
+                        q.first_access(),
+                        q.aux2.clone(), // committed value
+                        q.value_at_prev_rotation.clone(),
+                    ),
         );
     }
 

@@ -300,6 +300,7 @@ fn queries<F: Field, const QUICK_CHECK: bool>(
         selector: meta.query_fixed(c.selector, Rotation::cur()),
         rw_counter: MpiQueries::new(meta, c.rw_counter_mpi),
         is_write: meta.query_advice(c.rw_table.is_write, Rotation::cur()),
+        aux2: meta.query_advice(c.rw_table.aux2, Rotation::cur()),
         tag: meta.query_advice(c.rw_table.tag, Rotation::cur()),
         prev_tag: meta.query_advice(c.rw_table.tag, Rotation::prev()),
         id: MpiQueries::new(meta, c.id_mpi),
