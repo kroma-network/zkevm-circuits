@@ -333,7 +333,9 @@ pub mod test {
 
     impl<F: Field> TestCircuit<F> {
         pub fn new(block: Block<F>, fixed_table_tags: Vec<FixedTableTag>) -> Self {
-            let fixed_table_tags = if fixed_table_tags.is_empty() {
+            let mut fixed_table_tags = fixed_table_tags;
+            if fixed_table_tags.is_empty() {
+                // create fixed_table_tags by trace
                 let need_bitwise_lookup = block.txs.iter().any(|tx| {
                     tx.steps.iter().any(|step| {
                         matches!(
@@ -342,25 +344,17 @@ pub mod test {
                         )
                     })
                 });
-                if need_bitwise_lookup {
-                    FixedTableTag::iter().collect()
-                } else {
-                    vec![
-                        FixedTableTag::Zero,
-                        FixedTableTag::Range5,
-                        FixedTableTag::Range16,
-                        FixedTableTag::Range32,
-                        FixedTableTag::Range64,
-                        FixedTableTag::Range256,
-                        FixedTableTag::Range512,
-                        FixedTableTag::Range1024,
-                        FixedTableTag::SignByte,
-                        FixedTableTag::ResponsibleOpcode,
-                    ]
-                }
-            } else {
-                fixed_table_tags
-            };
+                fixed_table_tags = FixedTableTag::iter()
+                    .filter(|t| {
+                        !matches!(
+                            t,
+                            FixedTableTag::BitwiseAnd
+                                | FixedTableTag::BitwiseOr
+                                | FixedTableTag::BitwiseXor
+                        ) || need_bitwise_lookup
+                    })
+                    .collect();
+            }
             Self {
                 block,
                 fixed_table_tags,
