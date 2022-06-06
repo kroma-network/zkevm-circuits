@@ -266,12 +266,6 @@ impl<F: Field, const QUICK_CHECK: bool> Circuit<F> for StateCircuitBase<F, QUICK
                     log::trace!("state citcuit assign offset:{} row:{:#?}", offset, row);
                     self.assign_row(
                         &config,
-                    region.assign_advice(
-                        || "value",
-                        config.value,
-                        offset,
-                        || Ok(row.value_assignment(self.randomness)),
-                    )?;
                         &mut region,
                         &is_storage_key_unchanged,
                         &is_id_unchanged,
