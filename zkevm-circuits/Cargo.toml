@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 ff = "0.11"
-halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", rev = "37d0c7e", features=["zero-knowledge"] }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", rev = "37d0c7e" }
 bigint = "4"
 num = "0.4"
 sha3 = "0.10"
