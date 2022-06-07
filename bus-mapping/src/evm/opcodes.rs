@@ -33,6 +33,7 @@ mod mload;
 mod mstore;
 mod number;
 mod origin;
+mod r#return;
 mod selfbalance;
 mod sload;
 mod sstore;
