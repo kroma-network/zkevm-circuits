@@ -150,9 +150,10 @@ pub mod test {
             witness::{Block, BlockContext, Bytecode, RwMap, Transaction},
             EvmCircuit,
         },
-        rw_table::RwTable,
+        rw_table::RwTableRlc,
         util::DEFAULT_RAND,
     };
+    use bus_mapping::evm::OpcodeId;
     use eth_types::{Field, Word};
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner},
@@ -189,7 +190,7 @@ pub mod test {
     #[derive(Clone)]
     pub struct TestCircuitConfig<F> {
         tx_table: [Column<Advice>; 4],
-        rw_table: RwTable,
+        rw_table: RwTableRlc,
         bytecode_table: [Column<Advice>; 5],
         block_table: [Column<Advice>; 3],
         evm_circuit: EvmCircuit<F>,
@@ -243,30 +244,11 @@ pub mod test {
             layouter.assign_region(
                 || "rw table",
                 |mut region| {
-                    let mut offset = 0;
+                    rws.check_rw_counter_sanity();
+                    // TODO: fix this after cs.challenge() is implemented in halo2
+                    let randomness_phase_next = randomness;
                     self.rw_table
-                        .assign(&mut region, offset, &Default::default())?;
-                    offset += 1;
-
-                    let mut rows = rws
-                        .0
-                        .values()
-                        .flat_map(|rws| rws.iter())
-                        .collect::<Vec<_>>();
-
-                    rows.sort_by_key(|a| a.rw_counter());
-                    let mut expected_rw_counter = 1;
-                    for rw in rows {
-                        assert!(rw.rw_counter() == expected_rw_counter);
-                        expected_rw_counter += 1;
-
-                        self.rw_table.assign(
-                            &mut region,
-                            offset,
-                            &rw.table_assignment(randomness),
-                        )?;
-                        offset += 1;
-                    }
+                        .assign(&mut region, randomness, rws, randomness_phase_next)?;
                     Ok(())
                 },
             )
@@ -354,12 +336,61 @@ pub mod test {
         fixed_table_tags: Vec<FixedTableTag>,
     }
 
-    impl<F> TestCircuit<F> {
+    impl<F: Field> TestCircuit<F> {
         pub fn new(block: Block<F>, fixed_table_tags: Vec<FixedTableTag>) -> Self {
+            let mut fixed_table_tags = fixed_table_tags;
+            if fixed_table_tags.is_empty() {
+                // create fixed_table_tags by trace
+                let need_bitwise_lookup = block.txs.iter().any(|tx| {
+                    tx.steps.iter().any(|step| {
+                        matches!(
+                            step.opcode,
+                            Some(OpcodeId::AND) | Some(OpcodeId::OR) | Some(OpcodeId::XOR)
+                        )
+                    })
+                });
+                fixed_table_tags = FixedTableTag::iter()
+                    .filter(|t| {
+                        !matches!(
+                            t,
+                            FixedTableTag::BitwiseAnd
+                                | FixedTableTag::BitwiseOr
+                                | FixedTableTag::BitwiseXor
+                        ) || need_bitwise_lookup
+                    })
+                    .collect();
+            }
             Self {
                 block,
                 fixed_table_tags,
             }
+        }
+
+        pub fn estimate_k(&self) -> u32 {
+            let log2_ceil = |n| u32::BITS - (n as u32).leading_zeros() - (n & (n - 1) == 0) as u32;
+
+            let k = log2_ceil(
+                64 + self
+                    .fixed_table_tags
+                    .iter()
+                    .map(|tag| tag.build::<F>().count())
+                    .sum::<usize>(),
+            );
+
+            let num_rows_required_for_steps = TestCircuit::get_num_rows_required(&self.block);
+            let k = k.max(log2_ceil(64 + num_rows_required_for_steps));
+
+            let k = k.max(log2_ceil(
+                64 + self
+                    .block
+                    .bytecodes
+                    .iter()
+                    .map(|bytecode| bytecode.bytes.len())
+                    .sum::<usize>(),
+            ));
+
+            log::debug!("evm circuit uses k = {}", k);
+            k
         }
     }
 
@@ -373,7 +404,7 @@ pub mod test {
 
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
             let tx_table = [(); 4].map(|_| meta.advice_column());
-            let rw_table = RwTable::construct(meta);
+            let rw_table = RwTableRlc::construct(meta);
             let bytecode_table = [(); 5].map(|_| meta.advice_column());
             let block_table = [(); 3].map(|_| meta.advice_column());
 
@@ -440,29 +471,11 @@ pub mod test {
         block: Block<F>,
         fixed_table_tags: Vec<FixedTableTag>,
     ) -> Result<(), Vec<VerifyFailure>> {
-        let log2_ceil = |n| u32::BITS - (n as u32).leading_zeros() - (n & (n - 1) == 0) as u32;
-
-        let num_rows_required_for_steps = TestCircuit::get_num_rows_required(&block);
-
-        let k = log2_ceil(
-            64 + fixed_table_tags
-                .iter()
-                .map(|tag| tag.build::<F>().count())
-                .sum::<usize>(),
-        );
-        let k = k.max(log2_ceil(
-            64 + block
-                .bytecodes
-                .iter()
-                .map(|bytecode| bytecode.bytes.len())
-                .sum::<usize>(),
-        ));
-        let k = k.max(log2_ceil(64 + num_rows_required_for_steps));
-        log::debug!("evm circuit uses k = {}", k);
         let (active_gate_rows, active_lookup_rows) = TestCircuit::get_active_rows(&block);
+        let circuit = TestCircuit::<F>::new(block.clone(), fixed_table_tags);
+        let k = circuit.estimate_k();
         let block = block;
         //block.pad_to = (1 << k) - 64;
-        let circuit = TestCircuit::<F>::new(block, fixed_table_tags);
         let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
         prover.verify_at_rows(active_gate_rows.into_iter(), active_lookup_rows.into_iter())
     }
