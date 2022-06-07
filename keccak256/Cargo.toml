@@ -7,7 +7,7 @@ edition = "2018"
 dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2022_06_03" }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", rev = "37d0c7e", features=["zero-knowledge"] }
 itertools = "0.10.1"
 num-bigint = "0.4.2"
 num-traits = "0.2.14"
