@@ -110,6 +110,10 @@ pub struct CallContext {
     pub call_data: Vec<u8>,
     /// memory context of current call
     pub memory: Vec<u8>,
+    /// return data buffer
+    pub return_data: Vec<u8>,
+    /// last call reference
+    pub last_call: Option<Call>,
 }
 
 /// A reversion group is the collection of calls and the operations which are

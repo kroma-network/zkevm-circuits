@@ -34,6 +34,7 @@ mod mstore;
 mod number;
 mod origin;
 mod r#return;
+mod returndatacopy;
 mod selfbalance;
 mod sload;
 mod sstore;
@@ -61,6 +62,7 @@ use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
 use swap::Swap;
 use crate::evm::opcodes::extcodecopy::Extcodecopy;
+use crate::evm::opcodes::returndatacopy::Returndatacopy;
 
 /// Generic opcode trait which defines the logic of the
 /// [`Operation`](crate::operation::Operation) that should be generated for one
@@ -136,7 +138,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         // OpcodeId::EXTCODESIZE => {},
         OpcodeId::EXTCODECOPY => Extcodecopy::gen_associated_ops,
         // OpcodeId::RETURNDATASIZE => {},
-        // OpcodeId::RETURNDATACOPY => {},
+        OpcodeId::RETURNDATACOPY => Returndatacopy::gen_associated_ops,
         OpcodeId::EXTCODEHASH => Extcodehash::gen_associated_ops,
         // OpcodeId::BLOCKHASH => {},
         OpcodeId::COINBASE => StackOnlyOpcode::<0, 1>::gen_associated_ops,

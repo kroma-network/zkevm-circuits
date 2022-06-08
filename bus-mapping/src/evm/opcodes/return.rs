@@ -13,18 +13,21 @@ impl Opcode for Return {
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep]
     ) -> Result<Vec<ExecStep>, Error> {
-        let current_call = state.call()?;
+        let current_call = state.call()?.clone();
         // copy return data
         let caller = &state.tx.calls()[current_call.caller_id];
         let caller_ctx = &mut state.tx_ctx.calls[current_call.caller_id];
         if current_call.is_success && !current_call.is_create() {
-            let length = current_call.return_data_length;
-            let offset = current_call.return_data_offset;
+            let length = current_call.return_data_length as usize;
+            let offset = current_call.return_data_offset as usize;
 
             // update to the caller memory
-            debug_assert_eq!(caller.return_data_length, length);
-            let return_offset = caller.return_data_offset;
-            caller_ctx.memory[return_offset..return_offset + length].copy_from_slice(step.memory[offset..offset + length]);
+            debug_assert_eq!(caller.return_data_length as usize, length);
+            let return_offset = caller.return_data_offset as usize;
+            caller_ctx.memory[return_offset..return_offset + length].copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
+            caller_ctx.return_data.resize(length as usize, 0);
+            caller_ctx.return_data.copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
+            caller_ctx.last_call = Some(current_call.clone());
         }
 
 
@@ -33,7 +36,7 @@ impl Opcode for Return {
         // exec_steps.extend(memory_copy_steps);
         // Ok(exec_steps)
         let exec_step = state.new_step(&geth_steps[0])?;
-        state.handle_return(geth_step)?;
+        state.handle_return(&geth_steps[0])?;
         Ok(vec![exec_step])
     }
 }

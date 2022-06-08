@@ -55,7 +55,7 @@ impl<const IS_MSTORE8: bool> Opcode for Mstore<IS_MSTORE8> {
             }
         }
         assert_eq!(memory, geth_steps[1].memory.0);
-        state.call()?.memory = memory;
+        state.call_ctx_mut()?.memory = memory;
 
         match IS_MSTORE8 {
             true => {
