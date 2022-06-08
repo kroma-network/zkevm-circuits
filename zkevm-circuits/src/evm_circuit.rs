@@ -403,8 +403,8 @@ pub mod test {
         }
 
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            let tx_table = [(); 4].map(|_| meta.advice_column());
             let rw_table = RwTableRlc::construct(meta);
+            let tx_table = [(); 4].map(|_| meta.advice_column());
             let bytecode_table = [(); 5].map(|_| meta.advice_column());
             let block_table = [(); 3].map(|_| meta.advice_column());
 
