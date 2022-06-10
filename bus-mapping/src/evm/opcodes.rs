@@ -62,6 +62,7 @@ use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
 use swap::Swap;
 use crate::evm::opcodes::extcodecopy::Extcodecopy;
+use crate::evm::opcodes::r#return::Return;
 use crate::evm::opcodes::returndatacopy::Returndatacopy;
 
 /// Generic opcode trait which defines the logic of the
@@ -201,8 +202,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         // OpcodeId::CREATE => {},
         OpcodeId::CALL => Call::gen_associated_ops,
         // OpcodeId::CALLCODE => {},
-        // TODO: Handle RETURN by its own gen_associated_ops.
-        OpcodeId::RETURN => Stop::gen_associated_ops,
+        OpcodeId::RETURN => Return::gen_associated_ops,
         // OpcodeId::DELEGATECALL => {},
         // OpcodeId::CREATE2 => {},
         // OpcodeId::STATICCALL => {},

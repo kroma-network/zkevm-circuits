@@ -15,20 +15,21 @@ impl Opcode for Return {
     ) -> Result<Vec<ExecStep>, Error> {
         let current_call = state.call()?.clone();
         // copy return data
-        let caller = &state.tx.calls()[current_call.caller_id];
         let caller_ctx = &mut state.tx_ctx.calls[current_call.caller_id];
         if current_call.is_success && !current_call.is_create() {
-            let length = current_call.return_data_length as usize;
-            let offset = current_call.return_data_offset as usize;
-
+            let geth_step = &geth_steps[0];
+            let offset = geth_step.stack.nth_last(0)?.as_usize();
+            let length = geth_step.stack.nth_last(1)?.as_usize();
             // update to the caller memory
-            debug_assert_eq!(caller.return_data_length as usize, length);
-            let return_offset = caller.return_data_offset as usize;
+            let return_offset = current_call.return_data_offset as usize;
+            caller_ctx.memory.resize(return_offset + length, 0);
             caller_ctx.memory[return_offset..return_offset + length].copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.return_data.resize(length as usize, 0);
             caller_ctx.return_data.copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.last_call = Some(current_call.clone());
+            assert_eq!(hex::encode(&caller_ctx.memory), hex::encode(&geth_steps[1].memory.0));
         }
+
 
 
         // let mut exec_steps = vec![gen_calldatacopy_step(state, geth_step)?];
@@ -121,6 +122,7 @@ mod return_tests {
             DUP6
             PUSH2 (0xFFFF)
             CALL
+            STOP
         };
         // Get the execution steps from the external tracer
         let block: GethData = TestContext::<2, 1>::new(
