@@ -92,3 +92,49 @@ impl Opcode for Return {
 //
 //     Ok(vec![])
 // }
+
+#[cfg(test)]
+mod return_tests {
+    use eth_types::{bytecode, word};
+    use eth_types::geth_types::GethData;
+    use mock::TestContext;
+    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
+    use crate::mock::BlockData;
+
+    #[test]
+    fn test_ok() {
+        let code = bytecode! {
+            PUSH21(word!("6B6020600060003760206000F3600052600C6014F3"))
+            PUSH1(0)
+            MSTORE
+
+            PUSH1 (0x15)
+            PUSH1 (0xB)
+            PUSH1 (0)
+            CREATE
+
+            PUSH1 (0x20)
+            PUSH1 (0x20)
+            PUSH1 (0x20)
+            PUSH1 (0)
+            PUSH1 (0)
+            DUP6
+            PUSH2 (0xFFFF)
+            CALL
+        };
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<2, 1>::new(
+            None,
+            account_0_code_account_1_no_code(code),
+            tx_from_1_to_0,
+            |block, _tx| block.number(0xcafeu64),
+        )
+            .unwrap()
+            .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+    }
+}
