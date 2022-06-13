@@ -104,6 +104,26 @@ mod return_tests {
 
     #[test]
     fn test_ok() {
+        // // deployed contract
+        // PUSH1 0x20
+        // PUSH1 0
+        // PUSH1 0
+        // CALLDATACOPY
+        // PUSH1 0x20
+        // PUSH1 0
+        // RETURN
+        //
+        // bytecode: 0x6020600060003760206000F3
+        //
+        // // constructor
+        // PUSH12 0x6020600060003760206000F3
+        // PUSH1 0
+        // MSTORE
+        // PUSH1 0xC
+        // PUSH1 0x14
+        // RETURN
+        //
+        // bytecode: 0x6B6020600060003760206000F3600052600C6014F3
         let code = bytecode! {
             PUSH21(word!("6B6020600060003760206000F3600052600C6014F3"))
             PUSH1(0)
@@ -142,6 +162,26 @@ mod return_tests {
 
     #[test]
     fn test_revert() {
+        // // deployed contract
+        // PUSH1 0x20
+        // PUSH1 0
+        // PUSH1 0
+        // CALLDATACOPY
+        // PUSH1 0x20
+        // PUSH1 0
+        // REVERT
+        //
+        // bytecode: 0x6020600060003760206000FD
+        //
+        // // constructor
+        // PUSH12 0x6020600060003760206000FD
+        // PUSH1 0
+        // MSTORE
+        // PUSH1 0xC
+        // PUSH1 0x14
+        // RETURN
+        //
+        // bytecode: 0x6B6020600060003760206000FD600052600C6014F3
         let code = bytecode! {
             PUSH21(word!("6B6020600060003760206000FD600052600C6014F3"))
             PUSH1(0)
