@@ -16,7 +16,7 @@ impl Opcode for Return {
         let current_call = state.call()?.clone();
         // copy return data
         let caller_ctx = &mut state.tx_ctx.calls[current_call.caller_id];
-        if current_call.is_success && !current_call.is_create() {
+        if !current_call.is_create() {
             let geth_step = &geth_steps[0];
             let offset = geth_step.stack.nth_last(0)?.as_usize();
             let length = geth_step.stack.nth_last(1)?.as_usize();
