@@ -1,16 +1,15 @@
-use eth_types::GethExecStep;
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
 use crate::evm::Opcode;
+use crate::Error;
+use eth_types::GethExecStep;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
 
-
 impl Opcode for Return {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep]
+        geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let current_call = state.call()?.clone();
         // copy return data
@@ -22,14 +21,15 @@ impl Opcode for Return {
             // update to the caller memory
             let return_offset = current_call.return_data_offset as usize;
             caller_ctx.memory.resize(return_offset + length, 0);
-            caller_ctx.memory[return_offset..return_offset + length].copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
+            caller_ctx.memory[return_offset..return_offset + length]
+                .copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.return_data.resize(length as usize, 0);
-            caller_ctx.return_data.copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
+            caller_ctx
+                .return_data
+                .copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.last_call = Some(current_call);
             assert_eq!(&caller_ctx.memory, &geth_steps[1].memory.0);
         }
-
-
 
         // let mut exec_steps = vec![gen_calldatacopy_step(state, geth_step)?];
         // let memory_copy_steps = gen_memory_copy_steps(state, geth_steps)?;
@@ -53,9 +53,9 @@ impl Opcode for Return {
 //
 //     if cfg!(debug_assertions) {
 //         let current_call = state.call()?;
-//         debug_assert_eq!(memory_offset.as_u64(), current_call.return_data_offset);
-//         debug_assert_eq!(memory_size.as_u64(), current_call.return_data_length);
-//     }
+//         debug_assert_eq!(memory_offset.as_u64(),
+// current_call.return_data_offset);         debug_assert_eq!(memory_size.
+// as_u64(), current_call.return_data_length);     }
 //
 //     state.push_stack_op(
 //         &mut exec_step,
@@ -88,19 +88,19 @@ impl Opcode for Return {
 //         // update to the caller memory
 //         debug_assert_eq!(caller.return_data_length, length);
 //         let return_offset = caller.return_data_offset;
-//         caller_ctx.memory[return_offset..return_offset + length].copy_from_slice(step.memory[offset..offset + length]);
-//     }
+//         caller_ctx.memory[return_offset..return_offset +
+// length].copy_from_slice(step.memory[offset..offset + length]);     }
 //
 //     Ok(vec![])
 // }
 
 #[cfg(test)]
 mod return_tests {
-    use eth_types::{bytecode, word};
-    use eth_types::geth_types::GethData;
-    use mock::TestContext;
-    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
     use crate::mock::BlockData;
+    use eth_types::geth_types::GethData;
+    use eth_types::{bytecode, word};
+    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
+    use mock::TestContext;
 
     #[test]
     fn test_ok() {
@@ -151,8 +151,8 @@ mod return_tests {
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
         )
-            .unwrap()
-            .into();
+        .unwrap()
+        .into();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -209,8 +209,8 @@ mod return_tests {
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
         )
-            .unwrap()
-            .into();
+        .unwrap()
+        .into();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder

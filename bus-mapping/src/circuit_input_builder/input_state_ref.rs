@@ -14,7 +14,10 @@ use crate::{
     state_db::{CodeDB, StateDB},
     Error,
 };
-use eth_types::{evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress}, Address, GethExecStep, ToAddress, ToBigEndian, Word, H256, Hash};
+use eth_types::{
+    evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress},
+    Address, GethExecStep, Hash, ToAddress, ToBigEndian, Word, H256,
+};
 use ethers_core::utils::{get_contract_address, get_create2_address};
 
 /// Reference to the internal state of the CircuitInputBuilder in a particular

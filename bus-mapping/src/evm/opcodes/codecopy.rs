@@ -107,7 +107,8 @@ fn gen_memory_copy_steps(
             let actual_length = code.len() - code_starts;
             let mem_code_ends = mem_starts + actual_length;
             memory[mem_starts..mem_code_ends].copy_from_slice(&code[code_starts..]);
-            // since we already resize the memory, no need to copy 0s for out of bound bytes
+            // since we already resize the memory, no need to copy 0s for out of
+            // bound bytes
         }
     }
 

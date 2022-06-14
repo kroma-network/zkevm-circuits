@@ -162,7 +162,8 @@ fn gen_memory_copy_steps(
             let actual_length = call_data.len() - data_starts;
             let mem_code_ends = mem_starts + actual_length;
             memory[mem_starts..mem_code_ends].copy_from_slice(&call_data[data_starts..]);
-            // since we already resize the memory, no need to copy 0s for out of bound bytes
+            // since we already resize the memory, no need to copy 0s for out of
+            // bound bytes
         }
     }
     assert_eq!(memory, geth_steps[1].memory.0);

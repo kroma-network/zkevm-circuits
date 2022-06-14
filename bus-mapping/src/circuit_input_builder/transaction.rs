@@ -148,7 +148,7 @@ impl TransactionContext {
             call_data,
             memory: vec![],
             return_data: vec![],
-            last_call: None
+            last_call: None,
         });
     }
 

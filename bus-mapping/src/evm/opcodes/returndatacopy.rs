@@ -1,7 +1,7 @@
-use eth_types::GethExecStep;
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
 use crate::evm::Opcode;
+use crate::Error;
+use eth_types::GethExecStep;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Returndatacopy;
@@ -9,7 +9,7 @@ pub(crate) struct Returndatacopy;
 impl Opcode for Returndatacopy {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep]
+        geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let dest_offset = geth_step.stack.nth_last(0)?;
@@ -41,12 +41,12 @@ impl Opcode for Returndatacopy {
                 let actual_length = return_data.len() - data_starts;
                 let mem_data_ends = mem_starts + actual_length;
                 memory[mem_starts..mem_data_ends].copy_from_slice(&return_data[data_starts..]);
-                // since we already resize the memory, no need to copy 0s for out of bound bytes
+                // since we already resize the memory, no need to copy 0s for
+                // out of bound bytes
             }
         }
 
         let exec_step = state.new_step(&geth_steps[0])?;
         Ok(vec![exec_step])
-
     }
 }

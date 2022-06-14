@@ -44,6 +44,9 @@ mod stackonlyop;
 mod stop;
 mod swap;
 
+use crate::evm::opcodes::extcodecopy::Extcodecopy;
+use crate::evm::opcodes::r#return::Return;
+use crate::evm::opcodes::returndatacopy::Returndatacopy;
 use call::Call;
 use calldatacopy::Calldatacopy;
 use calldataload::Calldataload;
@@ -65,9 +68,6 @@ use sstore::Sstore;
 use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
 use swap::Swap;
-use crate::evm::opcodes::extcodecopy::Extcodecopy;
-use crate::evm::opcodes::r#return::Return;
-use crate::evm::opcodes::returndatacopy::Returndatacopy;
 
 /// Generic opcode trait which defines the logic of the
 /// [`Operation`](crate::operation::Operation) that should be generated for one

@@ -28,9 +28,9 @@ impl Default for CodeDB {
 impl CodeDB {
     /// Create a new empty Self.
     pub fn new() -> Self {
-        Self{
+        Self {
             address_hash: HashMap::new(),
-            hash_code: HashMap::new()
+            hash_code: HashMap::new(),
         }
     }
     /// Insert code indexed by code hash, and return the code hash.

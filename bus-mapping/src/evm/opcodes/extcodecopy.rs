@@ -1,9 +1,10 @@
-use eth_types::{GethExecStep, ToAddress, ToWord};
-use crate::circuit_input_builder::{CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData};
+use super::Opcode;
+use crate::circuit_input_builder::{
+    CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData,
+};
 use crate::constants::MAX_COPY_BYTES;
 use crate::Error;
-use super::Opcode;
-
+use eth_types::{GethExecStep, ToAddress, ToWord};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Extcodecopy;
@@ -11,7 +12,7 @@ pub(crate) struct Extcodecopy;
 impl Opcode for Extcodecopy {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep]
+        geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_steps = vec![gen_codecopy_step(state, geth_step)?];
@@ -33,26 +34,14 @@ fn gen_codecopy_step(
     let length = geth_step.stack.nth_last(3)?;
 
     // stack reads
-    state.stack_read(
-        &mut exec_step,
-        geth_step.stack.nth_last_filled(0),
-        address,
-    )?;
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(0), address)?;
     state.stack_read(
         &mut exec_step,
         geth_step.stack.nth_last_filled(1),
         dest_offset,
     )?;
-    state.stack_read(
-        &mut exec_step,
-        geth_step.stack.nth_last_filled(2),
-        offset,
-    )?;
-    state.stack_read(
-        &mut exec_step,
-        geth_step.stack.nth_last_filled(3),
-        length,
-    )?;
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(2), offset)?;
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(3), length)?;
     Ok(exec_step)
 }
 
@@ -70,11 +59,7 @@ fn gen_memory_copy_step(
         } else {
             0
         };
-        state.memory_write(
-            exec_step,
-            ((aux_data.dst_addr as usize) + idx).into(),
-            byte,
-        )?;
+        state.memory_write(exec_step, ((aux_data.dst_addr as usize) + idx).into(), byte)?;
     }
 
     exec_step.aux_data = Some(aux_data);
@@ -94,7 +79,6 @@ fn gen_memory_copy_steps(
     let code_hash = state.code_hash(address)?;
     let code = state.code(code_hash)?;
     let src_addr_end = code.len() as u64;
-
 
     // TODO: COMPLETE MEMORY RECONSTRUCTION
     let mut memory = geth_steps[0].memory.0.clone();
@@ -119,7 +103,8 @@ fn gen_memory_copy_steps(
             let actual_length = code.len() - code_starts;
             let mem_code_ends = mem_starts + actual_length;
             memory[mem_starts..mem_code_ends].copy_from_slice(&code[code_starts..]);
-            // since we already resize the memory, no need to copy 0s for out of bound bytes
+            // since we already resize the memory, no need to copy 0s for out of
+            // bound bytes
         }
     }
 
@@ -149,5 +134,4 @@ fn gen_memory_copy_steps(
     }
 
     Ok(steps)
-
 }

@@ -51,7 +51,7 @@ impl<const IS_MSTORE8: bool> Opcode for Mstore<IS_MSTORE8> {
             }
             false => {
                 let bytes = value.to_be_bytes();
-                memory[mem_starts..mem_starts+32].copy_from_slice(&bytes);
+                memory[mem_starts..mem_starts + 32].copy_from_slice(&bytes);
             }
         }
         assert_eq!(memory, geth_steps[1].memory.0);
