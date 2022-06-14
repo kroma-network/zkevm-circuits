@@ -34,27 +34,23 @@ fn gen_codecopy_step(
     let length = geth_step.stack.nth_last(3)?;
 
     // stack reads
-    state.push_stack_op(
+    state.stack_read(
         &mut exec_step,
-        RW::READ,
         geth_step.stack.nth_last_filled(0),
         address,
     )?;
-    state.push_stack_op(
+    state.stack_read(
         &mut exec_step,
-        RW::READ,
         geth_step.stack.nth_last_filled(1),
         dest_offset,
     )?;
-    state.push_stack_op(
+    state.stack_read(
         &mut exec_step,
-        RW::READ,
         geth_step.stack.nth_last_filled(2),
         offset,
     )?;
-    state.push_stack_op(
+    state.stack_read(
         &mut exec_step,
-        RW::READ,
         geth_step.stack.nth_last_filled(3),
         length,
     )?;
@@ -75,9 +71,8 @@ fn gen_memory_copy_step(
         } else {
             0
         };
-        state.push_memory_op(
+        state.memory_write(
             exec_step,
-            RW::WRITE,
             ((aux_data.dst_addr as usize) + idx).into(),
             byte,
         )?;
