@@ -3,7 +3,6 @@ use crate::{
         CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData,
     },
     constants::MAX_COPY_BYTES,
-    operation::RW,
     Error,
 };
 use eth_types::{GethExecStep, ToWord};
@@ -37,24 +36,18 @@ fn gen_codecopy_step(
     let length = geth_step.stack.nth_last(2)?;
 
     // stack reads
-    state.push_stack_op(
+    state.stack_read(
         &mut exec_step,
-        RW::READ,
         geth_step.stack.nth_last_filled(0),
         dest_offset,
     )?;
-    state.push_stack_op(
+    state.stack_read(
         &mut exec_step,
-        RW::READ,
         geth_step.stack.nth_last_filled(1),
         code_offset,
     )?;
-    state.push_stack_op(
-        &mut exec_step,
-        RW::READ,
-        geth_step.stack.nth_last_filled(2),
-        length,
-    )?;
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(2), length)?;
+
     Ok(exec_step)
 }
 
@@ -71,12 +64,7 @@ fn gen_memory_copy_step(
         } else {
             0
         };
-        state.push_memory_op(
-            exec_step,
-            RW::WRITE,
-            ((aux_data.dst_addr as usize) + idx).into(),
-            byte,
-        )?;
+        state.memory_write(exec_step, ((aux_data.dst_addr as usize) + idx).into(), byte)?;
     }
 
     exec_step.aux_data = Some(aux_data);
@@ -92,8 +80,8 @@ fn gen_memory_copy_steps(
     let code_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
     let length = geth_steps[0].stack.nth_last(2)?.as_u64();
 
-    let code_source = state.call()?.code_hash;
-    let code = state.code(code_source)?;
+    let code_hash = state.call()?.code_hash;
+    let code = state.code(code_hash)?;
     let src_addr_end = code.len() as u64;
 
     // TODO: COMPLETE MEMORY RECONSTRUCTION
@@ -126,7 +114,7 @@ fn gen_memory_copy_steps(
     assert_eq!(memory, geth_steps[1].memory.0);
     state.call_ctx_mut()?.memory = memory;
 
-    let code_source = code_source.to_word();
+    let code_hash = code_hash.to_word();
     let mut copied = 0;
     let mut steps = vec![];
     while copied < length {
@@ -140,7 +128,7 @@ fn gen_memory_copy_steps(
                 dest_offset + copied,
                 length - copied,
                 src_addr_end,
-                CopyDetails::Code(code_source),
+                CopyDetails::Code(code_hash),
             ),
             &code,
         )?;
@@ -166,7 +154,7 @@ mod codecopy_tests {
 
     use crate::{
         mock::BlockData,
-        operation::{MemoryOp, StackOp},
+        operation::{MemoryOp, StackOp, RW},
     };
 
     use super::*;
