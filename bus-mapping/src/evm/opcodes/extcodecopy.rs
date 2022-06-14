@@ -2,7 +2,6 @@ use eth_types::{GethExecStep, ToAddress, ToWord};
 use crate::circuit_input_builder::{CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData};
 use crate::constants::MAX_COPY_BYTES;
 use crate::Error;
-use crate::operation::RW;
 use super::Opcode;
 
 

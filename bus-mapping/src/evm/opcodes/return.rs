@@ -25,7 +25,7 @@ impl Opcode for Return {
             caller_ctx.memory[return_offset..return_offset + length].copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.return_data.resize(length as usize, 0);
             caller_ctx.return_data.copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
-            caller_ctx.last_call = Some(current_call.clone());
+            caller_ctx.last_call = Some(current_call);
             assert_eq!(&caller_ctx.memory, &geth_steps[1].memory.0);
         }
 
