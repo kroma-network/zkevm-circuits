@@ -41,6 +41,7 @@ impl Opcode for Return {
     }
 }
 
+// TODO: circuit implement
 // fn gen_calldatacopy_step(
 //     state: &mut CircuitInputStateRef,
 //     geth_step: &GethExecStep,
