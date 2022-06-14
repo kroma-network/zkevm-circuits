@@ -206,7 +206,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         // OpcodeId::DELEGATECALL => {},
         // OpcodeId::CREATE2 => {},
         // OpcodeId::STATICCALL => {},
-        // TODO: Handle REVERT by its own gen_associated_ops.
+        // REVERT is almost the same as RETURN
         OpcodeId::REVERT => Return::gen_associated_ops,
         OpcodeId::SELFDESTRUCT => {
             warn!("Using dummy gen_selfdestruct_ops for opcode SELFDESTRUCT");
