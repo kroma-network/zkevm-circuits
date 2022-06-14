@@ -1,8 +1,7 @@
 use eth_types::GethExecStep;
-use crate::circuit_input_builder::{CallKind, CircuitInputStateRef, ExecStep};
+use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::Error;
 use crate::evm::Opcode;
-use crate::operation::RW;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
@@ -27,7 +26,7 @@ impl Opcode for Return {
             caller_ctx.return_data.resize(length as usize, 0);
             caller_ctx.return_data.copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.last_call = Some(current_call.clone());
-            assert_eq!(hex::encode(&caller_ctx.memory), hex::encode(&geth_steps[1].memory.0));
+            assert_eq!(&caller_ctx.memory, &geth_steps[1].memory.0);
         }
 
 
