@@ -97,7 +97,7 @@ fn gen_memory_copy_steps(
         let mem_ends = mem_starts + length as usize;
         let code_starts = code_offset as usize;
         let code_ends = code_starts + length as usize;
-        if code_ends < code.len() {
+        if code_ends <= code.len() {
             memory[mem_starts..mem_ends].copy_from_slice(&code[code_starts..code_ends]);
         } else {
             let actual_length = code.len() - code_starts;

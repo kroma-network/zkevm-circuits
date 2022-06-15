@@ -156,7 +156,7 @@ fn gen_memory_copy_steps(
         let data_starts = data_offset as usize;
         let data_ends = data_starts + length as usize;
         let call_data = &state.call_ctx()?.call_data;
-        if data_ends < call_data.len() {
+        if data_ends <= call_data.len() {
             memory[mem_starts..mem_ends].copy_from_slice(&call_data[data_starts..data_ends]);
         } else {
             let actual_length = call_data.len() - data_starts;
