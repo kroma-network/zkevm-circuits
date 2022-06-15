@@ -379,6 +379,71 @@ mod calldatacopy_tests {
     }
 
     #[test]
+    fn calldatacopy_opcode_internal_overflow() {
+        let (addr_a, addr_b) = (mock::MOCK_ACCOUNTS[0], mock::MOCK_ACCOUNTS[1]);
+
+        // code B gets called by code A, so the call is an internal call.
+        let dst_offset = 0x00usize;
+        let offset = 0x00usize;
+        let copy_size = 0x50usize;
+        let code_b = bytecode! {
+            PUSH32(copy_size)  // size
+            PUSH32(offset)     // offset
+            PUSH32(dst_offset) // dst_offset
+            CALLDATACOPY
+            STOP
+        };
+
+        // code A calls code B.
+        let pushdata = hex::decode("1234567890abcdef").unwrap();
+        let memory_a = std::iter::repeat(0)
+            .take(24)
+            .chain(pushdata.clone())
+            .collect::<Vec<u8>>();
+        let call_data_length = 0x20usize;
+        let call_data_offset = 0x10usize;
+        let code_a = bytecode! {
+            // populate memory in A's context.
+            PUSH8(Word::from_big_endian(&pushdata))
+            PUSH1(0x00) // offset
+            MSTORE
+            // call addr_b.
+            PUSH1(0x00) // retLength
+            PUSH1(0x00) // retOffset
+            PUSH1(call_data_length) // argsLength
+            PUSH1(call_data_offset) // argsOffset
+            PUSH1(0x00) // value
+            PUSH32(addr_b.to_word()) // addr
+            PUSH32(0x1_0000) // gas
+            CALL
+            STOP
+        };
+
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<3, 1>::new(
+            None,
+            |accs| {
+                accs[0].address(addr_b).code(code_b);
+                accs[1].address(addr_a).code(code_a);
+                accs[2]
+                    .address(mock::MOCK_ACCOUNTS[2])
+                    .balance(Word::from(1u64 << 30));
+            },
+            |mut txs, accs| {
+                txs[0].to(accs[1].address).from(accs[2].address);
+            },
+            |block, _tx| block,
+        )
+            .unwrap()
+            .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+    }
+
+    #[test]
     fn calldatacopy_opcode_root() {
         let code = bytecode! {
             PUSH32(0)
