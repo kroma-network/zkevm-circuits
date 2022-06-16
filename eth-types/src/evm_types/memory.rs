@@ -6,6 +6,7 @@ use core::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign}
 use core::str::FromStr;
 use itertools::Itertools;
 use std::fmt;
+use serde::{Serialize, Serializer};
 
 /// Represents a `MemoryAddress` of the EVM.
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
@@ -232,6 +233,13 @@ impl IndexMut<MemoryAddress> for Memory {
         // MemoryAddress is in base 16. Therefore since the vec is not, we need
         // to shift the addr.
         &mut self.0[index.0 >> 5]
+    }
+}
+
+impl Serialize for Memory {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let encoded = hex::encode(&self.0);
+        serializer.serialize_str(encoded.as_str())
     }
 }
 
