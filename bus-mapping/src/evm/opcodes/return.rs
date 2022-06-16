@@ -1,7 +1,7 @@
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::evm::Opcode;
 use crate::Error;
-use eth_types::GethExecStep;
+use eth_types::{Address, GethExecStep};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
@@ -12,14 +12,16 @@ impl Opcode for Return {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let current_call = state.call()?.clone();
-        // copy return data
+
+        let geth_step = &geth_steps[0];
+        let offset = geth_step.stack.nth_last(0)?.as_usize();
+        let length = geth_step.stack.nth_last(1)?.as_usize();
+
         if !current_call.is_create() {
+            // copy return data
             let (_, caller_idx) = state.block_ctx.call_map.get(&current_call.caller_id)
                 .expect("caller id not found in call map");
             let caller_ctx = &mut state.tx_ctx.calls[*caller_idx];
-            let geth_step = &geth_steps[0];
-            let offset = geth_step.stack.nth_last(0)?.as_usize();
-            let length = geth_step.stack.nth_last(1)?.as_usize();
             // update to the caller memory
             let return_offset = current_call.return_data_offset as usize;
             caller_ctx.memory.resize(return_offset + length, 0);
@@ -31,6 +33,12 @@ impl Opcode for Return {
                 .copy_from_slice(&geth_steps[0].memory.0[offset..offset + length]);
             caller_ctx.last_call = Some(current_call);
             assert_eq!(&caller_ctx.memory, &geth_steps[1].memory.0);
+        } else {
+            // dealing with contract creation
+            assert!(offset + length <= geth_step.memory.len());
+            let code = geth_step.memory.0[offset..offset + length].to_vec();
+            let contract_addr = Address::from(geth_steps[1].stack.nth_last(0)?.0);
+            state.code_db.insert(Some(contract_addr), code);
         }
 
         // let mut exec_steps = vec![gen_calldatacopy_step(state, geth_step)?];
