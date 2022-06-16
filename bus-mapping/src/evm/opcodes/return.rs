@@ -1,7 +1,7 @@
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::evm::Opcode;
 use crate::Error;
-use eth_types::{Address, GethExecStep};
+use eth_types::{Address, GethExecStep, ToAddress, ToBigEndian};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
@@ -35,9 +35,9 @@ impl Opcode for Return {
             assert_eq!(&caller_ctx.memory, &geth_steps[1].memory.0);
         } else {
             // dealing with contract creation
-            assert!(offset + length <= geth_step.memory.len());
+            assert!(offset + length <= geth_step.memory.0.len());
             let code = geth_step.memory.0[offset..offset + length].to_vec();
-            let contract_addr = Address::from(geth_steps[1].stack.nth_last(0)?.0);
+            let contract_addr = geth_steps[1].stack.nth_last(0)?.to_address();
             state.code_db.insert(Some(contract_addr), code);
         }
 
