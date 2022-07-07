@@ -20,7 +20,6 @@ impl Opcode for Log {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
-
         let mut exec_steps = vec![gen_log_step(state, geth_step)?];
         let log_copy_steps = gen_log_copy_steps(state, geth_steps)?;
         exec_steps.extend(log_copy_steps);

@@ -77,7 +77,12 @@ impl<'a> CircuitInputStateRef<'a> {
             .expect("steps should have at least one BeginTx step");
         ExecStep {
             exec_state: ExecState::EndTx,
-            gas_left: Gas(prev_step.gas_left.0 - prev_step.gas_cost.0),
+            gas_left: if prev_step.error.is_none() {
+                Gas(prev_step.gas_left.0 - prev_step.gas_cost.0)
+            } else {
+                Gas(0)
+            },
+
             rwc: self.block_ctx.rwc,
             // For tx without code execution
             reversible_write_counter: if let Some(call_ctx) = self.tx_ctx.calls().last() {
@@ -815,7 +820,7 @@ impl<'a> CircuitInputStateRef<'a> {
         let call = self.call()?;
 
         // Return from a call with a failure
-        if step.depth != next_depth && next_result.is_zero() {
+        if step.depth == next_depth + 1 && next_result.is_zero() {
             if !matches!(step.op, OpcodeId::RETURN) {
                 // Without calling RETURN
                 return Ok(match step.op {
@@ -938,10 +943,10 @@ impl<'a> CircuitInputStateRef<'a> {
                 }
             }
 
-            return Err(Error::UnexpectedExecStepError(
-                "*CALL*/CREATE* code not executed",
-                step.clone(),
-            ));
+            // return Err(Error::UnexpectedExecStepError(
+            //     "*CALL*/CREATE* code not executed",
+            //     step.clone(),
+            // ));
         }
 
         Ok(None)

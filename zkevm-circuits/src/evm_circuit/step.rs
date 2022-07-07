@@ -176,6 +176,40 @@ impl ExecutionState {
         )
     }
 
+        matches!(
+            self,
+            Self::ErrorInvalidOpcode
+                | Self::ErrorStackOverflow
+                | Self::ErrorStackUnderflow
+                | Self::ErrorWriteProtection
+                | Self::ErrorDepth
+                | Self::ErrorInsufficientBalance
+                | Self::ErrorContractAddressCollision
+                | Self::ErrorInvalidCreationCode
+                | Self::ErrorMaxCodeSizeExceeded
+                | Self::ErrorInvalidJump
+                | Self::ErrorReturnDataOutOfBound
+                | Self::ErrorOutOfGasConstant
+                | Self::ErrorOutOfGasStaticMemoryExpansion
+                | Self::ErrorOutOfGasDynamicMemoryExpansion
+                | Self::ErrorOutOfGasMemoryCopy
+                | Self::ErrorOutOfGasAccountAccess
+                | Self::ErrorOutOfGasCodeStore
+                | Self::ErrorOutOfGasLOG
+                | Self::ErrorOutOfGasEXP
+                | Self::ErrorOutOfGasSHA3
+                | Self::ErrorOutOfGasEXTCODECOPY
+                | Self::ErrorOutOfGasSLOAD
+                | Self::ErrorOutOfGasSSTORE
+                | Self::ErrorOutOfGasCALL
+                | Self::ErrorOutOfGasCALLCODE
+                | Self::ErrorOutOfGasDELEGATECALL
+                | Self::ErrorOutOfGasCREATE2
+                | Self::ErrorOutOfGasSTATICCALL
+                | Self::ErrorOutOfGasSELFDESTRUCT
+        )
+    }
+
     pub(crate) fn halts(&self) -> bool {
         self.halts_in_success() || self.halts_in_exception() || matches!(self, Self::REVERT)
     }
