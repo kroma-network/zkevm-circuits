@@ -4,7 +4,8 @@ use crate::circuit_input_builder::{
 };
 use crate::constants::MAX_COPY_BYTES;
 use crate::Error;
-use eth_types::{Address, GethExecStep, ToAddress, ToWord};
+use eth_types::{GethExecStep, ToAddress, ToWord};
+use crate::operation::{RW, TxAccessListAccountOp};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Extcodecopy;
@@ -51,19 +52,6 @@ impl Opcode for Extcodecopy {
         }
         Ok(exec_steps)
     }
-
-    fn reconstruct_accessed_addresses(
-        &self,
-        state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep],
-    ) -> Result<Option<Vec<Address>>, Error> {
-        let address = geth_steps[0].stack.nth_last(0)?.to_address();
-        if state.sdb.add_account_to_access_list(address) {
-            Ok(Some(vec![address]))
-        } else {
-            Ok(None)
-        }
-    }
 }
 
 fn gen_codecopy_step(
@@ -76,6 +64,18 @@ fn gen_codecopy_step(
     let dest_offset = geth_step.stack.nth_last(1)?;
     let offset = geth_step.stack.nth_last(2)?;
     let length = geth_step.stack.nth_last(3)?;
+
+    let is_warm = state.sdb.check_account_in_access_list(&address.to_address());
+    state.push_op_reversible(
+        &mut exec_step,
+        RW::WRITE,
+        TxAccessListAccountOp {
+            tx_id: state.tx_ctx.id(),
+            address: address.to_address(),
+            is_warm: true,
+            is_warm_prev: is_warm,
+        },
+    )?;
 
     // stack reads
     state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(0), address)?;

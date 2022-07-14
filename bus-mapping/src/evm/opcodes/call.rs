@@ -10,7 +10,7 @@ use eth_types::{
         gas_utils::{eip150_gas, memory_expansion_gas_cost},
         GasCost,
     },
-    Address, GethExecStep, ToAddress, ToWord,
+    GethExecStep, ToWord,
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
@@ -412,18 +412,5 @@ mod return_tests {
         builder
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
-    }
-
-    fn reconstruct_accessed_addresses(
-        &self,
-        state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep],
-    ) -> Result<Option<Vec<Address>>, Error> {
-        let address = geth_steps[0].stack.nth_last(1)?.to_address();
-        if state.sdb.add_account_to_access_list(address) {
-            Ok(Some(vec![address]))
-        } else {
-            Ok(None)
-        }
     }
 }
