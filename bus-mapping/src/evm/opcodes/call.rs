@@ -19,14 +19,16 @@ use std::cmp::max;
 /// Placeholder structure used to implement [`Opcode`] trait over it
 /// corresponding to the `OpcodeId::CALL` `OpcodeId`.
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct Call;
+pub(crate) struct Call<const N_ARGS: usize>;
 
-impl Opcode for Call {
+impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
     fn gen_associated_ops(
         &self,
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
+        assert!(N_ARGS == 6 || N_ARGS == 7);
+
         let geth_step = &geth_steps[0];
 
         let mut exec_step = state.new_step(geth_step)?;
@@ -34,10 +36,10 @@ impl Opcode for Call {
         let call = state.parse_call(geth_step)?;
         let current_call = state.call()?.clone();
 
-        let args_offset = geth_step.stack.nth_last(3)?.as_usize();
-        let args_length = geth_step.stack.nth_last(4)?.as_usize();
-        let ret_offset = geth_step.stack.nth_last(5)?.as_usize();
-        let ret_length = geth_step.stack.nth_last(6)?.as_usize();
+        let args_offset = geth_step.stack.nth_last(N_ARGS - 4)?.as_usize();
+        let args_length = geth_step.stack.nth_last(N_ARGS - 3)?.as_usize();
+        let ret_offset = geth_step.stack.nth_last(N_ARGS - 2)?.as_usize();
+        let ret_length = geth_step.stack.nth_last(N_ARGS - 1)?.as_usize();
 
         // we need to keep the memory until parse_call complete
         {
@@ -81,7 +83,7 @@ impl Opcode for Call {
             state.call_context_read(&mut exec_step, current_call.call_id, field, value);
         }
 
-        for i in 0..7 {
+        for i in 0..N_ARGS {
             state.stack_read(
                 &mut exec_step,
                 geth_step.stack.nth_last_filled(i),
@@ -91,7 +93,7 @@ impl Opcode for Call {
 
         state.stack_write(
             &mut exec_step,
-            geth_step.stack.nth_last_filled(6),
+            geth_step.stack.nth_last_filled(N_ARGS - 1),
             (call.is_success as u64).into(),
         )?;
 
@@ -170,8 +172,9 @@ impl Opcode for Call {
         let callee_gas_left = eip150_gas(geth_step.gas.0 - gas_cost, geth_step.stack.last()?);
 
         // There are 3 branches from here.
+        let code_address = call.code_address();
         match (
-            state.is_precompiled(&call.address),
+            code_address.map(|ref addr| state.is_precompiled(addr)).unwrap_or(false),
             callee_code_hash.to_fixed_bytes() == *EMPTY_HASH,
         ) {
             // 1. Call to precompiled.
@@ -181,8 +184,9 @@ impl Opcode for Call {
                 // FIXME: is this correct?
                 if call.is_success {
                     let caller_ctx = state.caller_ctx_mut()?;
+                    let code_address = code_address.unwrap();
                     let result = execute_precompiled(
-                        &call.address,
+                        &code_address,
                         &caller_ctx.memory.0[args_offset..args_offset + args_length],
                     );
                     caller_ctx.memory.0[ret_offset..ret_offset + ret_length]
@@ -276,25 +280,25 @@ impl Opcode for Call {
 mod return_tests {
     use crate::mock::BlockData;
     use eth_types::geth_types::GethData;
-    use eth_types::{bytecode, word, Address};
+    use eth_types::{bytecode, word};
     use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
     use mock::TestContext;
 
     #[test]
-    fn test_precompiled() {
+    fn test_precompiled_call() {
         let code = bytecode! {
-        PUSH16(word!("0123456789ABCDEF0123456789ABCDEF"))
-        PUSH1(0x00)
-        MSTORE
+            PUSH16(word!("0123456789ABCDEF0123456789ABCDEF"))
+            PUSH1(0x00)
+            MSTORE
 
-        PUSH1(0x20)
-        PUSH1(0x20)
-        PUSH1(0x20)
-        PUSH1(0x00)
-        PUSH1(0x00)
-        PUSH1(0x04)
-        PUSH1(0xFF)
-        CALL
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x00)
+            PUSH1(0x00)
+            PUSH1(0x04)
+            PUSH1(0xFF)
+            CALL
         };
 
         // Get the execution steps from the external tracer
@@ -306,6 +310,103 @@ mod return_tests {
         )
         .unwrap()
         .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_precompiled_callcode() {
+        let code = bytecode! {
+            PUSH16(word!("0123456789ABCDEF0123456789ABCDEF"))
+            PUSH1(0x00)
+            MSTORE
+
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x00)
+            PUSH1(0x00)
+            PUSH1(0x04)
+            PUSH1(0xFF)
+            CALLCODE
+        };
+
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<2, 1>::new(
+            None,
+            account_0_code_account_1_no_code(code),
+            tx_from_1_to_0,
+            |block, _tx| block.number(0xcafeu64),
+        )
+            .unwrap()
+            .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_precompiled_static_call() {
+        let code = bytecode! {
+            PUSH16(word!("0123456789ABCDEF0123456789ABCDEF"))
+            PUSH1(0x00)
+            MSTORE
+
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x00)
+            PUSH1(0x04)
+            PUSH1(0xFF)
+            STATICCALL
+        };
+
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<2, 1>::new(
+            None,
+            account_0_code_account_1_no_code(code),
+            tx_from_1_to_0,
+            |block, _tx| block.number(0xcafeu64),
+        )
+            .unwrap()
+            .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_precompiled_delegate_call() {
+        let code = bytecode! {
+            PUSH16(word!("0123456789ABCDEF0123456789ABCDEF"))
+            PUSH1(0x00)
+            MSTORE
+
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x20)
+            PUSH1(0x00)
+            PUSH1(0x04)
+            PUSH1(0xFF)
+            DELEGATECALL
+        };
+
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<2, 1>::new(
+            None,
+            account_0_code_account_1_no_code(code),
+            tx_from_1_to_0,
+            |block, _tx| block.number(0xcafeu64),
+        )
+            .unwrap()
+            .into();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder

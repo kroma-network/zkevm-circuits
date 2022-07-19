@@ -543,6 +543,7 @@ impl<'a> CircuitInputStateRef<'a> {
     }
 
     /// Check if address is a precompiled or not.
+    /// FIXME: we should move this to a more common place.
     pub fn is_precompiled(&self, address: &Address) -> bool {
         address.0[0..19] == [0u8; 19] && (1..=9).contains(&address.0[19])
     }
@@ -593,7 +594,7 @@ impl<'a> CircuitInputStateRef<'a> {
                     }
                     _ => address,
                 };
-                if self.is_precompiled(&address) {
+                if self.is_precompiled(&code_address) {
                     (CodeSource::Address(code_address), Hash::zero()) // FIXME: is this correct?
                 } else {
                     let (found, account) = self.sdb.get_account(&code_address);

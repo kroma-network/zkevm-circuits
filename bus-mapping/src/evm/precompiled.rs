@@ -11,7 +11,7 @@ pub fn execute_precompiled(address: &Address, input: &[u8]) -> Memory {
         0x06 => ec_add,
         0x07 => ec_mul,
         0x08 => ec_pairing,
-        _ => nop,
+        _ => panic!("calling non-exist precompiled contract address"),
     })(input)
 }
 
@@ -44,9 +44,5 @@ fn ec_mul(_input: &[u8]) -> Memory {
 }
 
 fn ec_pairing(_input: &[u8]) -> Memory {
-    unimplemented!()
-}
-
-fn nop(_input: &[u8]) -> Memory {
     unimplemented!()
 }

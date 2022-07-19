@@ -212,22 +212,22 @@ fn down_cast_to_opcode(opcode_id: &OpcodeId) -> &dyn Opcode {
         OpcodeId::LOG3 => &Log,
         OpcodeId::LOG4 => &Log,
         // OpcodeId::CREATE => {},
-        OpcodeId::CALL => &Call,
-        // OpcodeId::CALLCODE => {},
+        OpcodeId::CALL => &Call::<7>,
+        OpcodeId::CALLCODE => &Call::<7>,
         OpcodeId::RETURN => &Return,
-        // OpcodeId::DELEGATECALL => {},
+        OpcodeId::DELEGATECALL => &Call::<6>,
         // OpcodeId::CREATE2 => {},
-        // OpcodeId::STATICCALL => {},
+        OpcodeId::STATICCALL => &Call::<6>,
         // REVERT is almost the same as RETURN
         OpcodeId::REVERT => &Return,
         OpcodeId::SELFDESTRUCT => {
             warn!("Using dummy gen_selfdestruct_ops for opcode SELFDESTRUCT");
             &DummySelfDestruct
         }
-        OpcodeId::CALLCODE | OpcodeId::DELEGATECALL | OpcodeId::STATICCALL => {
-            warn!("Using dummy gen_call_ops for opcode {:?}", opcode_id);
-            &DummyCall
-        }
+        // OpcodeId::CALLCODE | OpcodeId::DELEGATECALL | OpcodeId::STATICCALL => {
+        //     warn!("Using dummy gen_call_ops for opcode {:?}", opcode_id);
+        //     &Call
+        // }
         OpcodeId::CREATE | OpcodeId::CREATE2 => {
             warn!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
             &DummyCreate
@@ -535,63 +535,6 @@ pub fn gen_end_tx_ops(
     }
 
     Ok(exec_step)
-}
-
-#[derive(Debug, Copy, Clone)]
-struct DummyCall;
-
-impl Opcode for DummyCall {
-    fn gen_associated_ops(
-        &self,
-        state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep],
-    ) -> Result<Vec<ExecStep>, Error> {
-        // FIXME: memory
-        dummy_gen_call_ops(state, geth_steps)
-    }
-}
-
-fn dummy_gen_call_ops(
-    state: &mut CircuitInputStateRef,
-    geth_steps: &[GethExecStep],
-) -> Result<Vec<ExecStep>, Error> {
-    let geth_step = &geth_steps[0];
-    let mut exec_step = state.new_step(geth_step)?;
-
-    let tx_id = state.tx_ctx.id();
-    let call = state.parse_call(geth_step)?;
-
-    let (_, account) = state.sdb.get_account(&call.address);
-    let callee_code_hash = account.code_hash;
-
-    let is_warm = state.sdb.check_account_in_access_list(&call.address);
-    state.push_op_reversible(
-        &mut exec_step,
-        RW::WRITE,
-        TxAccessListAccountOp {
-            tx_id,
-            address: call.address,
-            is_warm: true,
-            is_warm_prev: is_warm,
-        },
-    )?;
-
-    state.push_call(call.clone());
-
-    match (
-        state.is_precompiled(&call.address),
-        callee_code_hash.to_fixed_bytes() == *EMPTY_HASH,
-    ) {
-        // 1. Call to precompiled.
-        (true, _) => Ok(vec![exec_step]),
-        // 2. Call to account with empty code.
-        (_, true) => {
-            state.handle_return(geth_step)?;
-            Ok(vec![exec_step])
-        }
-        // 3. Call to account with non-empty code.
-        (_, false) => Ok(vec![exec_step]),
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
