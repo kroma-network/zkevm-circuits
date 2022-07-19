@@ -17,7 +17,7 @@ use crate::{
 };
 use eth_types::{
     evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress},
-    Address, GethExecStep, ToAddress, ToBigEndian, Word, H256,
+    Address, GethExecStep, Hash, ToAddress, ToBigEndian, Word, H256,
 };
 use ethers_core::utils::{get_contract_address, get_create2_address};
 
@@ -405,22 +405,25 @@ impl<'a> CircuitInputStateRef<'a> {
             },
         )?;
 
-        let (found, receiver_account) = self.sdb.get_account(&receiver);
-        if !found {
-            return Err(Error::AccountNotFound(receiver));
+        // FIXME: is this correct?
+        if !self.is_precompiled(&receiver) {
+            let (found, receiver_account) = self.sdb.get_account(&receiver);
+            if !found {
+                return Err(Error::AccountNotFound(receiver));
+            }
+            let receiver_balance_prev = receiver_account.balance;
+            let receiver_balance = receiver_account.balance + value;
+            self.push_op_reversible(
+                step,
+                RW::WRITE,
+                AccountOp {
+                    address: receiver,
+                    field: AccountField::Balance,
+                    value: receiver_balance,
+                    value_prev: receiver_balance_prev,
+                },
+            )?;
         }
-        let receiver_balance_prev = receiver_account.balance;
-        let receiver_balance = receiver_account.balance + value;
-        self.push_op_reversible(
-            step,
-            RW::WRITE,
-            AccountOp {
-                address: receiver,
-                field: AccountField::Balance,
-                value: receiver_balance,
-                value_prev: receiver_balance_prev,
-            },
-        )?;
 
         Ok(())
     }
@@ -590,11 +593,15 @@ impl<'a> CircuitInputStateRef<'a> {
                     }
                     _ => address,
                 };
-                let (found, account) = self.sdb.get_account(&code_address);
-                if !found {
-                    return Err(Error::AccountNotFound(code_address));
+                if self.is_precompiled(&address) {
+                    (CodeSource::Address(code_address), Hash::zero()) // FIXME: is this correct?
+                } else {
+                    let (found, account) = self.sdb.get_account(&code_address);
+                    if !found {
+                        return Err(Error::AccountNotFound(code_address));
+                    }
+                    (CodeSource::Address(code_address), account.code_hash)
                 }
-                (CodeSource::Address(code_address), account.code_hash)
             }
         };
 

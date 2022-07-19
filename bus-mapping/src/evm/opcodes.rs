@@ -249,6 +249,13 @@ pub fn gen_associated_ops(
 ) -> Result<Vec<ExecStep>, Error> {
     let opcode = down_cast_to_opcode(opcode_id);
 
+    #[cfg(test)]
+    println!(
+        "{:?} {}",
+        opcode_id,
+        hex::encode(&state.call_ctx()?.memory.0)
+    );
+
     let memory_enabled = !geth_steps.iter().all(|s| s.memory.is_empty());
     if memory_enabled {
         assert_eq!(
@@ -539,6 +546,7 @@ impl Opcode for DummyCall {
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
+        // FIXME: memory
         dummy_gen_call_ops(state, geth_steps)
     }
 }

@@ -1,4 +1,5 @@
 use super::Opcode;
+use crate::evm::precompiled::execute_precompiled;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
     operation::{AccountField, CallContextField, TxAccessListAccountOp, RW},
@@ -28,33 +29,34 @@ impl Opcode for Call {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
 
+        let mut exec_step = state.new_step(geth_step)?;
+        let tx_id = state.tx_ctx.id();
+        let call = state.parse_call(geth_step)?;
+        let current_call = state.call()?.clone();
+
         let args_offset = geth_step.stack.nth_last(3)?.as_usize();
         let args_length = geth_step.stack.nth_last(4)?.as_usize();
         let ret_offset = geth_step.stack.nth_last(5)?.as_usize();
         let ret_length = geth_step.stack.nth_last(6)?.as_usize();
 
         // we need to keep the memory until parse_call complete
-        let call_ctx = state.call_ctx_mut()?;
-        let args_minimal = if args_length != 0 {
-            args_offset + args_length
-        } else {
-            0
-        };
-        let ret_minimal = if ret_length != 0 {
-            ret_offset + ret_length
-        } else {
-            0
-        };
-        if args_minimal != 0 || ret_minimal != 0 {
-            let minimal_length = max(args_minimal, ret_minimal);
-            call_ctx.memory.extend_at_least(minimal_length);
+        {
+            let call_ctx = state.call_ctx_mut()?;
+            let args_minimal = if args_length != 0 {
+                args_offset + args_length
+            } else {
+                0
+            };
+            let ret_minimal = if ret_length != 0 {
+                ret_offset + ret_length
+            } else {
+                0
+            };
+            if args_minimal != 0 || ret_minimal != 0 {
+                let minimal_length = max(args_minimal, ret_minimal);
+                call_ctx.memory.extend_at_least(minimal_length);
+            }
         }
-
-        let mut exec_step = state.new_step(geth_step)?;
-
-        let tx_id = state.tx_ctx.id();
-        let call = state.parse_call(geth_step)?;
-        let current_call = state.call()?.clone();
 
         // NOTE: For `RwCounterEndOfReversion` we use the `0` value as a placeholder,
         // and later set the proper value in
@@ -175,6 +177,17 @@ impl Opcode for Call {
             // 1. Call to precompiled.
             (true, _) => {
                 warn!("Call to precompiled is left unimplemented");
+
+                // FIXME: is this correct?
+                let caller_ctx = state.caller_ctx_mut()?;
+                let result = execute_precompiled(
+                    &call.address,
+                    &caller_ctx.memory.0[args_offset..args_offset + args_length],
+                );
+                caller_ctx.memory.0[ret_offset..ret_offset + ret_length]
+                    .copy_from_slice(&result.0[..]);
+                state.tx_ctx.pop_call_ctx();
+
                 Ok(vec![exec_step])
             }
             // 2. Call to account with empty code.
@@ -254,5 +267,47 @@ impl Opcode for Call {
                 Ok(vec![exec_step])
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod return_tests {
+    use crate::mock::BlockData;
+    use eth_types::geth_types::GethData;
+    use eth_types::{bytecode, word, Address};
+    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
+    use mock::TestContext;
+
+    #[test]
+    fn test_precompiled() {
+        let code = bytecode! {
+        PUSH16(word!("0123456789ABCDEF0123456789ABCDEF"))
+        PUSH1(0x00)
+        MSTORE
+
+        PUSH1(0x20)
+        PUSH1(0x20)
+        PUSH1(0x20)
+        PUSH1(0x00)
+        PUSH1(0x00)
+        PUSH1(0x04)
+        PUSH1(0xFF)
+        CALL
+        };
+
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<2, 1>::new(
+            None,
+            account_0_code_account_1_no_code(code),
+            tx_from_1_to_0,
+            |block, _tx| block.number(0xcafeu64),
+        )
+        .unwrap()
+        .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
     }
 }
