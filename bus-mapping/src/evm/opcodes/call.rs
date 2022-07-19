@@ -179,13 +179,15 @@ impl Opcode for Call {
                 warn!("Call to precompiled is left unimplemented");
 
                 // FIXME: is this correct?
-                let caller_ctx = state.caller_ctx_mut()?;
-                let result = execute_precompiled(
-                    &call.address,
-                    &caller_ctx.memory.0[args_offset..args_offset + args_length],
-                );
-                caller_ctx.memory.0[ret_offset..ret_offset + ret_length]
-                    .copy_from_slice(&result.0[..]);
+                if call.is_success {
+                    let caller_ctx = state.caller_ctx_mut()?;
+                    let result = execute_precompiled(
+                        &call.address,
+                        &caller_ctx.memory.0[args_offset..args_offset + args_length],
+                    );
+                    caller_ctx.memory.0[ret_offset..ret_offset + ret_length]
+                        .copy_from_slice(&result.0[..]);
+                }
                 state.tx_ctx.pop_call_ctx();
 
                 Ok(vec![exec_step])
