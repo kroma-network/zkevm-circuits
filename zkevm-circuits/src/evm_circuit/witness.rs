@@ -384,46 +384,6 @@ impl std::ops::Index<(RwTableTag, usize)> for RwMap {
     }
 }
 
-impl RwMap {
-    /// These "sorted_xx" methods are used in state circuit
-    pub fn sorted_memory_rw(&self) -> Vec<Rw> {
-        let mut sorted = self.0[&RwTableTag::Memory].clone();
-        sorted.sort_by_key(|x| match x {
-            Rw::Memory {
-                call_id,
-                memory_address,
-                ..
-            } => (*call_id, *memory_address),
-            _ => panic!("invalid memory rw"),
-        });
-        sorted
-    }
-
-    pub fn sorted_stack_rw(&self) -> Vec<Rw> {
-        let mut sorted = self.0[&RwTableTag::Stack].clone();
-        sorted.sort_by_key(|x| match x {
-            Rw::Stack {
-                call_id,
-                stack_pointer,
-                ..
-            } => (*call_id, *stack_pointer),
-            _ => panic!("invalid stack rw"),
-        });
-        sorted
-    }
-
-    pub fn sorted_storage_rw(&self) -> Vec<Rw> {
-        let mut sorted = self.0[&RwTableTag::AccountStorage].clone();
-        sorted.sort_by_key(|x| match x {
-            Rw::AccountStorage {
-                account_address,
-                storage_key,
-                ..
-            } => (*account_address, *storage_key),
-            _ => panic!("invalid storage rw"),
-        });
-        sorted
-    }
     // check rw_counter is continous and starting from 1
     pub fn check_rw_counter_sanity(&self) {
         for (idx, rw_counter) in self
@@ -456,8 +416,6 @@ impl RwMap {
         });
         rows
     }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum Rw {
     Start {
