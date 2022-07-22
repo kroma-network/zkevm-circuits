@@ -134,7 +134,7 @@ impl BlockContext {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Transaction {
     /// The transaction identifier in the block
     pub id: usize,
@@ -246,7 +246,7 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Call {
     /// The unique identifier of call in the whole proof, using the
     /// `rw_counter` at the call step.
@@ -286,7 +286,7 @@ pub struct Call {
     pub is_static: bool,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecStep {
     /// The index in the Transaction calls
     pub call_index: usize,
@@ -424,7 +424,6 @@ impl RwMap {
         });
         sorted
     }
-
     // check rw_counter is continous and starting from 1
     pub fn check_rw_counter_sanity(&self) {
         for (idx, rw_counter) in self
@@ -903,7 +902,6 @@ impl Rw {
             Self::AccountStorage { value, .. } | Self::Stack { value, .. } => {
                 RandomLinearCombination::random_linear_combine(value.to_le_bytes(), randomness)
             }
-
             Self::TxLog {
                 field_tag, value, ..
             } => match field_tag {
@@ -1273,7 +1271,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
 
                 macro_rules! dummy {
                     ($name:expr) => {{
-                        log::warn!("{:?} is implemented with DummyGadget", $name);
+                        log::debug!("{:?} is implemented with DummyGadget", $name);
                         $name
                     }};
                 }
@@ -1494,8 +1492,13 @@ pub fn block_convert(
                     .unique()
                     .into_iter()
                     .map(|code_hash| {
-                        let bytecode =
-                            Bytecode::new(code_db.hash_code.get(&code_hash).unwrap().to_vec());
+                        let bytecode = Bytecode::new(
+                            code_db
+                                .hash_code
+                                .get(&code_hash)
+                                .cloned()
+                                .unwrap_or_default(),
+                        );
                         (bytecode.hash, bytecode)
                     })
             })

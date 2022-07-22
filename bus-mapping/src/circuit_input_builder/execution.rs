@@ -149,7 +149,7 @@ impl ExecState {
 
 /// Provides specific details about the data copy for which an
 /// [`StepAuxiliaryData`] holds info about.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CopyDetails {
     /// Origin of the copied bytes is or not the Tx CallData.
     TxCallData(bool),
@@ -162,7 +162,7 @@ pub enum CopyDetails {
 }
 
 /// Auxiliary data of Execution step
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepAuxiliaryData {
     /// Source start address
     pub(crate) src_addr: u64,

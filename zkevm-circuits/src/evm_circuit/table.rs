@@ -219,29 +219,29 @@ pub enum CallContextFieldTag {
     CallerId,
     TxId,
     Depth,
-    CallerAddress,
+    CallerAddress, // 5
     CalleeAddress,
     CallDataOffset,
     CallDataLength,
     ReturnDataOffset,
-    ReturnDataLength,
+    ReturnDataLength, // 10
     Value,
     IsSuccess,
     IsPersistent,
     IsStatic,
 
-    LastCalleeId,
+    LastCalleeId, // 15
     LastCalleeReturnDataOffset,
     LastCalleeReturnDataLength,
 
     IsRoot,
     IsCreate,
-    CodeHash,
+    CodeHash, // 20
     ProgramCounter,
     StackPointer,
     GasLeft,
     MemorySize,
-    ReversibleWriteCounter,
+    ReversibleWriteCounter, // 25
 }
 
 impl_expr!(FixedTableTag);

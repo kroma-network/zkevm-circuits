@@ -17,9 +17,10 @@ use crate::{
 };
 use eth_types::{
     evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress},
-    Address, GethExecStep, Hash, ToAddress, ToBigEndian, Word, H256,
+    Address, GethExecStep, ToAddress, ToBigEndian, Word, H256,
 };
 use ethers_core::utils::{get_contract_address, get_create2_address};
+use keccak256::EMPTY_HASH;
 
 /// Reference to the internal state of the CircuitInputBuilder in a particular
 /// [`ExecStep`].
@@ -411,7 +412,7 @@ impl<'a> CircuitInputStateRef<'a> {
         )?;
 
         // FIXME: is this correct?
-        if !self.is_precompiled(&receiver) {
+        if true || !self.is_precompiled(&receiver) {
             let (found, receiver_account) = self.sdb.get_account(&receiver);
             if !found {
                 return Err(Error::AccountNotFound(receiver));
@@ -511,7 +512,6 @@ impl<'a> CircuitInputStateRef<'a> {
             }
             CallKind::Create | CallKind::Create2 => Vec::new(),
         };
-
         let call_id = call.call_id;
         let call_idx = self.tx.calls().len();
 
@@ -600,7 +600,7 @@ impl<'a> CircuitInputStateRef<'a> {
                     _ => address,
                 };
                 if self.is_precompiled(&code_address) {
-                    (CodeSource::Address(code_address), Hash::zero()) // FIXME: is this correct?
+                    (CodeSource::Address(code_address), H256::from(*EMPTY_HASH))
                 } else {
                     let (found, account) = self.sdb.get_account(&code_address);
                     if !found {

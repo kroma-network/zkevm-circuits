@@ -3,7 +3,7 @@ use crate::{
     evm_circuit::{
         param::{MAX_STEP_HEIGHT, STEP_WIDTH},
         step::{ExecutionState, Step},
-        table::{LookupTable, Table},
+        table::{LookupTable, RwTableTag, Table, TxReceiptFieldTag},
         util::{
             constraint_builder::{BaseConstraintBuilder, ConstraintBuilder},
             rlc, CellType,
@@ -21,7 +21,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use std::{collections::HashMap, convert::TryInto, iter};
-use strum::IntoEnumIterator;
+use strum::{EnumCount, IntoEnumIterator};
 
 mod add_sub;
 mod addmod;
@@ -93,7 +93,7 @@ use codecopy::CodeCopyGadget;
 use codesize::CodesizeGadget;
 use comparator::ComparatorGadget;
 use copy_code_to_memory::CopyCodeToMemoryGadget;
-use copy_to_log::CopyToLogGadget;
+
 use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
@@ -107,7 +107,7 @@ use is_zero::IsZeroGadget;
 use jump::JumpGadget;
 use jumpdest::JumpdestGadget;
 use jumpi::JumpiGadget;
-use logs::LogGadget;
+
 use memory::MemoryGadget;
 use memory_copy::CopyToMemoryGadget;
 use msize::MsizeGadget;
@@ -181,7 +181,7 @@ pub(crate) struct ExecutionConfig<F> {
     codesize_gadget: CodesizeGadget<F>,
     comparator_gadget: ComparatorGadget<F>,
     copy_code_to_memory_gadget: CopyCodeToMemoryGadget<F>,
-    copy_to_log_gadget: CopyToLogGadget<F>,
+    copy_to_log_gadget: DummyGadget<F, 0, 0, { ExecutionState::CopyToLog }>,
     dup_gadget: DupGadget<F>,
     dummy_gadget: DummyGadget<F, 0, 0, { ExecutionState::DUMMY }>,
     extcodehash_gadget: ExtcodehashGadget<F>,
@@ -191,7 +191,7 @@ pub(crate) struct ExecutionConfig<F> {
     jump_gadget: JumpGadget<F>,
     jumpdest_gadget: JumpdestGadget<F>,
     jumpi_gadget: JumpiGadget<F>,
-    log_gadget: LogGadget<F>,
+    log_gadget: DummyGadget<F, 0, 0, { ExecutionState::LOG }>,
     memory_gadget: MemoryGadget<F>,
     msize_gadget: MsizeGadget<F>,
     mul_div_mod_gadget: MulDivModGadget<F>,
@@ -764,6 +764,46 @@ impl<F: Field> ExecutionConfig<F> {
                 while let Some((transaction, call, step)) = steps.next() {
                     let height = self.get_step_height(step.execution_state);
                     // Assign the step witness
+                    let next = steps.peek();
+                    if let Some(&(t, _c, _s)) = next {
+                        if t != transaction {
+                            let mut tx = transaction.clone();
+                            tx.call_data.clear();
+                            tx.calls.clear();
+                            tx.steps.clear();
+                            let total_gas = if step.execution_state == ExecutionState::EndTx {
+                                let gas_used = tx.gas - step.gas_left;
+                                let current_cumulative_gas_used: u64 = if tx.id == 1 {
+                                    0
+                                } else {
+                                    // first transaction needs TxReceiptFieldTag::COUNT(3) lookups
+                                    // to tx receipt,
+                                    // while later transactions need 4 (with one extra cumulative
+                                    // gas read) lookups
+                                    let rw = &block.rws[(
+                                        RwTableTag::TxReceipt,
+                                        (tx.id - 2) * (TxReceiptFieldTag::COUNT + 1) + 2,
+                                    )];
+                                    rw.receipt_value()
+                                };
+                                current_cumulative_gas_used + gas_used
+                            } else {
+                                log::error!("last step not end tx? {:?}", step);
+                                0
+                            };
+
+                            log::info!(
+                                "offset {} tx_num {} total_gas {} assign last step {:?} of tx {:?}",
+                                offset,
+                                tx.id,
+                                total_gas,
+                                step,
+                                tx
+                            );
+                        }
+                    } else {
+                        log::info!("assign last step of block");
+                    }
                     self.assign_exec_step(
                         &mut region,
                         offset,
@@ -772,7 +812,7 @@ impl<F: Field> ExecutionConfig<F> {
                         call,
                         step,
                         height,
-                        steps.peek(),
+                        next,
                         power_of_randomness,
                     )?;
                     // q_step logic
@@ -847,6 +887,7 @@ impl<F: Field> ExecutionConfig<F> {
 
                 if !exact {
                     if block.pad_to != 0 {
+                        log::info!("pad block height to {}", block.pad_to);
                         // Pad leftover region to the desired capacity
                         if offset >= block.pad_to {
                             panic!("row not enough");
@@ -863,10 +904,12 @@ impl<F: Field> ExecutionConfig<F> {
                         log::warn!("assign_block with exact = false, but pad_to not provided");
                     }
                 }
-
+                log::info!("Execution step assign done");
                 Ok(())
             },
-        )
+        )?;
+        log::info!("assign_block done");
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -882,6 +925,13 @@ impl<F: Field> ExecutionConfig<F> {
         next: Option<&(&Transaction, &Call, &ExecStep)>,
         power_of_randomness: [F; 31],
     ) -> Result<(), Error> {
+        log::trace!(
+            "assign_exec_step offset: {} state {:?} step: {:?} call: {:?}",
+            offset,
+            step.execution_state,
+            step,
+            call
+        );
         // Make the region large enough for the current step and the next step.
         // The next step's next step may also be accessed, so make the region large
         // enough for 3 steps.
@@ -921,18 +971,12 @@ impl<F: Field> ExecutionConfig<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        log::trace!(
-            "assign_exec_step offset: {} step: {:?} call: {:?}",
-            offset,
-            step,
-            call
-        );
         self.step
             .assign_exec_step(region, offset, block, transaction, call, step)?;
 
         macro_rules! assign_exec_step {
             ($gadget:expr) => {
-                $gadget.assign_exec_step(region, offset, block, transaction, call, step)?
+                $gadget.assign_exec_step(region, offset, block, transaction, call, step)?;
             };
         }
 
@@ -1079,11 +1123,29 @@ impl<F: Field> ExecutionConfig<F> {
                 assign_exec_step!(self.dummy_gadget)
             }
             _ => unimplemented!("unimplemented ExecutionState: {:?}", step.execution_state),
-        }
+        };
 
         // Fill in the witness values for stored expressions
+        let assigned_stored_expressions = self.assign_stored_expressions(region, offset, step)?;
 
-        let mut assigned_rw_values = Vec::new();
+        Self::check_rw_lookup(
+            &assigned_stored_expressions,
+            offset,
+            step,
+            call,
+            transaction,
+            block,
+        );
+        Ok(())
+    }
+
+    fn assign_stored_expressions(
+        &self,
+        region: &mut CachedRegion<'_, '_, F>,
+        offset: usize,
+        step: &ExecStep,
+    ) -> Result<Vec<(String, F)>, Error> {
+        let mut assigned_stored_expressions = Vec::new();
         for stored_expression in self
             .stored_expressions_map
             .get(&step.execution_state)
@@ -1092,36 +1154,83 @@ impl<F: Field> ExecutionConfig<F> {
             let assigned = stored_expression.assign(region, offset)?;
             if let Some(v) = assigned.value() {
                 let name = stored_expression.name.clone();
-                if name.starts_with("rw lookup ")
-                    && !name.contains(" with reversion")
-                    && !v.is_zero_vartime()
-                    && !assigned_rw_values.contains(&(name.clone(), *v))
-                {
-                    assigned_rw_values.push((name, *v));
-                }
+                assigned_stored_expressions.push((name, *v))
             }
         }
-        let rw_table_values: Vec<_> = step
-            .rw_indices
-            .iter()
-            .map(|rw_idx| {
-                let rlc = block.rws[*rw_idx]
-                    .table_assignment(block.randomness)
-                    .rlc(block.randomness, block.randomness);
-                (rw_idx, rlc)
-            })
-            .filter(|(_, v)| !v.is_zero_vartime())
-            .collect();
-
-        for idx in 0..assigned_rw_values.len() {
-            let (rw_idx, rlc) = rw_table_values[idx];
-            debug_assert_eq!(
-                rlc, assigned_rw_values[idx].1,
-                "incorrect rw witness {} at {:?}({}th rw), step: {:#?}",
-                assigned_rw_values[idx].0, rw_idx, idx, step
-            )
+        Ok(assigned_stored_expressions)
+    }
+    fn check_rw_lookup(
+        assigned_stored_expressions: &Vec<(String, F)>,
+        offset: usize,
+        step: &ExecStep,
+        call: &Call,
+        transaction: &Transaction,
+        block: &Block<F>,
+    ) {
+        let mut assigned_rw_values = Vec::new();
+        for (name, v) in assigned_stored_expressions {
+            if name.starts_with("rw lookup ")
+                && !name.contains(" with reversion")
+                && !v.is_zero_vartime()
+                && !assigned_rw_values.contains(&(name.clone(), *v))
+            {
+                assigned_rw_values.push((name.clone(), *v));
+            }
         }
 
-        Ok(())
+        for idx in 0..assigned_rw_values.len() {
+            let log_ctx = || {
+                log::error!("assigned_rw_values {:?}", assigned_rw_values);
+                for rw_idx in &step.rw_indices {
+                    log::error!(
+                        "step rw {:?} rlc {:?}",
+                        block.rws[*rw_idx],
+                        block.rws[*rw_idx]
+                            .table_assignment(block.randomness)
+                            .rlc(block.randomness, block.randomness)
+                    );
+                }
+                let mut tx = transaction.clone();
+                tx.call_data.clear();
+                tx.calls.clear();
+                tx.steps.clear();
+                log::error!(
+                    "ctx: offset {} step {:?}. call: {:?}, tx: {:?}, block number {:?}",
+                    offset,
+                    step,
+                    call,
+                    tx,
+                    block.context.number
+                );
+            };
+            if idx >= step.rw_indices.len() {
+                log_ctx();
+                panic!(
+                    "invalid rw len exp {} witness {}",
+                    assigned_rw_values.len(),
+                    step.rw_indices.len()
+                );
+            }
+            let rw_idx = step.rw_indices[idx];
+            let rw = block.rws[rw_idx];
+            let table_assignments = rw.table_assignment(block.randomness);
+            let rlc = table_assignments.rlc(block.randomness, block.randomness);
+            if rlc != assigned_rw_values[idx].1 {
+                log_ctx();
+                log::error!(
+                    "incorrect rw witness. input_value {:?}, name \"{}\". table_value {:?}, table_assignments {:?}, rw {:?}, index {:?}, {}th rw of step",
+                    assigned_rw_values[idx].1,
+                    assigned_rw_values[idx].0,
+                    rlc,
+                    table_assignments,
+                    rw,
+                    rw_idx, idx);
+
+                debug_assert_eq!(
+                    rlc, assigned_rw_values[idx].1,
+                    "left is witness, right is expression"
+                );
+            }
+        }
     }
 }

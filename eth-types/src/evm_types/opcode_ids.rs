@@ -320,6 +320,22 @@ impl OpcodeId {
         self.as_u8() >= Self::PUSH1.as_u8() && self.as_u8() <= Self::PUSH32.as_u8()
     }
 
+    /// ..
+    pub fn is_call7(&self) -> bool {
+        match &self {
+            Self::CALL | Self::CALLCODE => true,
+            _ => false,
+        }
+    }
+
+    /// ..
+    pub fn is_call6(&self) -> bool {
+        match &self {
+            Self::DELEGATECALL | Self::STATICCALL => true,
+            _ => false,
+        }
+    }
+
     /// Returns `true` if the `OpcodeId` is a `DUPn`.
     pub fn is_dup(&self) -> bool {
         self.as_u8() >= Self::DUP1.as_u8() && self.as_u8() <= Self::DUP16.as_u8()

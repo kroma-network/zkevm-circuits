@@ -224,6 +224,8 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         step: &ExecStep,
     ) -> Result<(), Error> {
         let gas_fee = tx.gas_price * tx.gas;
+
+        let callee_addr = call.callee_address; // block.rws[step.rw_indices[5]].tx_access_list_value_pair();
         let [caller_balance_pair, callee_balance_pair, (callee_code_hash, _)] =
             [step.rw_indices[6], step.rw_indices[7], step.rw_indices[8]]
                 .map(|idx| block.rws[idx].account_value_pair());
@@ -239,15 +241,15 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             .assign(region, offset, tx.gas_price, tx.gas, gas_fee)?;
         self.tx_caller_address
             .assign(region, offset, tx.caller_address.to_scalar())?;
+
         self.tx_callee_address
-            .assign(region, offset, tx.callee_address.to_scalar())?;
+            .assign(region, offset, Some(callee_addr.to_scalar().unwrap()))?;
         self.tx_is_create
             .assign(region, offset, Some(F::from(tx.is_create as u64)))?;
-        self.tx_call_data_length.assign(
-            region,
-            offset,
-            Some(F::from(tx.call_data_length as u64)),
-        )?;
+
+        let call_data_length = block.rws[step.rw_indices[13]].call_context_value().as_u64();
+        self.tx_call_data_length
+            .assign(region, offset, Some(F::from(call_data_length as u64)))?;
         self.tx_call_data_gas_cost
             .assign(region, offset, Some(F::from(tx.call_data_gas_cost)))?;
         self.reversion_info.assign(

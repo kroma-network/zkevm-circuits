@@ -106,19 +106,4 @@ impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
             Ok(vec![exec_step])
         }
     }
-
-    fn reconstruct_memory(
-        &self,
-        _state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep],
-    ) -> Result<Memory, Error> {
-        let geth_step = &geth_steps[0];
-        let offset = geth_step.stack.nth_last(1)?.as_usize();
-        let length = geth_step.stack.nth_last(2)?.as_usize();
-
-        let mut memory = geth_step.memory.borrow().clone();
-        memory.extend_at_least(offset + length);
-
-        Ok(memory)
-    }
 }
