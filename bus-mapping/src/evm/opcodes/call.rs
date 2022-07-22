@@ -102,7 +102,7 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
             exec_step.error = Some(exec_error.clone());
             if !call.is_success && exec_error == ExecError::InsufficientBalance {
                 // Switch to callee's call context
-                state.push_call(call, geth_step);
+                state.push_call(call);
                 state.handle_return(geth_step)?;
                 return Ok(vec![exec_step]);
             } else {

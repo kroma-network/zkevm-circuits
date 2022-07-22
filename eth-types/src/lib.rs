@@ -364,7 +364,7 @@ pub struct GethExecTraceInternal {
 /// The deserialization truncates the memory of each step in `struct_logs` to
 /// the memory size before the expansion, so that it corresponds to the memory
 /// before the step is executed.
-#[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct GethExecTrace {
     /// Used gas
     pub gas: Gas,

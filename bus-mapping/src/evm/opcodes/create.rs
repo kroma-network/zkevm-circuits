@@ -15,6 +15,20 @@ impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         // TODO: replace dummy create here
+        let geth_step = &geth_steps[0];
+
+        let offset = geth_step.stack.nth_last(1)?.as_usize();
+        let length = geth_step.stack.nth_last(2)?.as_usize();
+
+        state
+            .call_ctx_mut()?
+            .memory
+            .extend_at_least(offset + length);
+
+        let mut exec_step = state.new_step(geth_step)?;
+
+        let tx_id = state.tx_ctx.id();
+        let call = state.parse_call(geth_step)?;
 
         // Quote from [EIP-2929](https://eips.ethereum.org/EIPS/eip-2929)
         // > When a CREATE or CREATE2 opcode is called,
@@ -38,14 +52,6 @@ impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
                 is_warm_prev: is_warm,
             },
         )?;
-
-        let offset = geth_step.stack.nth_last(1)?.as_usize();
-        let length = geth_step.stack.nth_last(2)?.as_usize();
-
-        state
-            .call_ctx_mut()?
-            .memory
-            .extend_at_least(offset + length);
 
         // Increase caller's nonce
         let nonce_prev = state.sdb.get_nonce(&call.caller_address);
