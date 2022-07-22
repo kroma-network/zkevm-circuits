@@ -2,6 +2,7 @@ use super::Opcode;
 use crate::evm::precompiled::execute_precompiled;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    error::ExecError,
     operation::{AccountField, CallContextField, TxAccessListAccountOp, RW},
     Error,
 };
@@ -30,6 +31,8 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
         assert!(N_ARGS == 6 || N_ARGS == 7);
 
         let geth_step = &geth_steps[0];
+        let next_step = &geth_steps[1];
+
 
         let mut exec_step = state.new_step(geth_step)?;
         let tx_id = state.tx_ctx.id();
@@ -97,6 +100,19 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
             (call.is_success as u64).into(),
         )?;
 
+        if let Some(exec_error) = state.get_step_err(geth_step, Some(next_step)).unwrap() {
+            exec_step.error = Some(exec_error.clone());
+            if !call.is_success && exec_error == ExecError::InsufficientBalance {
+                // Switch to callee's call context
+                state.push_call(call, geth_step);
+                state.handle_return(geth_step)?;
+                return Ok(vec![exec_step]);
+            } else {
+                panic!("unhandled error happened in call")
+            }
+        }
+
+        // if no errors, continue as normal
         let is_warm = state.sdb.check_account_in_access_list(&call.address);
         state.push_op_reversible(
             &mut exec_step,

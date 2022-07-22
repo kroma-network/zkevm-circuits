@@ -3,6 +3,7 @@ use super::{
     random_linear_combination::Queries as RlcQueries, N_LIMBS_ACCOUNT_ADDRESS, N_LIMBS_ID,
     N_LIMBS_RW_COUNTER,
 };
+
 use crate::evm_circuit::{
     param::N_BYTES_WORD,
     table::{AccountFieldTag, RwTableTag},
@@ -21,6 +22,7 @@ pub struct Queries<F: Field> {
     pub rw_counter: MpiQueries<F, N_LIMBS_RW_COUNTER>,
     pub is_write: Expression<F>,
     pub tag: Expression<F>,
+    //pub aux2: Expression<F>,
     pub tag_bits: [Expression<F>; 4],
     pub id: MpiQueries<F, N_LIMBS_ID>,
     pub is_tag_and_id_unchanged: Expression<F>,
@@ -30,11 +32,14 @@ pub struct Queries<F: Field> {
     pub value: Expression<F>,
     pub value_prev: Expression<F>,
     pub initial_value: Expression<F>,
+    //pub value_at_prev_rotation: Expression<F>,
+    //pub value_prev: Expression<F>,
     pub initial_value_prev: Expression<F>,
     pub lookups: LookupsQueries<F>,
     pub power_of_randomness: [Expression<F>; N_BYTES_WORD - 1],
     pub first_access: Expression<F>,
     pub not_first_access: Expression<F>,
+    //pub rw_rlc: Expression<F>,
 }
 
 type Constraint<F> = (&'static str, Expression<F>);
@@ -129,6 +134,72 @@ impl<F: Field> ConstraintBuilder<F> {
                 q.initial_value.clone() - q.initial_value_prev(),
             );
         });
+        /*
+        // Only reversible rws have `value_prev`.
+        // There is no need to constain MemoryRw and StackRw since the 'read
+        // consistency' part of the constaints are enough for them to behave
+        // correctly.
+        // For these 6 Rws whose `value_prev` need to be
+        // constrained:
+        // (1) `AccountStorage` and `Account`: they are related to storage
+        // and they should be connected to MPT cricuit later to check the
+        // `value_prev`.
+        // (2)`TxAccessListAccount` and
+        // `TxAccessListAccountStorage`:  Default values of them should be `false`
+        // indicating "not accessed yet".
+        // (3) `AccountDestructed`: Since we probably
+        // will not support this feature, it is skipped now.
+        // (4) `TxRefund`: Default values should be '0'. BTW it may be moved out of rw table in the future. See https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/395
+        // for more details.
+        self.require_equal(
+            "prev value",
+            q.value_prev.clone(),
+            (q.tag_matches(RwTableTag::TxAccessListAccount)
+                + q.tag_matches(RwTableTag::TxAccessListAccountStorage)
+                + q.tag_matches(RwTableTag::AccountDestructed)
+                + q.tag_matches(RwTableTag::TxRefund))
+                * select::expr(
+                    q.first_access(),
+                    0u64.expr(),
+                    q.value_at_prev_rotation.clone(),
+                )
+                + q.tag_matches(RwTableTag::Account)
+                    * select::expr(
+                        q.first_access(),
+                        // FIXME: this is a dummy placeholder to pass constraints
+                        // It should be aux2/committed_value.
+                        // We should fix this after the committed_value field of Rw::Account in
+                        // both bus-mapping and evm-circuits are implemented.
+                        q.value_prev.clone(),
+                        q.value_prev.clone(),
+                    )
+                + q.tag_matches(RwTableTag::AccountStorage)
+                    * select::expr(
+                        q.first_access(),
+                        q.aux2.clone(), // committed value
+                        q.value_at_prev_rotation.clone(),
+                    ),
+        );
+
+        self.require_equal("rw table rlc", q.rw_rlc.clone(), {
+            rlc::expr(
+                &[
+                    q.rw_counter.value.clone(),
+                    q.is_write.clone(),
+                    q.tag.clone(),
+                    q.id.value.clone(),
+                    q.address.value.clone(),
+                    q.field_tag.clone(),
+                    q.storage_key.encoded.clone(),
+                    q.value.clone(),
+                    q.value_prev.clone(),
+                    0u64.expr(), //q.aux1,
+                    q.aux2.clone(),
+                ],
+                &q.power_of_randomness,
+            )
+        })
+        */
     }
 
     fn build_start_constraints(&mut self, q: &Queries<F>) {
@@ -178,6 +249,10 @@ impl<F: Field> ConstraintBuilder<F> {
         });
 
         self.require_zero("initial Stack value is 0", q.initial_value.clone());
+        //self.require_zero(
+        //   "prev_value is 0 when keys changed",
+        //    q.first_access() * q.value_prev.clone(),
+        //);
     }
 
     fn build_account_storage_constraints(&mut self, q: &Queries<F>) {
@@ -220,6 +295,10 @@ impl<F: Field> ConstraintBuilder<F> {
             q.storage_key.encoded.clone(),
         );
         self.require_zero("initial TxRefund value is 0", q.initial_value());
+        //self.require_zero(
+        //    "prev_value is 0 when keys changed",
+        //    q.first_access() * q.value_prev.clone(),
+        //);
     }
 
     fn build_account_constraints(&mut self, q: &Queries<F>) {

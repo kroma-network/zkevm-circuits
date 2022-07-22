@@ -252,12 +252,13 @@ pub(crate) mod test {
     use super::MAX_COPY_BYTES;
     use std::collections::HashMap;
 
+    use crate::util::DEFAULT_RAND;
     use bus_mapping::{
         circuit_input_builder::{CopyDetails, StepAuxiliaryData},
         evm::OpcodeId,
     };
     use eth_types::{bytecode, Word};
-    use halo2_proofs::arithmetic::BaseExt;
+    use halo2_proofs::arithmetic::FieldExt;
     use halo2_proofs::pairing::bn256::Fr;
 
     use crate::evm_circuit::{
@@ -370,7 +371,7 @@ pub(crate) mod test {
     }
 
     fn test_ok(src_addr: u64, dst_addr: u64, length: usize) {
-        let randomness = Fr::rand();
+        let randomness = Fr::from_u128(DEFAULT_RAND);
         let call_id = 1;
         let mut rws = RwMap::default();
         let mut rw_counter = 1;

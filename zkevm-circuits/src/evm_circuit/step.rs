@@ -90,6 +90,9 @@ pub enum ExecutionState {
     STATICCALL,
     REVERT,
     SELFDESTRUCT,
+
+    DUMMY,
+
     // Error cases
     ErrorInvalidOpcode,
     ErrorStackOverflow,

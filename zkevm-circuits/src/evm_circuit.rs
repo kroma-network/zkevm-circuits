@@ -141,21 +141,24 @@ impl<F: Field> EvmCircuit<F> {
 
 #[cfg(any(feature = "test", test))]
 pub mod test {
+
+    use std::convert::TryInto;
+
     use crate::{
         evm_circuit::{
             table::FixedTableTag,
             witness::{Block, BlockContext, Bytecode, RwMap, Transaction},
             EvmCircuit,
         },
-        rw_table::RwTable,
-        util::Expr,
+        rw_table::RwTableRlc,
+        util::DEFAULT_RAND,
     };
+    use bus_mapping::evm::OpcodeId;
     use eth_types::{Field, Word};
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner},
         dev::{MockProver, VerifyFailure},
-        plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
-        poly::Rotation,
+        plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
     };
     use itertools::Itertools;
     use rand::{
@@ -187,7 +190,7 @@ pub mod test {
     #[derive(Clone)]
     pub struct TestCircuitConfig<F> {
         tx_table: [Column<Advice>; 4],
-        rw_table: RwTable,
+        rw_table: RwTableRlc,
         bytecode_table: [Column<Advice>; 5],
         block_table: [Column<Advice>; 3],
         evm_circuit: EvmCircuit<F>,
@@ -241,30 +244,11 @@ pub mod test {
             layouter.assign_region(
                 || "rw table",
                 |mut region| {
-                    let mut offset = 0;
+                    rws.check_rw_counter_sanity();
+                    // TODO: fix this after cs.challenge() is implemented in halo2
+                    let randomness_phase_next = randomness;
                     self.rw_table
-                        .assign(&mut region, offset, &Default::default())?;
-                    offset += 1;
-
-                    let mut rows = rws
-                        .0
-                        .values()
-                        .flat_map(|rws| rws.iter())
-                        .collect::<Vec<_>>();
-
-                    rows.sort_by_key(|a| a.rw_counter());
-                    let mut expected_rw_counter = 1;
-                    for rw in rows {
-                        assert!(rw.rw_counter() == expected_rw_counter);
-                        expected_rw_counter += 1;
-
-                        self.rw_table.assign(
-                            &mut region,
-                            offset,
-                            &rw.table_assignment(randomness),
-                        )?;
-                        offset += 1;
-                    }
+                        .assign(&mut region, randomness, rws, randomness_phase_next)?;
                     Ok(())
                 },
             )
@@ -352,12 +336,61 @@ pub mod test {
         fixed_table_tags: Vec<FixedTableTag>,
     }
 
-    impl<F> TestCircuit<F> {
+    impl<F: Field> TestCircuit<F> {
         pub fn new(block: Block<F>, fixed_table_tags: Vec<FixedTableTag>) -> Self {
+            let mut fixed_table_tags = fixed_table_tags;
+            if fixed_table_tags.is_empty() {
+                // create fixed_table_tags by trace
+                let need_bitwise_lookup = block.txs.iter().any(|tx| {
+                    tx.steps.iter().any(|step| {
+                        matches!(
+                            step.opcode,
+                            Some(OpcodeId::AND) | Some(OpcodeId::OR) | Some(OpcodeId::XOR)
+                        )
+                    })
+                });
+                fixed_table_tags = FixedTableTag::iter()
+                    .filter(|t| {
+                        !matches!(
+                            t,
+                            FixedTableTag::BitwiseAnd
+                                | FixedTableTag::BitwiseOr
+                                | FixedTableTag::BitwiseXor
+                        ) || need_bitwise_lookup
+                    })
+                    .collect();
+            }
             Self {
                 block,
                 fixed_table_tags,
             }
+        }
+
+        pub fn estimate_k(&self) -> u32 {
+            let log2_ceil = |n| u32::BITS - (n as u32).leading_zeros() - (n & (n - 1) == 0) as u32;
+
+            let k = log2_ceil(
+                64 + self
+                    .fixed_table_tags
+                    .iter()
+                    .map(|tag| tag.build::<F>().count())
+                    .sum::<usize>(),
+            );
+
+            let num_rows_required_for_steps = TestCircuit::get_num_rows_required(&self.block);
+            let k = k.max(log2_ceil(64 + num_rows_required_for_steps));
+
+            let k = k.max(log2_ceil(
+                64 + self
+                    .block
+                    .bytecodes
+                    .values()
+                    .map(|bytecode| bytecode.bytes.len())
+                    .sum::<usize>(),
+            ));
+
+            log::debug!("evm circuit uses k = {}", k);
+            k
         }
     }
 
@@ -370,29 +403,16 @@ pub mod test {
         }
 
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+            let rw_table = RwTableRlc::construct(meta);
             let tx_table = [(); 4].map(|_| meta.advice_column());
-            let rw_table = RwTable::construct(meta);
             let bytecode_table = [(); 5].map(|_| meta.advice_column());
             let block_table = [(); 3].map(|_| meta.advice_column());
 
-            // This gate is used just to get the array of expressions from the power of
-            // randomness instance column, so that later on we don't need to query
-            // columns everywhere, and can pass the power of randomness array
-            // expression everywhere.  The gate itself doesn't add any constraints.
-            let power_of_randomness = {
-                let columns = [(); 31].map(|_| meta.instance_column());
-                let mut power_of_randomness = None;
-
-                meta.create_gate("", |meta| {
-                    power_of_randomness =
-                        Some(columns.map(|column| meta.query_instance(column, Rotation::cur())));
-
-                    [0.expr()]
-                });
-
-                power_of_randomness.unwrap()
-            };
-
+            let power_of_randomness: [Expression<F>; 31] = (1..32)
+                .map(|exp| Expression::Constant(F::from_u128(DEFAULT_RAND).pow(&[exp, 0, 0, 0])))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
             Self::Config {
                 tx_table,
                 rw_table,
@@ -426,9 +446,14 @@ pub mod test {
                 self.block.randomness,
             )?;
             config.load_block(&mut layouter, &self.block.context, self.block.randomness)?;
-            config
-                .evm_circuit
-                .assign_block_exact(&mut layouter, &self.block)
+            if self.block.pad_to != 0 {
+                config.evm_circuit.assign_block(&mut layouter, &self.block)
+            } else {
+                config
+                    .evm_circuit
+                    .assign_block_exact(&mut layouter, &self.block)
+            }?;
+            Ok(())
         }
     }
 
@@ -450,32 +475,12 @@ pub mod test {
         block: Block<F>,
         fixed_table_tags: Vec<FixedTableTag>,
     ) -> Result<(), Vec<VerifyFailure>> {
-        let log2_ceil = |n| u32::BITS - (n as u32).leading_zeros() - (n & (n - 1) == 0) as u32;
-
-        let num_rows_required_for_steps = TestCircuit::get_num_rows_required(&block);
-
-        let k = log2_ceil(
-            64 + fixed_table_tags
-                .iter()
-                .map(|tag| tag.build::<F>().count())
-                .sum::<usize>(),
-        );
-        let k = k.max(log2_ceil(
-            64 + block
-                .bytecodes
-                .values()
-                .map(|bytecode| bytecode.bytes.len())
-                .sum::<usize>(),
-        ));
-        let k = k.max(log2_ceil(64 + num_rows_required_for_steps));
-        log::debug!("evm circuit uses k = {}", k);
-
-        let power_of_randomness = (1..32)
-            .map(|exp| vec![block.randomness.pow(&[exp, 0, 0, 0]); (1 << k) - 64])
-            .collect();
         let (active_gate_rows, active_lookup_rows) = TestCircuit::get_active_rows(&block);
-        let circuit = TestCircuit::<F>::new(block, fixed_table_tags);
-        let prover = MockProver::<F>::run(k, &circuit, power_of_randomness).unwrap();
+        let circuit = TestCircuit::<F>::new(block.clone(), fixed_table_tags);
+        let k = circuit.estimate_k();
+        let _block = block;
+        //block.pad_to = (1 << k) - 64;
+        let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
         prover.verify_at_rows(active_gate_rows.into_iter(), active_lookup_rows.into_iter())
     }
 

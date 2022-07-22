@@ -1,6 +1,7 @@
 //! Definition of each opcode of the EVM.
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    error::ExecError,
     evm::OpcodeId,
     operation::{
         AccountField, CallContextField, TxAccessListAccountOp, TxReceiptField, TxRefundOp, RW,
@@ -225,6 +226,7 @@ fn down_cast_to_opcode(opcode_id: &OpcodeId) -> &dyn Opcode {
         OpcodeId::STATICCALL => &Call::<6>,
         // REVERT is almost the same as RETURN
         OpcodeId::REVERT => &Return,
+        OpcodeId::INVALID(_) => Stop::gen_associated_ops,
         OpcodeId::SELFDESTRUCT => {
             warn!("Using dummy gen_selfdestruct_ops for opcode SELFDESTRUCT");
             &DummySelfDestruct
@@ -257,6 +259,31 @@ pub fn gen_associated_ops(
     geth_steps: &[GethExecStep],
 ) -> Result<Vec<ExecStep>, Error> {
     let opcode = down_cast_to_opcode(opcode_id);
+    // check if have error
+    let geth_step = &geth_steps[0];
+    let mut exec_step = state.new_step(geth_step)?;
+    let next_step = if geth_steps.len() > 1 {
+        Some(&geth_steps[0])
+    } else {
+        None
+    };
+
+    if let Some(exec_error) = state.get_step_err(geth_step, next_step).unwrap() {
+        log::warn!(
+            "geth error {:?} occurred in  {:?}",
+            exec_error,
+            geth_step.op
+        );
+
+        exec_step.error = Some(exec_error.clone());
+        if exec_error == ExecError::InsufficientBalance {
+            // handle it inside call op code
+        } else {
+            state.handle_return(geth_step)?;
+            return Ok(vec![exec_step]);
+        }
+    }
+    // if no errors, continue as normal
 
     #[cfg(test)]
     println!(
@@ -564,6 +591,7 @@ fn dummy_gen_selfdestruct_ops(
 ) -> Result<Vec<ExecStep>, Error> {
     let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
+
     let sender = state.call()?.address;
     let receiver = geth_step.stack.last()?.to_address();
 

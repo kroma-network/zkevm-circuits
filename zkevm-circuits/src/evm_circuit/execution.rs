@@ -13,10 +13,11 @@ use crate::{
     util::Expr,
 };
 use eth_types::Field;
+
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Region},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, VirtualCells},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, Selector, VirtualCells},
     poly::Rotation,
 };
 use std::{collections::HashMap, convert::TryInto, iter};
@@ -44,6 +45,7 @@ mod dummy;
 mod dup;
 mod end_block;
 mod end_tx;
+mod error_oog_constant;
 mod error_oog_static_memory;
 mod extcodehash;
 mod gas;
@@ -96,6 +98,7 @@ use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
 use end_tx::EndTxGadget;
+use error_oog_constant::ErrorOOGConstantGadget;
 use error_oog_static_memory::ErrorOOGStaticMemoryGadget;
 use extcodehash::ExtcodehashGadget;
 use gas::GasGadget;
@@ -146,12 +149,13 @@ pub(crate) trait ExecutionGadget<F: FieldExt> {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ExecutionConfig<F> {
-    q_usable: Selector,
+    q_usable: Column<Fixed>,
+    q_used: Column<Advice>,
     q_step: Column<Advice>,
     num_rows_until_next_step: Column<Advice>,
     num_rows_inv: Column<Advice>,
     q_step_first: Selector,
-    q_step_last: Selector,
+    q_step_last: Column<Advice>,
     advices: [Column<Advice>; STEP_WIDTH],
     step: Step<F>,
     // internal state gadgets
@@ -179,6 +183,7 @@ pub(crate) struct ExecutionConfig<F> {
     copy_code_to_memory_gadget: CopyCodeToMemoryGadget<F>,
     copy_to_log_gadget: CopyToLogGadget<F>,
     dup_gadget: DupGadget<F>,
+    dummy_gadget: DummyGadget<F, 0, 0, { ExecutionState::DUMMY }>,
     extcodehash_gadget: ExtcodehashGadget<F>,
     gas_gadget: GasGadget<F>,
     gasprice_gadget: GasPriceGadget<F>,
@@ -227,7 +232,31 @@ pub(crate) struct ExecutionConfig<F> {
     block_ctx_u160_gadget: BlockCtxU160Gadget<F>,
     block_ctx_u256_gadget: BlockCtxU256Gadget<F>,
     // error gadgets
+    error_oog_constant: ErrorOOGConstantGadget<F>,
+    error_stack_overflow: DummyGadget<F, 0, 0, { ExecutionState::ErrorStackOverflow }>,
+    error_stack_underflow: DummyGadget<F, 0, 0, { ExecutionState::ErrorStackUnderflow }>,
+    // pass error_oog_constant: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasConstant }>,
     error_oog_static_memory_gadget: ErrorOOGStaticMemoryGadget<F>,
+    error_oog_dynamic_memory_gadget:
+        DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasDynamicMemoryExpansion }>,
+    error_oog_log: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasLOG }>,
+    error_oog_sload: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSLOAD }>,
+    error_oog_sstore: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSSTORE }>,
+    error_oog_call: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCALL }>,
+    error_oog_memory_copy: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasMemoryCopy }>,
+    error_oog_account_access: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasAccountAccess }>,
+    error_oog_sha3: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSHA3 }>,
+    error_oog_ext_codecopy: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasEXTCODECOPY }>,
+    error_oog_call_code: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCALLCODE }>,
+    error_oog_delegate_call: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasDELEGATECALL }>,
+    error_oog_exp: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasEXP }>,
+    error_oog_create2: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCREATE2 }>,
+    error_oog_static_call: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSTATICCALL }>,
+    error_oog_self_destruct: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSELFDESTRUCT }>,
+    error_oog_insufficient_balance:
+        DummyGadget<F, 0, 0, { ExecutionState::ErrorInsufficientBalance }>,
+
+    invalid_opcode_gadget: DummyGadget<F, 0, 0, { ExecutionState::ErrorInvalidOpcode }>,
 }
 
 impl<F: Field> ExecutionConfig<F> {
@@ -242,24 +271,27 @@ impl<F: Field> ExecutionConfig<F> {
         bytecode_table: &dyn LookupTable<F>,
         block_table: &dyn LookupTable<F>,
     ) -> Self {
-        let q_usable = meta.complex_selector();
+        let q_usable = meta.fixed_column();
+        let q_used = meta.advice_column();
         let q_step = meta.advice_column();
         let num_rows_until_next_step = meta.advice_column();
         let num_rows_inv = meta.advice_column();
         let q_step_first = meta.complex_selector();
-        let q_step_last = meta.complex_selector();
+        let q_step_last = meta.advice_column();
         let advices = [(); STEP_WIDTH].map(|_| meta.advice_column());
 
         let step_curr = Step::new(meta, advices, 0);
         let mut height_map = HashMap::new();
 
         meta.create_gate("Constrain execution state", |meta| {
-            let q_usable = meta.query_selector(q_usable);
+            let q_usable = meta.query_fixed(q_usable, Rotation::cur());
+            let q_used = meta.query_advice(q_used, Rotation::cur());
             let q_step = meta.query_advice(q_step, Rotation::cur());
             let q_step_first = meta.query_selector(q_step_first);
-            let q_step_last = meta.query_selector(q_step_last);
+            let q_step_last = meta.query_advice(q_step_last, Rotation::cur());
 
             // Only one of execution_state should be enabled
+            debug_assert!(!step_curr.state.execution_state.is_empty());
             let sum_to_one = (
                 "Only one of execution_state should be enabled",
                 step_curr
@@ -297,14 +329,19 @@ impl<F: Field> ExecutionConfig<F> {
 
             iter::once(sum_to_one)
                 .chain(bool_checks)
-                .map(move |(name, poly)| (name, q_usable.clone() * q_step.clone() * poly))
-            // TODO: Enable these after incomplete trace is no longer necessary.
+                .map(move |(name, poly)| {
+                    (
+                        name,
+                        q_usable.clone() * q_used.clone() * q_step.clone() * poly,
+                    )
+                })
             // .chain(first_step_check)
             // .chain(last_step_check)
         });
 
         meta.create_gate("q_step", |meta| {
-            let q_usable = meta.query_selector(q_usable);
+            let q_usable = meta.query_fixed(q_usable, Rotation::cur());
+            let q_used = meta.query_advice(q_used, Rotation::cur());
             let q_step_first = meta.query_selector(q_step_first);
             let q_step = meta.query_advice(q_step, Rotation::cur());
             let num_rows_left_cur = meta.query_advice(num_rows_until_next_step, Rotation::cur());
@@ -336,7 +373,7 @@ impl<F: Field> ExecutionConfig<F> {
             );
             cb.require_equal("q_step == is_zero", q_step, is_zero);
             // On each usable row
-            cb.gate(q_usable)
+            cb.gate(q_usable * q_used)
         });
 
         let mut stored_expressions_map = HashMap::new();
@@ -347,6 +384,7 @@ impl<F: Field> ExecutionConfig<F> {
                     meta,
                     advices,
                     q_usable,
+                    q_used,
                     q_step,
                     num_rows_until_next_step,
                     q_step_first,
@@ -363,6 +401,7 @@ impl<F: Field> ExecutionConfig<F> {
         let cell_manager = step_curr.cell_manager.clone();
         let config = Self {
             q_usable,
+            q_used,
             q_step,
             num_rows_until_next_step,
             num_rows_inv,
@@ -392,6 +431,7 @@ impl<F: Field> ExecutionConfig<F> {
             codesize_gadget: configure_gadget!(),
             comparator_gadget: configure_gadget!(),
             dup_gadget: configure_gadget!(),
+            dummy_gadget: configure_gadget!(),
             extcodehash_gadget: configure_gadget!(),
             gas_gadget: configure_gadget!(),
             gasprice_gadget: configure_gadget!(),
@@ -440,7 +480,27 @@ impl<F: Field> ExecutionConfig<F> {
             block_ctx_u160_gadget: configure_gadget!(),
             block_ctx_u256_gadget: configure_gadget!(),
             // error gadgets
+            error_oog_constant: configure_gadget!(),
+            error_stack_overflow: configure_gadget!(),
+            error_stack_underflow: configure_gadget!(),
             error_oog_static_memory_gadget: configure_gadget!(),
+            error_oog_dynamic_memory_gadget: configure_gadget!(),
+            error_oog_log: configure_gadget!(),
+            error_oog_sload: configure_gadget!(),
+            error_oog_sstore: configure_gadget!(),
+            error_oog_call: configure_gadget!(),
+            error_oog_memory_copy: configure_gadget!(),
+            error_oog_account_access: configure_gadget!(),
+            error_oog_sha3: configure_gadget!(),
+            error_oog_ext_codecopy: configure_gadget!(),
+            error_oog_call_code: configure_gadget!(),
+            error_oog_delegate_call: configure_gadget!(),
+            error_oog_exp: configure_gadget!(),
+            error_oog_create2: configure_gadget!(),
+            error_oog_static_call: configure_gadget!(),
+            error_oog_self_destruct: configure_gadget!(),
+            error_oog_insufficient_balance: configure_gadget!(),
+            invalid_opcode_gadget: configure_gadget!(),
             // step and presets
             step: step_curr,
             height_map,
@@ -473,11 +533,12 @@ impl<F: Field> ExecutionConfig<F> {
     fn configure_gadget<G: ExecutionGadget<F>>(
         meta: &mut ConstraintSystem<F>,
         advices: [Column<Advice>; STEP_WIDTH],
-        q_usable: Selector,
+        q_usable: Column<Fixed>,
+        q_used: Column<Advice>,
         q_step: Column<Advice>,
         num_rows_until_next_step: Column<Advice>,
         q_step_first: Selector,
-        q_step_last: Selector,
+        q_step_last: Column<Advice>,
         power_of_randomness: &[Expression<F>; 31],
         step_curr: &Step<F>,
         step_next: &Step<F>,
@@ -545,10 +606,15 @@ impl<F: Field> ExecutionConfig<F> {
         ] {
             if !constraints.is_empty() {
                 meta.create_gate(G::NAME, |meta| {
-                    let q_usable = meta.query_selector(q_usable);
+                    let q_usable = meta.query_fixed(q_usable, Rotation::cur());
+                    let q_used = meta.query_advice(q_used, Rotation::cur());
                     let selector = selector(meta);
+
                     constraints.into_iter().map(move |(name, constraint)| {
-                        (name, q_usable.clone() * selector.clone() * constraint)
+                        (
+                            name,
+                            q_usable.clone() * q_used.clone() * selector.clone() * constraint,
+                        )
                     })
                 });
             }
@@ -556,9 +622,10 @@ impl<F: Field> ExecutionConfig<F> {
 
         // Enforce the state transitions for this opcode
         meta.create_gate("Constrain state machine transitions", |meta| {
-            let q_usable = meta.query_selector(q_usable);
+            let q_usable = meta.query_fixed(q_usable, Rotation::cur());
+            let q_used = meta.query_advice(q_used, Rotation::cur());
             let q_step = meta.query_advice(q_step, Rotation::cur());
-            let q_step_last = meta.query_selector(q_step_last);
+            let q_step_last = meta.query_advice(q_step_last, Rotation::cur());
 
             // ExecutionState transition should be correct.
             iter::empty()
@@ -616,6 +683,7 @@ impl<F: Field> ExecutionConfig<F> {
                 .reduce(|accum, poly| accum + poly)
                 .map(move |poly| {
                         q_usable.clone()
+                            * q_used.clone()
                             * q_step.clone()
                             * (1.expr() - q_step_last.clone())
                             * step_curr.execution_state_selector([G::EXECUTION_STATE])
@@ -667,7 +735,7 @@ impl<F: Field> ExecutionConfig<F> {
         &self,
         layouter: &mut impl Layouter<F>,
         block: &Block<F>,
-        _exact: bool,
+        exact: bool,
     ) -> Result<(), Error> {
         let power_of_randomness = (1..32)
             .map(|exp| block.randomness.pow(&[exp, 0, 0, 0]))
@@ -681,19 +749,20 @@ impl<F: Field> ExecutionConfig<F> {
                 let mut offset = 0;
 
                 self.q_step_first.enable(&mut region, offset)?;
-
                 // Collect all steps
                 let mut steps = block
                     .txs
                     .iter()
-                    .flat_map(|tx| tx.steps.iter().map(move |step| (tx, step)))
+                    .flat_map(|tx| {
+                        tx.steps
+                            .iter()
+                            .map(move |step| (tx, &tx.calls[step.call_index], step))
+                    })
                     .peekable();
 
                 let mut last_height = 0;
-                while let Some((transaction, step)) = steps.next() {
-                    let call = &transaction.calls[step.call_index];
+                while let Some((transaction, call, step)) = steps.next() {
                     let height = self.get_step_height(step.execution_state);
-
                     // Assign the step witness
                     self.assign_exec_step(
                         &mut region,
@@ -703,16 +772,30 @@ impl<F: Field> ExecutionConfig<F> {
                         call,
                         step,
                         height,
-                        steps.peek().map(|&(transaction, step)| {
-                            (transaction, &transaction.calls[step.call_index], step)
-                        }),
+                        steps.peek(),
                         power_of_randomness,
                     )?;
-
                     // q_step logic
                     for idx in 0..height {
                         let offset = offset + idx;
-                        self.q_usable.enable(&mut region, offset)?;
+                        region.assign_fixed(
+                            || "row usable",
+                            self.q_usable,
+                            offset,
+                            || Ok(F::one()),
+                        )?;
+                        region.assign_advice(
+                            || "row used",
+                            self.q_used,
+                            offset,
+                            || Ok(F::one()),
+                        )?;
+                        region.assign_advice(
+                            || "last step",
+                            self.q_step_last,
+                            offset,
+                            || Ok(F::zero()),
+                        )?;
                         region.assign_advice(
                             || "step selector",
                             self.q_step,
@@ -755,10 +838,31 @@ impl<F: Field> ExecutionConfig<F> {
                     || Ok(F::zero()),
                 )?;
 
-                // If not exact:
-                // TODO: Pad leftover region to the desired capacity
-                // TODO: Enable q_step_last
-                self.q_step_last.enable(&mut region, offset - last_height)?;
+                region.assign_advice(
+                    || "last step",
+                    self.q_step_last,
+                    offset - last_height,
+                    || Ok(F::one()),
+                )?;
+
+                if !exact {
+                    if block.pad_to != 0 {
+                        // Pad leftover region to the desired capacity
+                        if offset >= block.pad_to {
+                            panic!("row not enough");
+                        }
+                        for pad_offset in offset..block.pad_to {
+                            region.assign_fixed(
+                                || "row usable",
+                                self.q_usable,
+                                pad_offset,
+                                || Ok(F::one()),
+                            )?;
+                        }
+                    } else {
+                        log::warn!("assign_block with exact = false, but pad_to not provided");
+                    }
+                }
 
                 Ok(())
             },
@@ -775,7 +879,7 @@ impl<F: Field> ExecutionConfig<F> {
         call: &Call,
         step: &ExecStep,
         height: usize,
-        next: Option<(&Transaction, &Call, &ExecStep)>,
+        next: Option<&(&Transaction, &Call, &ExecStep)>,
         power_of_randomness: [F; 31],
     ) -> Result<(), Error> {
         // Make the region large enough for the current step and the next step.
@@ -817,7 +921,12 @@ impl<F: Field> ExecutionConfig<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        log::trace!("assign_exec_step offset:{} step:{:?}", offset, step);
+        log::trace!(
+            "assign_exec_step offset: {} step: {:?} call: {:?}",
+            offset,
+            step,
+            call
+        );
         self.step
             .assign_exec_step(region, offset, block, transaction, call, step)?;
 
@@ -901,19 +1010,116 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::STOP => assign_exec_step!(self.stop_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
             // errors
+            ExecutionState::ErrorOutOfGasConstant => {
+                assign_exec_step!(self.error_oog_constant)
+            }
             ExecutionState::ErrorOutOfGasStaticMemoryExpansion => {
                 assign_exec_step!(self.error_oog_static_memory_gadget)
+            }
+            ExecutionState::ErrorOutOfGasDynamicMemoryExpansion => {
+                assign_exec_step!(self.error_oog_dynamic_memory_gadget)
+            }
+            ExecutionState::ErrorOutOfGasLOG => {
+                assign_exec_step!(self.error_oog_log)
+            }
+            ExecutionState::ErrorOutOfGasSLOAD => {
+                assign_exec_step!(self.error_oog_sload)
+            }
+            ExecutionState::ErrorOutOfGasSSTORE => {
+                assign_exec_step!(self.error_oog_sstore)
+            }
+            ExecutionState::ErrorOutOfGasCALL => {
+                assign_exec_step!(self.error_oog_call)
+            }
+            ExecutionState::ErrorOutOfGasMemoryCopy => {
+                assign_exec_step!(self.error_oog_memory_copy)
+            }
+            ExecutionState::ErrorOutOfGasAccountAccess => {
+                assign_exec_step!(self.error_oog_account_access)
+            }
+            ExecutionState::ErrorOutOfGasSHA3 => {
+                assign_exec_step!(self.error_oog_sha3)
+            }
+            ExecutionState::ErrorOutOfGasEXTCODECOPY => {
+                assign_exec_step!(self.error_oog_ext_codecopy)
+            }
+            ExecutionState::ErrorOutOfGasCALLCODE => {
+                assign_exec_step!(self.error_oog_call_code)
+            }
+            ExecutionState::ErrorOutOfGasDELEGATECALL => {
+                assign_exec_step!(self.error_oog_delegate_call)
+            }
+            ExecutionState::ErrorOutOfGasEXP => {
+                assign_exec_step!(self.error_oog_exp)
+            }
+            ExecutionState::ErrorOutOfGasCREATE2 => {
+                assign_exec_step!(self.error_oog_create2)
+            }
+            ExecutionState::ErrorOutOfGasSTATICCALL => {
+                assign_exec_step!(self.error_oog_static_call)
+            }
+            ExecutionState::ErrorOutOfGasSELFDESTRUCT => {
+                assign_exec_step!(self.error_oog_self_destruct)
+            }
+
+            ExecutionState::ErrorStackOverflow => {
+                assign_exec_step!(self.error_stack_overflow)
+            }
+            ExecutionState::ErrorStackUnderflow => {
+                assign_exec_step!(self.error_stack_underflow)
+            }
+            ExecutionState::ErrorInsufficientBalance => {
+                assign_exec_step!(self.error_oog_insufficient_balance)
+            }
+
+            ExecutionState::ErrorInvalidOpcode => {
+                assign_exec_step!(self.dummy_gadget)
+            }
+            ExecutionState::DUMMY => {
+                assign_exec_step!(self.dummy_gadget)
             }
             _ => unimplemented!("unimplemented ExecutionState: {:?}", step.execution_state),
         }
 
         // Fill in the witness values for stored expressions
+
+        let mut assigned_rw_values = Vec::new();
         for stored_expression in self
             .stored_expressions_map
             .get(&step.execution_state)
             .unwrap_or_else(|| panic!("Execution state unknown: {:?}", step.execution_state))
         {
-            stored_expression.assign(region, offset)?;
+            let assigned = stored_expression.assign(region, offset)?;
+            if let Some(v) = assigned.value() {
+                let name = stored_expression.name.clone();
+                if name.starts_with("rw lookup ")
+                    && !name.contains(" with reversion")
+                    && !v.is_zero_vartime()
+                    && !assigned_rw_values.contains(&(name.clone(), *v))
+                {
+                    assigned_rw_values.push((name, *v));
+                }
+            }
+        }
+        let rw_table_values: Vec<_> = step
+            .rw_indices
+            .iter()
+            .map(|rw_idx| {
+                let rlc = block.rws[*rw_idx]
+                    .table_assignment(block.randomness)
+                    .rlc(block.randomness, block.randomness);
+                (rw_idx, rlc)
+            })
+            .filter(|(_, v)| !v.is_zero_vartime())
+            .collect();
+
+        for idx in 0..assigned_rw_values.len() {
+            let (rw_idx, rlc) = rw_table_values[idx];
+            debug_assert_eq!(
+                rlc, assigned_rw_values[idx].1,
+                "incorrect rw witness {} at {:?}({}th rw), step: {:#?}",
+                assigned_rw_values[idx].0, rw_idx, idx, step
+            )
         }
 
         Ok(())
