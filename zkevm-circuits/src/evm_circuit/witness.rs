@@ -384,6 +384,7 @@ impl std::ops::Index<(RwTableTag, usize)> for RwMap {
     }
 }
 
+impl RwMap {
     // check rw_counter is continous and starting from 1
     pub fn check_rw_counter_sanity(&self) {
         for (idx, rw_counter) in self
@@ -416,6 +417,7 @@ impl std::ops::Index<(RwTableTag, usize)> for RwMap {
         });
         rows
     }
+}
 #[derive(Clone, Copy, Debug)]
 pub enum Rw {
     Start {

@@ -1,8 +1,8 @@
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::evm::Opcode;
+use crate::operation::{TxAccessListAccountOp, RW};
 use crate::Error;
 use eth_types::{GethExecStep, ToAddress, ToWord};
-use crate::operation::{RW, TxAccessListAccountOp};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Balance;

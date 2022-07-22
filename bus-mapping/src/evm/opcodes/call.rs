@@ -34,7 +34,6 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
         let geth_step = &geth_steps[0];
         let next_step = &geth_steps[1];
 
-
         let mut exec_step = state.new_step(geth_step)?;
         let tx_id = state.tx_ctx.id();
         let call = state.parse_call(geth_step)?;
@@ -222,7 +221,9 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
         // There are 3 branches from here.
         let code_address = call.code_address();
         match (
-            code_address.map(|ref addr| state.is_precompiled(addr)).unwrap_or(false),
+            code_address
+                .map(|ref addr| state.is_precompiled(addr))
+                .unwrap_or(false),
             callee_code_hash.to_fixed_bytes() == *EMPTY_HASH,
         ) {
             // 1. Call to precompiled.
@@ -422,8 +423,8 @@ mod return_tests {
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
         )
-            .unwrap()
-            .into();
+        .unwrap()
+        .into();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -454,8 +455,8 @@ mod return_tests {
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
         )
-            .unwrap()
-            .into();
+        .unwrap()
+        .into();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -486,8 +487,8 @@ mod return_tests {
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
         )
-            .unwrap()
-            .into();
+        .unwrap()
+        .into();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder

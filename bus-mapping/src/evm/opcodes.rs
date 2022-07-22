@@ -94,7 +94,6 @@ pub trait Opcode: Debug {
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error>;
-
 }
 
 #[derive(Debug, Copy, Clone)]

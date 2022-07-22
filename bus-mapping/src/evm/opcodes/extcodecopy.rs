@@ -3,9 +3,9 @@ use crate::circuit_input_builder::{
     CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData,
 };
 use crate::constants::MAX_COPY_BYTES;
+use crate::operation::{TxAccessListAccountOp, RW};
 use crate::Error;
 use eth_types::{GethExecStep, ToAddress, ToWord};
-use crate::operation::{RW, TxAccessListAccountOp};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Extcodecopy;
@@ -66,7 +66,9 @@ fn gen_codecopy_step(
     let offset = geth_step.stack.nth_last(2)?;
     let length = geth_step.stack.nth_last(3)?;
 
-    let is_warm = state.sdb.check_account_in_access_list(&address.to_address());
+    let is_warm = state
+        .sdb
+        .check_account_in_access_list(&address.to_address());
     state.push_op_reversible(
         &mut exec_step,
         RW::WRITE,

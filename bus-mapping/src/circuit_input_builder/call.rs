@@ -103,8 +103,8 @@ impl Call {
             CallKind::CallCode | CallKind::DelegateCall => match self.code_source {
                 CodeSource::Address(address) => Some(address),
                 _ => None,
-            }
-            CallKind::Create | CallKind::Create2 => None
+            },
+            CallKind::Create | CallKind::Create2 => None,
         }
     }
 }
