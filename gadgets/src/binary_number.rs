@@ -100,7 +100,7 @@ where
 ///    T.
 ///  - creating expressions (via the Config) that evaluate to 1 when the bits
 ///    match a specific value and 0 otherwise.
-pub struct BinaryNumberChip<F: Field, T, const N: usize> {
+pub struct BinaryNumberChip<F, T, const N: usize> {
     config: BinaryNumberConfig<T, N>,
     _marker: PhantomData<F>,
 }

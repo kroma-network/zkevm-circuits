@@ -90,6 +90,9 @@ pub enum ExecutionState {
     STATICCALL,
     REVERT,
     SELFDESTRUCT,
+
+    DUMMY,
+
     // Error cases
     ErrorInvalidOpcode,
     ErrorStackOverflow,
@@ -142,40 +145,6 @@ impl ExecutionState {
     }
 
     pub(crate) fn halts_in_exception(&self) -> bool {
-        matches!(
-            self,
-            Self::ErrorInvalidOpcode
-                | Self::ErrorStackOverflow
-                | Self::ErrorStackUnderflow
-                | Self::ErrorWriteProtection
-                | Self::ErrorDepth
-                | Self::ErrorInsufficientBalance
-                | Self::ErrorContractAddressCollision
-                | Self::ErrorInvalidCreationCode
-                | Self::ErrorMaxCodeSizeExceeded
-                | Self::ErrorInvalidJump
-                | Self::ErrorReturnDataOutOfBound
-                | Self::ErrorOutOfGasConstant
-                | Self::ErrorOutOfGasStaticMemoryExpansion
-                | Self::ErrorOutOfGasDynamicMemoryExpansion
-                | Self::ErrorOutOfGasMemoryCopy
-                | Self::ErrorOutOfGasAccountAccess
-                | Self::ErrorOutOfGasCodeStore
-                | Self::ErrorOutOfGasLOG
-                | Self::ErrorOutOfGasEXP
-                | Self::ErrorOutOfGasSHA3
-                | Self::ErrorOutOfGasEXTCODECOPY
-                | Self::ErrorOutOfGasSLOAD
-                | Self::ErrorOutOfGasSSTORE
-                | Self::ErrorOutOfGasCALL
-                | Self::ErrorOutOfGasCALLCODE
-                | Self::ErrorOutOfGasDELEGATECALL
-                | Self::ErrorOutOfGasCREATE2
-                | Self::ErrorOutOfGasSTATICCALL
-                | Self::ErrorOutOfGasSELFDESTRUCT
-        )
-    }
-
         matches!(
             self,
             Self::ErrorInvalidOpcode

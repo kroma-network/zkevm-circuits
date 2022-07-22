@@ -212,6 +212,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
             warn!("Using dummy gen_associated_ops for opcode {:?}", opcode_id);
             Return::gen_associated_ops
         }
+        OpcodeId::INVALID(_) => Stop::gen_associated_ops,
         OpcodeId::SELFDESTRUCT => {
             warn!("Using dummy gen_selfdestruct_ops for opcode SELFDESTRUCT");
             dummy_gen_selfdestruct_ops
