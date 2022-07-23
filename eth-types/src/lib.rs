@@ -413,10 +413,10 @@ impl<'de> Deserialize<'de> for GethExecTrace {
         let GethExecTraceInternal {
             gas,
             failed,
-            struct_logs,
+            mut struct_logs,
             return_value,
         } = GethExecTraceInternal::deserialize(deserializer)?;
-        //fix_geth_trace_memory_size(&mut struct_logs);
+        fix_geth_trace_memory_size(&mut struct_logs);
         Ok(Self {
             gas,
             failed,

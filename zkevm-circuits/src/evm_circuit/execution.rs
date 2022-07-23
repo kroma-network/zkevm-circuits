@@ -976,7 +976,7 @@ impl<F: Field> ExecutionConfig<F> {
 
         macro_rules! assign_exec_step {
             ($gadget:expr) => {
-                $gadget.assign_exec_step(region, offset, block, transaction, call, step)?;
+                $gadget.assign_exec_step(region, offset, block, transaction, call, step)?
             };
         }
 
