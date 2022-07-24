@@ -205,7 +205,7 @@ impl<F: Field> ExecutionGadget<F> for SstoreGadget<F> {
         debug_assert_eq!(
             calc_expected_gas_cost(value, value_prev, original_value, is_warm),
             step.gas_cost,
-            "invalid gas cost in sstore valie {:?} value_prev {:?} original_value {:?} is_warm {:?} contract addr {:?} storage key {:?}",
+            "invalid gas cost in sstore value {:?} value_prev {:?} original_value {:?} is_warm {:?} contract addr {:?} storage key {:?}",
             value, value_prev, original_value, is_warm, call.callee_address, key
         );
         self.gas_cost.assign(
