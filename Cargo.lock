@@ -1797,7 +1797,7 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 [[package]]
 name = "halo2_proofs"
 version = "0.1.0-beta.1"
-source = "git+https://github.com/scroll-tech/halo2.git?branch=scroll-dev-0607#0956563d1b2647c8112d444df0303914db93ba81"
+source = "git+https://github.com/scroll-tech/halo2.git?branch=scroll-dev-0607#94de954abfbff0a74329f6bbfb0f56fc4aefefae"
 dependencies = [
  "blake2b_simd",
  "bumpalo",
@@ -2076,11 +2076,13 @@ dependencies = [
  "ethers",
  "ff 0.11.1",
  "halo2_proofs",
+ "hex",
  "lazy_static",
  "log",
  "pretty_assertions",
  "serde",
  "serde_json",
+ "strum",
  "tokio",
  "url",
  "zkevm-circuits",
@@ -3534,9 +3536,9 @@ checksum = "6446ced80d6c486436db5c078dde11a9f73d42b57fb273121e160b84f63d894c"
 
 [[package]]
 name = "strum"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e96acfc1b70604b8b2f1ffa4c57e59176c7dbb05d556c71ecd2f5498a1dee7f8"
+checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
 
 [[package]]
 name = "strum_macros"

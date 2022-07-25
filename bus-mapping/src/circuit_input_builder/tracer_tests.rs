@@ -12,7 +12,7 @@ use eth_types::{
     address, bytecode, geth_types::GethData, word, Bytecode, Hash, ToAddress, ToWord, Word,
 };
 use lazy_static::lazy_static;
-use mock::test_ctx::{helpers::*, TestContext};
+use mock::test_ctx::{helpers::*, LoggerConfig, TestContext};
 use mock::MOCK_COINBASE;
 use pretty_assertions::assert_eq;
 use std::collections::HashSet;
@@ -54,11 +54,13 @@ impl CircuitInputBuilderTx {
             tx.last_step().log_id
         };
 
+        let call_ctx = tx_ctx.call_ctx().unwrap();
+        let exec_step = ExecStep::new(geth_step, call_ctx, RWCounter::new(), 0, prev_log_id);
         Self {
             builder,
             tx,
             tx_ctx,
-            step: ExecStep::new(geth_step, 0, RWCounter::new(), 0, prev_log_id),
+            step: exec_step,
         }
     }
 
@@ -135,7 +137,7 @@ fn tracer_err_depth() {
     };
 
     // Create a custom tx setting Gas to
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -153,6 +155,7 @@ fn tracer_err_depth() {
                 .gas(Word::from(10u64.pow(15)));
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -210,7 +213,7 @@ fn tracer_err_insufficient_balance() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -231,6 +234,7 @@ fn tracer_err_insufficient_balance() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -384,7 +388,7 @@ fn tracer_err_address_collision() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -403,6 +407,7 @@ fn tracer_err_address_collision() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -433,7 +438,7 @@ fn tracer_err_address_collision() {
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     // Set up call context at CREATE2
     builder.tx_ctx.call_is_success.push(false);
-    builder.state_ref().push_call(mock_internal_create(), step);
+    builder.state_ref().push_call(mock_internal_create());
     // Set up account and contract that exist during the second CREATE2
     builder.builder.sdb.set_account(
         &ADDR_B,
@@ -520,7 +525,7 @@ fn tracer_err_code_store_out_of_gas() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -539,6 +544,7 @@ fn tracer_err_code_store_out_of_gas() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -557,7 +563,7 @@ fn tracer_err_code_store_out_of_gas() {
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     // Set up call context at CREATE
     builder.tx_ctx.call_is_success.push(false);
-    builder.state_ref().push_call(mock_internal_create(), step);
+    builder.state_ref().push_call(mock_internal_create());
     assert_eq!(
         builder.state_ref().get_step_err(step, next_step).unwrap(),
         Some(ExecError::CodeStoreOutOfGas)
@@ -571,7 +577,7 @@ fn check_err_invalid_code(step: &GethExecStep, next_step: Option<&GethExecStep>)
         && step.error.is_none()
         && result(next_step).is_zero()
         && length > Word::zero()
-        && !step.memory.0.is_empty()
+        && !step.memory.is_empty()
         && step.memory.0.get(offset.low_u64() as usize) == Some(&0xef)
 }
 
@@ -626,7 +632,7 @@ fn tracer_err_invalid_code() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -645,6 +651,7 @@ fn tracer_err_invalid_code() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -663,7 +670,7 @@ fn tracer_err_invalid_code() {
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     // Set up call context at RETURN
     builder.tx_ctx.call_is_success.push(false);
-    builder.state_ref().push_call(mock_internal_create(), step);
+    builder.state_ref().push_call(mock_internal_create());
     assert_eq!(
         builder.state_ref().get_step_err(step, next_step).unwrap(),
         Some(ExecError::InvalidCreationCode)
@@ -730,7 +737,7 @@ fn tracer_err_max_code_size_exceeded() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -749,6 +756,7 @@ fn tracer_err_max_code_size_exceeded() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -767,7 +775,7 @@ fn tracer_err_max_code_size_exceeded() {
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     // Set up call context at RETURN
     builder.tx_ctx.call_is_success.push(false);
-    builder.state_ref().push_call(mock_internal_create(), step);
+    builder.state_ref().push_call(mock_internal_create());
     assert_eq!(
         builder.state_ref().get_step_err(step, next_step).unwrap(),
         Some(ExecError::MaxCodeSizeExceeded)
@@ -824,7 +832,7 @@ fn tracer_create_stop() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -845,6 +853,7 @@ fn tracer_create_stop() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -861,7 +870,7 @@ fn tracer_create_stop() {
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     // Set up call context at STOP
     builder.tx_ctx.call_is_success.push(false);
-    builder.state_ref().push_call(mock_internal_create(), step);
+    builder.state_ref().push_call(mock_internal_create());
     assert_eq!(
         builder.state_ref().get_step_err(step, next_step).unwrap(),
         None
@@ -899,7 +908,7 @@ fn tracer_err_invalid_jump() {
         STOP
     };
     let index = 1; // JUMP
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -914,6 +923,7 @@ fn tracer_err_invalid_jump() {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -946,7 +956,7 @@ fn tracer_err_invalid_jump() {
     let index = 8; // JUMP
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -965,6 +975,7 @@ fn tracer_err_invalid_jump() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -999,7 +1010,7 @@ fn tracer_err_execution_reverted() {
         STOP
     };
     let index = 2; // REVERT
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1014,6 +1025,7 @@ fn tracer_err_execution_reverted() {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1047,7 +1059,7 @@ fn tracer_err_execution_reverted() {
     let index = 10; // REVERT
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1066,6 +1078,7 @@ fn tracer_err_execution_reverted() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1108,7 +1121,7 @@ fn tracer_stop() {
     let index = 10; // STOP
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1127,6 +1140,7 @@ fn tracer_stop() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1182,7 +1196,7 @@ fn tracer_err_return_data_out_of_bounds() {
         RETURN
     };
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1203,6 +1217,7 @@ fn tracer_err_return_data_out_of_bounds() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1239,7 +1254,7 @@ fn tracer_err_gas_uint_overflow() {
         PUSH32(0x100_0000_0000_0000_0000_u128) // offset
         MSTORE
     };
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1254,6 +1269,7 @@ fn tracer_err_gas_uint_overflow() {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1277,7 +1293,7 @@ fn tracer_err_invalid_opcode() {
     let mut code = bytecode::Bytecode::default();
     code.write_op(OpcodeId::PC);
     code.write(0x0f);
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1292,6 +1308,7 @@ fn tracer_err_invalid_opcode() {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1330,7 +1347,7 @@ fn tracer_err_write_protection() {
         PUSH3(0xbb)
     };
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1349,6 +1366,7 @@ fn tracer_err_write_protection() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1360,29 +1378,26 @@ fn tracer_err_write_protection() {
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     builder.tx_ctx.call_is_success.push(false);
-    builder.state_ref().push_call(
-        Call {
-            call_id: 0,
-            caller_id: 0,
-            kind: CallKind::StaticCall,
-            is_static: true,
-            is_root: false,
-            is_persistent: false,
-            is_success: false,
-            rw_counter_end_of_reversion: 0,
-            caller_address: *ADDR_A,
-            address: *ADDR_B,
-            code_source: CodeSource::Address(*ADDR_B),
-            code_hash: Hash::zero(),
-            depth: 2,
-            value: Word::zero(),
-            call_data_offset: 0,
-            call_data_length: 0,
-            return_data_offset: 0,
-            return_data_length: 0,
-        },
-        step,
-    );
+    builder.state_ref().push_call(Call {
+        call_id: 0,
+        caller_id: 0,
+        kind: CallKind::StaticCall,
+        is_static: true,
+        is_root: false,
+        is_persistent: false,
+        is_success: false,
+        rw_counter_end_of_reversion: 0,
+        caller_address: *ADDR_A,
+        address: *ADDR_B,
+        code_source: CodeSource::Address(*ADDR_B),
+        code_hash: Hash::zero(),
+        depth: 2,
+        value: Word::zero(),
+        call_data_offset: 0,
+        call_data_length: 0,
+        return_data_offset: 0,
+        return_data_length: 0,
+    });
 
     assert_eq!(
         builder.state_ref().get_step_err(step, next_step).unwrap(),
@@ -1399,7 +1414,7 @@ fn tracer_err_out_of_gas() {
         PUSH1(0x2)
     };
     // Create a custom tx setting Gas to
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         |mut txs, accs| {
@@ -1409,6 +1424,7 @@ fn tracer_err_out_of_gas() {
                 .gas(Word::from(21004u64));
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1424,11 +1440,12 @@ fn tracer_err_stack_overflow() {
     for i in 0u64..1025 {
         code.push(2, Word::from(i));
     }
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1454,11 +1471,12 @@ fn tracer_err_stack_underflow() {
     let code = bytecode! {
         SWAP5
     };
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1533,7 +1551,7 @@ fn create2_address() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1552,6 +1570,7 @@ fn create2_address() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1575,9 +1594,7 @@ fn create2_address() {
     let mut builder = CircuitInputBuilderTx::new(&block, step_create2);
     // Set up call context at CREATE2
     builder.tx_ctx.call_is_success.push(false);
-    builder
-        .state_ref()
-        .push_call(mock_internal_create(), step_create2);
+    builder.state_ref().push_call(mock_internal_create());
     let addr = builder.state_ref().create2_address(step_create2).unwrap();
 
     assert_eq!(addr.to_word(), addr_expect);
@@ -1639,7 +1656,7 @@ fn create_address() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1658,6 +1675,7 @@ fn create_address() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1683,9 +1701,7 @@ fn create_address() {
     let mut builder = CircuitInputBuilderTx::new(&block, step_create);
     // Set up call context at CREATE
     builder.tx_ctx.call_is_success.push(false);
-    builder
-        .state_ref()
-        .push_call(mock_internal_create(), step_create);
+    builder.state_ref().push_call(mock_internal_create());
     builder.builder.sdb.set_account(
         &ADDR_B,
         Account {
@@ -1733,7 +1749,7 @@ fn test_gen_access_trace() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0]
@@ -1750,6 +1766,7 @@ fn test_gen_access_trace() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1828,7 +1845,7 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
         None,
         |accs| {
             accs[0].address(*MOCK_COINBASE).code(code);
@@ -1836,6 +1853,7 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
         },
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();
@@ -1960,7 +1978,7 @@ fn test_gen_access_trace_create_push_call_stack() {
     code_b.append(&code_b_end);
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new(
+    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
         None,
         |accs| {
             accs[0].address(*MOCK_COINBASE).code(code_a);
@@ -1975,6 +1993,7 @@ fn test_gen_access_trace_create_push_call_stack() {
                 .nonce(Word::one());
         },
         |block, _tx| block.number(0xcafeu64),
+        LoggerConfig::enable_memory(),
     )
     .unwrap()
     .into();

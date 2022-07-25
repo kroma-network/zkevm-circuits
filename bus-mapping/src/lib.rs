@@ -215,6 +215,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // Temporary until we have more of the crate implemented.
 #![allow(dead_code)]
+#![feature(map_first_last)]
 // We want to have UPPERCASE idents sometimes.
 #![allow(non_snake_case)]
 // Catch documentation errors caused by code changes.
@@ -225,6 +226,8 @@
 #![allow(clippy::upper_case_acronyms)] // Too pedantic
 
 extern crate alloc;
+extern crate core;
+
 pub mod circuit_input_builder;
 pub mod constants;
 pub mod error;

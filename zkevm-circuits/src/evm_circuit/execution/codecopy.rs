@@ -106,7 +106,7 @@ impl<F: Field> ExecutionGadget<F> for CodeCopyGadget<F> {
                 cb.require_equal(
                     "next_bytes_left = length",
                     next_bytes_left.expr(),
-                    size.expr(),
+                    from_bytes::expr(&size.cells),
                 );
                 cb.require_equal(
                     "next_src_addr_end == code_size",
@@ -211,7 +211,7 @@ mod tests {
     fn test_ok(memory_offset: usize, code_offset: usize, size: usize, large: bool) {
         let mut code = bytecode! {};
         if large {
-            for _ in 0..128 {
+            for _ in 0..500 {
                 code.push(1, Word::from(0));
             }
         }
@@ -242,6 +242,6 @@ mod tests {
 
     #[test]
     fn codecopy_gadget_large() {
-        test_ok(0x00, 0x00, 0x40, true);
+        test_ok(0x00, 0x00, 0x123, true);
     }
 }

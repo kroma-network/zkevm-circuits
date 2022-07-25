@@ -21,9 +21,15 @@ log = "0.4.14"
 env_logger = "0.9"
 halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "scroll-dev-0607" }
 ff =  "0.11"
+hex = "0.4.3"
+strum = "0.24.1"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
+
+[[bin]]
+name = "mock_tx_prover"
+path = "src/bin/mock_tx_prover.rs"
 
 [features]
 default = ["circuits"]

@@ -395,7 +395,7 @@ pub mod test {
                     .sum::<usize>(),
             ));
 
-            log::debug!("evm circuit uses k = {}", k);
+            log::info!("evm circuit uses k = {}", k);
             k
         }
     }
@@ -492,7 +492,7 @@ pub mod test {
         let _block = block;
         //block.pad_to = (1 << k) - 64;
         let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
-        prover.verify_at_rows(active_gate_rows.into_iter(), active_lookup_rows.into_iter())
+        prover.verify_at_rows_par(active_gate_rows.into_iter(), active_lookup_rows.into_iter())
     }
 
     pub fn run_test_circuit_incomplete_fixed_table<F: Field>(

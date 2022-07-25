@@ -136,7 +136,7 @@ impl BlockContext {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Transaction {
     /// The transaction identifier in the block
     pub id: usize,
@@ -248,7 +248,7 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Call {
     /// The unique identifier of call in the whole proof, using the
     /// `rw_counter` at the call step.
@@ -288,7 +288,7 @@ pub struct Call {
     pub is_static: bool,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecStep {
     /// The index in the Transaction calls
     pub call_index: usize,
@@ -387,46 +387,6 @@ impl std::ops::Index<(RwTableTag, usize)> for RwMap {
 }
 
 impl RwMap {
-    /// These "sorted_xx" methods are used in state circuit
-    pub fn sorted_memory_rw(&self) -> Vec<Rw> {
-        let mut sorted = self.0[&RwTableTag::Memory].clone();
-        sorted.sort_by_key(|x| match x {
-            Rw::Memory {
-                call_id,
-                memory_address,
-                ..
-            } => (*call_id, *memory_address),
-            _ => panic!("invalid memory rw"),
-        });
-        sorted
-    }
-
-    pub fn sorted_stack_rw(&self) -> Vec<Rw> {
-        let mut sorted = self.0[&RwTableTag::Stack].clone();
-        sorted.sort_by_key(|x| match x {
-            Rw::Stack {
-                call_id,
-                stack_pointer,
-                ..
-            } => (*call_id, *stack_pointer),
-            _ => panic!("invalid stack rw"),
-        });
-        sorted
-    }
-
-    pub fn sorted_storage_rw(&self) -> Vec<Rw> {
-        let mut sorted = self.0[&RwTableTag::AccountStorage].clone();
-        sorted.sort_by_key(|x| match x {
-            Rw::AccountStorage {
-                account_address,
-                storage_key,
-                ..
-            } => (*account_address, *storage_key),
-            _ => panic!("invalid storage rw"),
-        });
-        sorted
-    }
-
     // check rw_counter is continous and starting from 1
     pub fn check_rw_counter_sanity(&self) {
         for (idx, rw_counter) in self
@@ -473,7 +433,6 @@ impl RwMap {
         rows
     }
 }
-
 #[derive(Clone, Copy, Debug)]
 pub enum Rw {
     Start {
@@ -921,7 +880,6 @@ impl Rw {
             Self::AccountStorage { value, .. } | Self::Stack { value, .. } => {
                 RandomLinearCombination::random_linear_combine(value.to_le_bytes(), randomness)
             }
-
             Self::TxLog {
                 field_tag, value, ..
             } => match field_tag {
@@ -1291,7 +1249,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
 
                 macro_rules! dummy {
                     ($name:expr) => {{
-                        log::warn!("$name is implemented with DummyGadget");
+                        log::debug!("{:?} is implemented with DummyGadget", $name);
                         $name
                     }};
                 }
@@ -1512,7 +1470,13 @@ pub fn block_convert(
                     .unique()
                     .into_iter()
                     .map(|code_hash| {
-                        let bytecode = Bytecode::new(code_db.0.get(&code_hash).unwrap().to_vec());
+                        let bytecode = Bytecode::new(
+                            code_db
+                                .hash_code
+                                .get(&code_hash)
+                                .cloned()
+                                .unwrap_or_default(),
+                        );
                         (bytecode.hash, bytecode)
                     })
             })

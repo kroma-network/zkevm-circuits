@@ -50,11 +50,16 @@ async fn test_evm_circuit_block(block_num: u64) {
             )
         })
     });
-    if need_bitwise_lookup {
-        run_test_circuit_complete_fixed_table(block).expect("evm_circuit verification failed");
+    let result = if need_bitwise_lookup {
+        run_test_circuit_complete_fixed_table(block)
     } else {
-        run_test_circuit_incomplete_fixed_table(block).expect("evm_circuit verification failed");
-    }
+        run_test_circuit_incomplete_fixed_table(block)
+    };
+    log::info!(
+        "test evm circuit, block number: {} result {:?}",
+        block_num,
+        result
+    );
 }
 
 async fn test_state_circuit_block(block_num: u64) {
