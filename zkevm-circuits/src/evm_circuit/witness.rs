@@ -572,8 +572,8 @@ pub struct RwRow<F> {
     pub aux2: F,
 }
 impl<F: Field> RwRow<F> {
-    pub fn rlc(&self, randomness: F, randomness_next_phase: F) -> F {
-        let values = [
+    pub fn rlc_values(&self, randomness: F) -> [F; 11] {
+        [
             F::from(self.rw_counter),
             F::from(self.is_write),
             (F::from(self.tag as u64)),
@@ -588,7 +588,10 @@ impl<F: Field> RwRow<F> {
             (self.value_prev),
             (self.aux1),
             (self.aux2),
-        ];
+        ]
+    }
+    pub fn rlc(&self, randomness: F, randomness_next_phase: F) -> F {
+        let values = self.rlc_values(randomness);
         values
             .iter()
             .rev()
@@ -959,7 +962,7 @@ impl Rw {
         }
     }
 
-    fn committed_value_assignment<F: Field>(&self, randomness: F) -> Option<F> {
+    pub fn committed_value_assignment<F: Field>(&self, randomness: F) -> Option<F> {
         match self {
             Self::AccountStorage {
                 committed_value, ..

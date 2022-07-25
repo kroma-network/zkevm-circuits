@@ -7,7 +7,7 @@ use super::{
 use crate::evm_circuit::{
     param::N_BYTES_WORD,
     table::{AccountFieldTag, RwTableTag},
-    util::not,
+    util::{not, rlc},
 };
 use crate::util::Expr;
 use eth_types::Field;
@@ -22,7 +22,7 @@ pub struct Queries<F: Field> {
     pub rw_counter: MpiQueries<F, N_LIMBS_RW_COUNTER>,
     pub is_write: Expression<F>,
     pub tag: Expression<F>,
-    //pub aux2: Expression<F>,
+    pub aux2: Expression<F>,
     pub tag_bits: [Expression<F>; 4],
     pub id: MpiQueries<F, N_LIMBS_ID>,
     pub is_tag_and_id_unchanged: Expression<F>,
@@ -31,15 +31,15 @@ pub struct Queries<F: Field> {
     pub storage_key: RlcQueries<F, N_BYTES_WORD>,
     pub value: Expression<F>,
     pub value_prev: Expression<F>,
+    // TODO: check between aux2 <=> initial_value
     pub initial_value: Expression<F>,
-    //pub value_at_prev_rotation: Expression<F>,
-    //pub value_prev: Expression<F>,
+    pub value_prev_col: Expression<F>,
     pub initial_value_prev: Expression<F>,
     pub lookups: LookupsQueries<F>,
     pub power_of_randomness: [Expression<F>; N_BYTES_WORD - 1],
     pub first_access: Expression<F>,
     pub not_first_access: Expression<F>,
-    //pub rw_rlc: Expression<F>,
+    pub rw_rlc: Expression<F>,
 }
 
 type Constraint<F> = (&'static str, Expression<F>);
@@ -134,7 +134,7 @@ impl<F: Field> ConstraintBuilder<F> {
                 q.initial_value.clone() - q.initial_value_prev(),
             );
         });
-        /*
+
         // Only reversible rws have `value_prev`.
         // There is no need to constain MemoryRw and StackRw since the 'read
         // consistency' part of the constaints are enough for them to behave
@@ -151,35 +151,39 @@ impl<F: Field> ConstraintBuilder<F> {
         // will not support this feature, it is skipped now.
         // (4) `TxRefund`: Default values should be '0'. BTW it may be moved out of rw table in the future. See https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/395
         // for more details.
-        self.require_equal(
-            "prev value",
-            q.value_prev.clone(),
-            (q.tag_matches(RwTableTag::TxAccessListAccount)
-                + q.tag_matches(RwTableTag::TxAccessListAccountStorage)
-                + q.tag_matches(RwTableTag::AccountDestructed)
-                + q.tag_matches(RwTableTag::TxRefund))
-                * select::expr(
-                    q.first_access(),
-                    0u64.expr(),
-                    q.value_at_prev_rotation.clone(),
-                )
-                + q.tag_matches(RwTableTag::Account)
-                    * select::expr(
-                        q.first_access(),
-                        // FIXME: this is a dummy placeholder to pass constraints
-                        // It should be aux2/committed_value.
-                        // We should fix this after the committed_value field of Rw::Account in
-                        // both bus-mapping and evm-circuits are implemented.
-                        q.value_prev.clone(),
-                        q.value_prev.clone(),
-                    )
-                + q.tag_matches(RwTableTag::AccountStorage)
-                    * select::expr(
-                        q.first_access(),
-                        q.aux2.clone(), // committed value
-                        q.value_at_prev_rotation.clone(),
-                    ),
-        );
+
+        // FIXME: For RwTableTag::Account, this is a dummy placeholder to pass
+        // constraints It should be aux2/committed_value.
+        // We should fix this after the committed_value field of Rw::Account in
+        // both bus-mapping and evm-circuits are implemented.
+        self.condition(q.first_access(), |cb| {
+            cb.require_equal(
+                "prev value when first access",
+                q.value_prev_col.clone(),
+                (q.tag_matches(RwTableTag::TxAccessListAccount)
+                    + q.tag_matches(RwTableTag::TxAccessListAccountStorage)
+                    + q.tag_matches(RwTableTag::AccountDestructed)
+                    + q.tag_matches(RwTableTag::TxRefund))
+                    * 0u64.expr()
+                    + q.tag_matches(RwTableTag::Account)
+                          *  q.value_prev_col.clone()
+                    + q.tag_matches(RwTableTag::AccountStorage)
+                       *     q.aux2.clone(), // committed value
+            );
+        });
+        self.condition(q.not_first_access(), |cb| {
+            cb.require_equal(
+                "prev value when not first acccess",
+                q.value_prev_col.clone(),
+                (q.tag_matches(RwTableTag::TxAccessListAccount)
+                    + q.tag_matches(RwTableTag::TxAccessListAccountStorage)
+                    + q.tag_matches(RwTableTag::AccountDestructed)
+                    + q.tag_matches(RwTableTag::TxRefund))
+                    * q.value_prev.clone()
+                    + q.tag_matches(RwTableTag::Account) * q.value_prev_col.clone()
+                    + q.tag_matches(RwTableTag::AccountStorage) * q.value_prev.clone(),
+            );
+        });
 
         self.require_equal("rw table rlc", q.rw_rlc.clone(), {
             rlc::expr(
@@ -192,14 +196,13 @@ impl<F: Field> ConstraintBuilder<F> {
                     q.field_tag.clone(),
                     q.storage_key.encoded.clone(),
                     q.value.clone(),
-                    q.value_prev.clone(),
+                    q.value_prev_col.clone(),
                     0u64.expr(), //q.aux1,
                     q.aux2.clone(),
                 ],
                 &q.power_of_randomness,
             )
         })
-        */
     }
 
     fn build_start_constraints(&mut self, q: &Queries<F>) {
@@ -503,8 +506,12 @@ impl<F: Field> Queries<F> {
         BinaryNumberConfig::<RwTableTag, 4>::value_equals_expr(tag, self.tag_bits.clone())
     }
 
+    // be careful! not boolean!!
     fn first_access(&self) -> Expression<F> {
         self.first_access.clone()
+    }
+    fn not_first_access(&self) -> Expression<F> {
+        self.not_first_access.clone()
     }
 
     fn address_change(&self) -> Expression<F> {
