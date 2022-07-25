@@ -43,7 +43,9 @@ pub struct Block<F> {
     /// The block context
     pub context: BlockContext,
     /// ..
-    pub pad_to: usize,
+    pub evm_circuit_pad_to: usize,
+    /// ..
+    pub state_circuit_pad_to: usize,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -439,10 +441,23 @@ impl RwMap {
         }
     }
 
-    pub fn table_assignments<F>(&self, _randomness: F) -> Vec<Rw>
-    where
-        F: Field,
-    {
+    pub fn table_assignments_prepad(rows: Vec<Rw>, target_len: usize) -> (Vec<Rw>, usize) {
+        let padding_length = if target_len >= rows.len() {
+            target_len - rows.len()
+        } else {
+            if target_len != 0 {
+                log::error!(
+                    "RwMap::table_assignments_prepad len overflow {} {}",
+                    target_len,
+                    rows.len()
+                );
+            }
+            0
+        };
+        let padding = (1..=padding_length).map(|rw_counter| Rw::Start { rw_counter });
+        (padding.chain(rows.into_iter()).collect(), padding_length)
+    }
+    pub fn table_assignments(&self) -> Vec<Rw> {
         let mut rows: Vec<Rw> = self.0.values().flatten().cloned().collect();
 
         rows.sort_by_key(|row| {
@@ -1502,6 +1517,7 @@ pub fn block_convert(
                     })
             })
             .collect(),
-        pad_to: 0,
+        evm_circuit_pad_to: 0,
+        state_circuit_pad_to: 0,
     }
 }

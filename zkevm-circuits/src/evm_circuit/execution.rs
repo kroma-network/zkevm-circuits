@@ -846,12 +846,12 @@ impl<F: Field> ExecutionConfig<F> {
                 )?;
 
                 if !exact {
-                    if block.pad_to != 0 {
+                    if block.evm_circuit_pad_to != 0 {
                         // Pad leftover region to the desired capacity
-                        if offset >= block.pad_to {
+                        if offset >= block.evm_circuit_pad_to {
                             panic!("row not enough");
                         }
-                        for pad_offset in offset..block.pad_to {
+                        for pad_offset in offset..block.evm_circuit_pad_to {
                             region.assign_fixed(
                                 || "row usable",
                                 self.q_usable,

@@ -36,8 +36,11 @@ impl RwTableRlc {
         randomness: F,
         rw_map: &RwMap,
         randomness_next_phase: F,
+        n_rows: usize,
     ) -> Result<(), Error> {
-        for (offset, row) in rw_map.table_assignments(randomness).iter().enumerate() {
+        let rows = rw_map.table_assignments();
+        let (rows, _) = RwMap::table_assignments_prepad(rows, n_rows);
+        for (offset, row) in rows.iter().enumerate() {
             let value = row
                 .table_assignment(randomness)
                 .rlc(randomness, randomness_next_phase);

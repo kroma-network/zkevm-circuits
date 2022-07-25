@@ -68,32 +68,32 @@ pub struct SortKeysConfig {
 type Lookup<F> = (&'static str, Expression<F>, Expression<F>);
 
 /// State Circuit for proving RwTable is valid
-pub type StateCircuit<F, const N_ROWS: usize> = StateCircuitBase<F, false, N_ROWS>;
+pub type StateCircuit<F> = StateCircuitBase<F, false>;
 /// StateCircuit with lexicographic ordering u16 lookup disabled to allow
 /// smaller `k`. It is almost impossible to trigger u16 lookup verification
 /// error. So StateCircuitLight can be used in opcode gadgets test.
 /// Normal opcodes constaints error can still be captured but cost much less
 /// time.
-pub type StateCircuitLight<F, const N_ROWS: usize> = StateCircuitBase<F, true, N_ROWS>;
+pub type StateCircuitLight<F> = StateCircuitBase<F, true>;
 
 /// State Circuit for proving RwTable is valid
 #[derive(Default)]
-pub struct StateCircuitBase<F, const QUICK_CHECK: bool, const N_ROWS: usize> {
+pub struct StateCircuitBase<F, const QUICK_CHECK: bool> {
     pub(crate) randomness: F,
     pub(crate) rows: Vec<Rw>,
+    pub(crate) n_rows: usize,
     #[cfg(test)]
     overrides: HashMap<(test::AdviceColumn, isize), F>,
 }
 
-impl<F: Field, const QUICK_CHECK: bool, const N_ROWS: usize>
-    StateCircuitBase<F, QUICK_CHECK, N_ROWS>
-{
+impl<F: Field, const QUICK_CHECK: bool> StateCircuitBase<F, QUICK_CHECK> {
     /// make a new state circuit from an RwMap
-    pub fn new(randomness: F, rw_map: RwMap) -> Self {
-        let rows = rw_map.table_assignments(randomness);
+    pub fn new(randomness: F, rw_map: RwMap, n_rows: usize) -> Self {
+        let rows = rw_map.table_assignments();
         Self {
             randomness,
             rows,
+            n_rows,
             #[cfg(test)]
             overrides: HashMap::new(),
         }
@@ -113,8 +113,7 @@ impl<F: Field, const QUICK_CHECK: bool, const N_ROWS: usize>
     }
 }
 
-impl<F: Field, const QUICK_CHECK: bool, const N_ROWS: usize> Circuit<F>
-    for StateCircuitBase<F, QUICK_CHECK, N_ROWS>
+impl<F: Field, const QUICK_CHECK: bool> Circuit<F> for StateCircuitBase<F, QUICK_CHECK>
 where
     F: Field,
 {
@@ -223,10 +222,9 @@ where
         layouter.assign_region(
             || "rw table",
             |mut region| {
-                let padding_length = N_ROWS - self.rows.len();
-                let padding = (1..=padding_length).map(|rw_counter| Rw::Start { rw_counter });
-
-                let rows = padding.chain(self.rows.iter().cloned());
+                let (rows, padding_length) =
+                    RwMap::table_assignments_prepad(self.rows.clone(), self.n_rows);
+                let rows = rows.into_iter();
                 let prev_rows = once(None).chain(rows.clone().map(Some));
 
                 let mut initial_value = F::zero();

@@ -240,6 +240,7 @@ pub mod test {
             layouter: &mut impl Layouter<F>,
             rws: &RwMap,
             randomness: F,
+            n_rows: usize,
         ) -> Result<(), Error> {
             layouter.assign_region(
                 || "rw table",
@@ -247,8 +248,13 @@ pub mod test {
                     rws.check_rw_counter_sanity();
                     // TODO: fix this after cs.challenge() is implemented in halo2
                     let randomness_phase_next = randomness;
-                    self.rw_table
-                        .assign(&mut region, randomness, rws, randomness_phase_next)?;
+                    self.rw_table.assign(
+                        &mut region,
+                        randomness,
+                        rws,
+                        randomness_phase_next,
+                        n_rows,
+                    )?;
                     Ok(())
                 },
             )
@@ -439,14 +445,19 @@ pub mod test {
                 .load_fixed_table(&mut layouter, self.fixed_table_tags.clone())?;
             config.evm_circuit.load_byte_table(&mut layouter)?;
             config.load_txs(&mut layouter, &self.block.txs, self.block.randomness)?;
-            config.load_rws(&mut layouter, &self.block.rws, self.block.randomness)?;
+            config.load_rws(
+                &mut layouter,
+                &self.block.rws,
+                self.block.randomness,
+                self.block.state_circuit_pad_to,
+            )?;
             config.load_bytecodes(
                 &mut layouter,
                 self.block.bytecodes.values(),
                 self.block.randomness,
             )?;
             config.load_block(&mut layouter, &self.block.context, self.block.randomness)?;
-            if self.block.pad_to != 0 {
+            if self.block.evm_circuit_pad_to != 0 {
                 config.evm_circuit.assign_block(&mut layouter, &self.block)
             } else {
                 config
