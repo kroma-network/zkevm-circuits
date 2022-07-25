@@ -230,20 +230,16 @@ fn down_cast_to_opcode(opcode_id: &OpcodeId) -> &dyn Opcode {
             warn!("Using dummy gen_selfdestruct_ops for opcode SELFDESTRUCT");
             &DummySelfDestruct
         }
-        // OpcodeId::CALLCODE | OpcodeId::DELEGATECALL | OpcodeId::STATICCALL => {
-        //     warn!("Using dummy gen_call_ops for opcode {:?}", opcode_id);
-        //     &Call
-        // }
         OpcodeId::CREATE => {
-            warn!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
+            log::debug!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
             &DummyCreate::<false>
         }
         OpcodeId::CREATE2 => {
-            warn!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
+            log::debug!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
             &DummyCreate::<true>
         }
         _ => {
-            warn!("Using dummy gen_associated_ops for opcode {:?}", opcode_id);
+            log::debug!("Using dummy gen_associated_ops for opcode {:?}", opcode_id);
             &Dummy
         }
     }
@@ -262,7 +258,7 @@ pub fn gen_associated_ops(
     let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
     let next_step = if geth_steps.len() > 1 {
-        Some(&geth_steps[0])
+        Some(&geth_steps[1])
     } else {
         None
     };
@@ -282,27 +278,20 @@ pub fn gen_associated_ops(
             return Ok(vec![exec_step]);
         }
     }
+
     // if no errors, continue as normal
-
-    #[cfg(test)]
-    println!(
-        "{:?} {}",
-        opcode_id,
-        hex::encode(&state.call_ctx()?.memory.0)
-    );
-
     let memory_enabled = !geth_steps.iter().all(|s| s.memory.is_empty());
     if memory_enabled {
-        let check_level = 1; // 0: no check, 1: check and log error and fix, 2: check and assert_eq
+        let check_level = 0; // 0: no check, 1: check and log error and fix, 2: check and assert_eq
         match check_level {
             1 => {
                 if state.call_ctx()?.memory != geth_steps[0].memory {
                     log::error!("wrong mem: {:?} goes wrong. len in state {}, len in step0 {}. state mem {:?} step mem {:?}",
-                    opcode_id,
-                    &state.call_ctx()?.memory.len(),
-                    &geth_steps[0].memory.len(),
-                    &state.call_ctx()?.memory,
-                    &geth_steps[0].memory);
+                        opcode_id,
+                        &state.call_ctx()?.memory.len(),
+                        &geth_steps[0].memory.len(),
+                        &state.call_ctx()?.memory,
+                        &geth_steps[0].memory);
                     state.call_ctx_mut()?.memory = geth_steps[0].memory.clone();
                 }
             }
@@ -321,27 +310,6 @@ pub fn gen_associated_ops(
     }
 
     let steps = opcode.gen_associated_ops(state, geth_steps)?;
-
-    if geth_steps.len() > 1 {
-        // if !geth_steps[1].memory.borrow().is_empty() {
-        //     // memory trace is enabled or it is a call
-        //     assert_eq!(geth_steps[1].memory.borrow().deref(), &memory, "{:?}
-        // goes wrong", opcode_id); } else {
-        //     if opcode_id.is_call() {
-        //         if geth_steps[0].depth == geth_steps[1].depth {
-        //             geth_steps[1].memory.replace(memory.clone());
-        //         } else {
-        //             geth_steps[1].memory.replace(Memory::default());
-        //         }
-        //     } else {
-        //         // debug: enable trace = true
-        //         // TODO: comment this when mem trace = false(auto) ..
-        // heihei...         //assert_eq!(geth_steps[1].memory.borrow().
-        // deref(), &memory);         geth_steps[1].memory.
-        // replace(memory.clone());     }
-        // }
-    }
-
     Ok(steps)
 }
 

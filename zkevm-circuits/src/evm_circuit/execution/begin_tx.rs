@@ -186,7 +186,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             rw_counter: Delta(22.expr()),
             call_id: To(call_id.expr()),
             is_root: To(true.expr()),
-            is_create: To(false.expr()),
+            is_create: To(tx_is_create.expr()),
             code_hash: To(code_hash.expr()),
             gas_left: To(gas_left),
             reversible_write_counter: To(2.expr()),

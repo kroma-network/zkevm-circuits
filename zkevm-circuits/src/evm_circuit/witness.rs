@@ -402,7 +402,7 @@ impl RwMap {
     }
 
     pub fn table_assignments_prepad(rows: Vec<Rw>, target_len: usize) -> (Vec<Rw>, usize) {
-        let padding_length = if target_len >= rows.len() {
+        let padding_length = if target_len > rows.len() {
             target_len - rows.len()
         } else {
             if target_len != 0 {
@@ -412,7 +412,7 @@ impl RwMap {
                     rows.len()
                 );
             }
-            0
+            1
         };
         let padding = (1..=padding_length).map(|rw_counter| Rw::Start { rw_counter });
         (padding.chain(rows.into_iter()).collect(), padding_length)

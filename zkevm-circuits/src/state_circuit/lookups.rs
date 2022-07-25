@@ -54,7 +54,7 @@ impl<const QUICK_CHECK: bool> Config<QUICK_CHECK> {
             });
         } else {
             log::debug!(
-                "{} u16 range check is skipped because `QUICK_CHECK` is enabled",
+                "\"{}\" u16 range check is skipped because `QUICK_CHECK` is enabled",
                 msg
             );
         }

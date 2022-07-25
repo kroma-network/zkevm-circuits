@@ -322,18 +322,12 @@ impl OpcodeId {
 
     /// ..
     pub fn is_call7(&self) -> bool {
-        match &self {
-            Self::CALL | Self::CALLCODE => true,
-            _ => false,
-        }
+        matches!(self, Self::CALL | Self::CALLCODE)
     }
 
     /// ..
     pub fn is_call6(&self) -> bool {
-        match &self {
-            Self::DELEGATECALL | Self::STATICCALL => true,
-            _ => false,
-        }
+        matches!(self, Self::DELEGATECALL | Self::STATICCALL)
     }
 
     /// Returns `true` if the `OpcodeId` is a `DUPn`.

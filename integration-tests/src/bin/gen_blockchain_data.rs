@@ -1,10 +1,7 @@
 use ethers::{
     abi::{self, Tokenize},
     contract::{builders::ContractCall, Contract, ContractFactory},
-    core::types::{
-        transaction::eip2718::TypedTransaction, Address, TransactionReceipt, TransactionRequest,
-        U256,
-    },
+    core::types::{transaction::eip2718::TypedTransaction, Address, TransactionRequest, U256},
     core::utils::WEI_IN_ETHER,
     middleware::SignerMiddleware,
     prelude::{k256::ecdsa::SigningKey, Eip1559TransactionRequest, NonceManagerMiddleware, Wallet},
@@ -62,6 +59,7 @@ where
     call.tx
 }
 
+/*
 async fn send_confirm_tx<M>(prov: &Arc<M>, tx: TypedTransaction) -> TransactionReceipt
 where
     M: Middleware,
@@ -74,6 +72,7 @@ where
         .unwrap()
         .unwrap()
 }
+*/
 
 #[tokio::main]
 async fn main() {

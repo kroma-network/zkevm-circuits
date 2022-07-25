@@ -50,11 +50,15 @@ impl<F: Field, const N_POP: usize, const N_PUSH: usize, const S: ExecutionState>
         _: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        let full_dummy = true;
+        if full_dummy {
+            return Ok(());
+        }
         // this happens if some opcodes are in the
         // process of being implemented but are still
         // using DummyGadget.
         // See `bus-mapping/src/evm/opcodes.rs`
-        if true || step.rw_indices.len() != N_POP + N_PUSH {
+        if step.rw_indices.len() != N_POP + N_PUSH {
             //log::warn!("DummyGadget: wrong number of rw indices for {:?}", step);
             return Ok(());
         }

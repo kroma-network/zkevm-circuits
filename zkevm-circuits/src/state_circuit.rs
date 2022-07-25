@@ -137,7 +137,6 @@ where
 
         let rw_counter = MpiChip::configure(meta, selector, lookups);
         let is_write = meta.advice_column();
-        log::info!("is_write col {:?}", is_write);
         let tag = BinaryNumberChip::configure(meta, selector);
         let id = MpiChip::configure(meta, selector, lookups);
         let address = MpiChip::configure(meta, selector, lookups);
@@ -150,7 +149,7 @@ where
         // committed_value
         let aux2 = meta.advice_column();
 
-        log::info!(
+        log::debug!(
             "rw cols {:?}",
             (
                 rw_counter.value,

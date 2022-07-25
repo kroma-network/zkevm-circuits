@@ -765,44 +765,36 @@ impl<F: Field> ExecutionConfig<F> {
                     let height = self.get_step_height(step.execution_state);
                     // Assign the step witness
                     let next = steps.peek();
-                    if let Some(&(t, _c, _s)) = next {
-                        if t != transaction {
-                            let mut tx = transaction.clone();
-                            tx.call_data.clear();
-                            tx.calls.clear();
-                            tx.steps.clear();
-                            let total_gas = if step.execution_state == ExecutionState::EndTx {
-                                let gas_used = tx.gas - step.gas_left;
-                                let current_cumulative_gas_used: u64 = if tx.id == 1 {
-                                    0
-                                } else {
-                                    // first transaction needs TxReceiptFieldTag::COUNT(3) lookups
-                                    // to tx receipt,
-                                    // while later transactions need 4 (with one extra cumulative
-                                    // gas read) lookups
-                                    let rw = &block.rws[(
-                                        RwTableTag::TxReceipt,
-                                        (tx.id - 2) * (TxReceiptFieldTag::COUNT + 1) + 2,
-                                    )];
-                                    rw.receipt_value()
-                                };
-                                current_cumulative_gas_used + gas_used
-                            } else {
-                                log::error!("last step not end tx? {:?}", step);
+                    if step.execution_state == ExecutionState::EndTx {
+                        let mut tx = transaction.clone();
+                        tx.call_data.clear();
+                        tx.calls.clear();
+                        tx.steps.clear();
+                        let total_gas = {
+                            let gas_used = tx.gas - step.gas_left;
+                            let current_cumulative_gas_used: u64 = if tx.id == 1 {
                                 0
+                            } else {
+                                // first transaction needs TxReceiptFieldTag::COUNT(3) lookups
+                                // to tx receipt,
+                                // while later transactions need 4 (with one extra cumulative
+                                // gas read) lookups
+                                let rw = &block.rws[(
+                                    RwTableTag::TxReceipt,
+                                    (tx.id - 2) * (TxReceiptFieldTag::COUNT + 1) + 2,
+                                )];
+                                rw.receipt_value()
                             };
-
-                            log::info!(
-                                "offset {} tx_num {} total_gas {} assign last step {:?} of tx {:?}",
-                                offset,
-                                tx.id,
-                                total_gas,
-                                step,
-                                tx
-                            );
-                        }
-                    } else {
-                        log::info!("assign last step of block");
+                            current_cumulative_gas_used + gas_used
+                        };
+                        log::debug!(
+                            "offset {} tx_num {} total_gas {} assign last step {:?} of tx {:?}",
+                            offset,
+                            tx.id,
+                            total_gas,
+                            step,
+                            tx
+                        );
                     }
                     self.assign_exec_step(
                         &mut region,
@@ -887,7 +879,7 @@ impl<F: Field> ExecutionConfig<F> {
 
                 if !exact {
                     if block.evm_circuit_pad_to != 0 {
-                        log::info!("pad block height to {}", block.pad_to);
+                        log::debug!("pad block height to {}", block.evm_circuit_pad_to);
                         // Pad leftover region to the desired capacity
                         if offset >= block.evm_circuit_pad_to {
                             panic!("row not enough");
@@ -904,11 +896,11 @@ impl<F: Field> ExecutionConfig<F> {
                         log::warn!("assign_block with exact = false, but pad_to not provided");
                     }
                 }
-                log::info!("Execution step assign done");
+                log::debug!("assign for region done");
                 Ok(())
             },
         )?;
-        log::info!("assign_block done");
+        log::debug!("assign_block done");
         Ok(())
     }
 
@@ -1160,7 +1152,7 @@ impl<F: Field> ExecutionConfig<F> {
         Ok(assigned_stored_expressions)
     }
     fn check_rw_lookup(
-        assigned_stored_expressions: &Vec<(String, F)>,
+        assigned_stored_expressions: &[(String, F)],
         offset: usize,
         step: &ExecStep,
         call: &Call,

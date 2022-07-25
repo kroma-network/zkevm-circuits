@@ -411,25 +411,22 @@ impl<'a> CircuitInputStateRef<'a> {
             },
         )?;
 
-        // FIXME: is this correct?
-        if true || !self.is_precompiled(&receiver) {
-            let (found, receiver_account) = self.sdb.get_account(&receiver);
-            if !found {
-                return Err(Error::AccountNotFound(receiver));
-            }
-            let receiver_balance_prev = receiver_account.balance;
-            let receiver_balance = receiver_account.balance + value;
-            self.push_op_reversible(
-                step,
-                RW::WRITE,
-                AccountOp {
-                    address: receiver,
-                    field: AccountField::Balance,
-                    value: receiver_balance,
-                    value_prev: receiver_balance_prev,
-                },
-            )?;
+        let (found, receiver_account) = self.sdb.get_account(&receiver);
+        if !found {
+            return Err(Error::AccountNotFound(receiver));
         }
+        let receiver_balance_prev = receiver_account.balance;
+        let receiver_balance = receiver_account.balance + value;
+        self.push_op_reversible(
+            step,
+            RW::WRITE,
+            AccountOp {
+                address: receiver,
+                field: AccountField::Balance,
+                value: receiver_balance,
+                value_prev: receiver_balance_prev,
+            },
+        )?;
 
         Ok(())
     }
@@ -963,6 +960,12 @@ impl<'a> CircuitInputStateRef<'a> {
                 };
                 let (found, _) = self.sdb.get_account(&address);
                 if found {
+                    log::error!(
+                        "create address collision at {:?}, step {:?}, next_step {:?}",
+                        address,
+                        step,
+                        next_step
+                    );
                     return Ok(Some(ExecError::ContractAddressCollision));
                 }
             }

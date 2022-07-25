@@ -128,14 +128,17 @@ impl<F: Field> EvmCircuit<F> {
     }
 
     pub fn get_num_rows_required(&self, block: &Block<F>) -> usize {
-        // Start at 1 so we can be sure there is an unused `next` row available
-        let mut num_rows = 1;
+        let mut num_rows = 0;
         for transaction in &block.txs {
             for step in &transaction.steps {
                 num_rows += self.execution.get_step_height(step.execution_state);
             }
         }
-        num_rows
+        if num_rows == 0 {
+            return 0;
+        }
+        // add 1 so we can be sure there is an unused `next` row available
+        num_rows + 1
     }
 }
 
