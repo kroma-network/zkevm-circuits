@@ -49,6 +49,7 @@ mod dummy;
 mod dup;
 mod end_block;
 mod end_tx;
+mod error_depth;
 mod error_invalid_jump;
 mod error_oog_constant;
 mod error_oog_static_memory;

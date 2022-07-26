@@ -53,6 +53,7 @@ mod stackonlyop;
 mod stop;
 mod swap;
 
+mod error_depth;
 mod error_invalid_jump;
 
 #[cfg(test)]
@@ -71,6 +72,7 @@ use codecopy::Codecopy;
 use codesize::Codesize;
 use create::DummyCreate;
 use dup::Dup;
+use error_depth::ErrorDepth;
 use error_invalid_jump::ErrorInvalidJump;
 use exp::Exponentiation;
 use extcodecopy::Extcodecopy;
@@ -260,6 +262,7 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
 
 fn fn_gen_error_state_associated_ops(error: &ExecError) -> FnGenAssociatedOps {
     match error {
+        ExecError::Depth => ErrorDepth::gen_associated_ops,
         ExecError::InvalidJump => ErrorInvalidJump::gen_associated_ops,
         // more future errors place here
         _ => {
@@ -309,14 +312,15 @@ pub fn gen_associated_ops(
         if exec_step.oog_or_stack_error() {
             state.gen_restore_context_ops(&mut exec_step, geth_steps)?;
         } else {
-            if geth_step.op.is_call_or_create() {
-                let call = state.parse_call(geth_step)?;
-                // Switch to callee's call context
-                state.push_call(call);
-            } else {
-                let fn_gen_error_associated_ops = fn_gen_error_state_associated_ops(&exec_error);
-                return fn_gen_error_associated_ops(state, geth_steps);
-            }
+            // FIXME
+            // if geth_step.op.is_call_or_create() {
+            //     let call = state.parse_call(geth_step)?;
+            //     // Switch to callee's call context
+            //     state.push_call(call);
+            // } else {
+            let fn_gen_error_associated_ops = fn_gen_error_state_associated_ops(&exec_error);
+            return fn_gen_error_associated_ops(state, geth_steps);
+            // }
         }
 
         state.handle_return(geth_step)?;
