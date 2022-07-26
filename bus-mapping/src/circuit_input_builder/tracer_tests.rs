@@ -421,6 +421,7 @@ fn tracer_err_address_collision() {
         .find(|(_, s)| s.op == OpcodeId::CREATE2)
         .unwrap();
     let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let memory = next_step.unwrap().memory.clone();
 
     let create2_address: Address = {
         // get first RETURN
@@ -439,6 +440,7 @@ fn tracer_err_address_collision() {
     // Set up call context at CREATE2
     builder.tx_ctx.call_is_success.push(false);
     builder.state_ref().push_call(mock_internal_create());
+    builder.state_ref().call_ctx_mut().unwrap().memory = memory;
     // Set up account and contract that exist during the second CREATE2
     builder.builder.sdb.set_account(
         &ADDR_B,
@@ -656,6 +658,10 @@ fn tracer_err_invalid_code() {
     .unwrap()
     .into();
 
+    println!(
+        "{}",
+        serde_json::to_string(&block.geth_traces[0].struct_logs).unwrap()
+    );
     // get last RETURN
     let (index, step) = block.geth_traces[0]
         .struct_logs
@@ -671,6 +677,7 @@ fn tracer_err_invalid_code() {
     // Set up call context at RETURN
     builder.tx_ctx.call_is_success.push(false);
     builder.state_ref().push_call(mock_internal_create());
+    builder.state_ref().call_ctx_mut().unwrap().memory = step.memory.clone();
     assert_eq!(
         builder.state_ref().get_step_err(step, next_step).unwrap(),
         Some(ExecError::InvalidCreationCode)
@@ -1584,6 +1591,7 @@ fn create2_address() {
         .unwrap();
     let next_step_return = block.geth_traces[0].struct_logs.get(index_return + 1);
     let addr_expect = next_step_return.unwrap().stack.last().unwrap();
+    let memory = next_step_return.unwrap().memory.clone();
 
     // get CREATE2
     let step_create2 = block.geth_traces[0]
@@ -1595,6 +1603,7 @@ fn create2_address() {
     // Set up call context at CREATE2
     builder.tx_ctx.call_is_success.push(false);
     builder.state_ref().push_call(mock_internal_create());
+    builder.state_ref().call_ctx_mut().unwrap().memory = memory;
     let addr = builder.state_ref().create2_address(step_create2).unwrap();
 
     assert_eq!(addr.to_word(), addr_expect);
