@@ -237,6 +237,8 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         self.tx_gas.assign(region, offset, Some(F::from(tx.gas)))?;
         self.tx_gas_price
             .assign(region, offset, Some(tx.gas_price.to_le_bytes()))?;
+        self.tx_value
+            .assign(region, offset, Some(tx.value.to_le_bytes()))?;
         self.mul_gas_fee_by_gas
             .assign(region, offset, tx.gas_price, tx.gas, gas_fee)?;
         self.tx_caller_address

@@ -201,7 +201,13 @@ impl Transaction {
                     F::from(self.id as u64),
                     F::from(TxContextFieldTag::CalleeAddress as u64),
                     F::zero(),
-                    self.callee_address.to_scalar().unwrap(),
+                    (if self.is_create {
+                        self.calls[0].callee_address
+                    } else {
+                        self.callee_address
+                    })
+                    .to_scalar()
+                    .unwrap(),
                 ],
                 [
                     F::from(self.id as u64),
@@ -222,7 +228,11 @@ impl Transaction {
                     F::from(self.id as u64),
                     F::from(TxContextFieldTag::CallDataLength as u64),
                     F::zero(),
-                    F::from(self.call_data_length as u64),
+                    F::from(if self.is_create {
+                        0
+                    } else {
+                        self.call_data_length
+                    } as u64),
                 ],
                 [
                     F::from(self.id as u64),
