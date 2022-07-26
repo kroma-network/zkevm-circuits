@@ -15,6 +15,7 @@ use eth_types::{
 use keccak256::EMPTY_HASH;
 use log::warn;
 use std::collections::HashMap;
+use std::hint::unreachable_unchecked;
 
 mod call;
 mod calldatacopy;
@@ -108,10 +109,6 @@ type FnGenAssociatedOps = fn(
 ) -> Result<Vec<ExecStep>, Error>;
 
 fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
-    if opcode_id.is_push() {
-        return StackOnlyOpcode::<0, 1>::gen_associated_ops;
-    }
-
     match opcode_id {
         OpcodeId::STOP => Stop::gen_associated_ops,
         OpcodeId::ADD => StackOnlyOpcode::<2, 1>::gen_associated_ops,
@@ -214,26 +211,29 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
         OpcodeId::LOG2 => Log::gen_associated_ops,
         OpcodeId::LOG3 => Log::gen_associated_ops,
         OpcodeId::LOG4 => Log::gen_associated_ops,
-        OpcodeId::CALL => Call::gen_associated_ops,
+        OpcodeId::CALL => Call::<7>::gen_associated_ops,
+        OpcodeId::CALLCODE => Call::<7>::gen_associated_ops,
         OpcodeId::RETURN => Return::gen_associated_ops,
+        OpcodeId::DELEGATECALL => Call::<6>::gen_associated_ops,
+        OpcodeId::STATICCALL => Call::<6>::gen_associated_ops,
         // REVERT is almost the same as RETURN)
         OpcodeId::REVERT => Return::gen_associated_ops,
         OpcodeId::SELFDESTRUCT => {
             warn!("Using dummy gen_selfdestruct_ops for opcode SELFDESTRUCT");
             DummySelfDestruct::gen_associated_ops
         }
-        OpcodeId::CALLCODE | OpcodeId::DELEGATECALL | OpcodeId::STATICCALL => {
-            warn!("Using dummy gen_call_ops for opcode {:?}", opcode_id);
-            DummyCall::gen_associated_ops
-        }
         OpcodeId::CREATE | OpcodeId::CREATE2 => {
             warn!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
             DummyCreate::gen_associated_ops
         }
-        _ => {
+        OpcodeId::INVALID(_) => {
             warn!("Using dummy gen_associated_ops for opcode {:?}", opcode_id);
             Dummy::gen_associated_ops
         }
+        _ if opcode_id.is_push() => StackOnlyOpcode::<0, 1>::gen_associated_ops,
+        // # Safety
+        // We can prove this match is exhaustive, so let's tell the compiler the truth.
+        _ => unsafe { unreachable_unchecked() },
     }
 }
 
@@ -247,6 +247,13 @@ pub fn gen_associated_ops(
 ) -> Result<Vec<ExecStep>, Error> {
     let fn_gen_associated_ops = fn_gen_associated_ops(opcode_id);
 
+    #[cfg(test)]
+    println!(
+        "{:?} {}",
+        opcode_id,
+        hex::encode(&state.call_ctx()?.memory.0)
+    );
+
     let memory_enabled = !geth_steps.iter().all(|s| s.memory.is_empty());
     if memory_enabled {
         assert_eq!(
@@ -258,26 +265,6 @@ pub fn gen_associated_ops(
     }
 
     let steps = fn_gen_associated_ops(state, geth_steps)?;
-
-    if geth_steps.len() > 1 {
-        // if !geth_steps[1].memory.borrow().is_empty() {
-        //     // memory trace is enabled or it is a call
-        //     assert_eq!(geth_steps[1].memory.borrow().deref(), &memory, "{:?}
-        // goes wrong", opcode_id); } else {
-        //     if opcode_id.is_call() {
-        //         if geth_steps[0].depth == geth_steps[1].depth {
-        //             geth_steps[1].memory.replace(memory.clone());
-        //         } else {
-        //             geth_steps[1].memory.replace(Memory::default());
-        //         }
-        //     } else {
-        //         // debug: enable trace = true
-        //         // TODO: comment this when mem trace = false(auto) ..
-        // heihei...         //assert_eq!(geth_steps[1].memory.borrow().
-        // deref(), &memory);         geth_steps[1].memory.
-        // replace(memory.clone());     }
-        // }
-    }
 
     Ok(steps)
 }
@@ -526,61 +513,6 @@ pub fn gen_end_tx_ops(
     }
 
     Ok(exec_step)
-}
-
-#[derive(Debug, Copy, Clone)]
-struct DummyCall;
-
-impl Opcode for DummyCall {
-    fn gen_associated_ops(
-        state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep],
-    ) -> Result<Vec<ExecStep>, Error> {
-        dummy_gen_call_ops(state, geth_steps)
-    }
-}
-
-fn dummy_gen_call_ops(
-    state: &mut CircuitInputStateRef,
-    geth_steps: &[GethExecStep],
-) -> Result<Vec<ExecStep>, Error> {
-    let geth_step = &geth_steps[0];
-    let mut exec_step = state.new_step(geth_step)?;
-
-    let tx_id = state.tx_ctx.id();
-    let call = state.parse_call(geth_step)?;
-
-    let (_, account) = state.sdb.get_account(&call.address);
-    let callee_code_hash = account.code_hash;
-
-    let is_warm = state.sdb.check_account_in_access_list(&call.address);
-    state.push_op_reversible(
-        &mut exec_step,
-        RW::WRITE,
-        TxAccessListAccountOp {
-            tx_id,
-            address: call.address,
-            is_warm: true,
-            is_warm_prev: is_warm,
-        },
-    )?;
-
-    state.push_call(call.clone());
-
-    match (
-        state.is_precompiled(&call.address),
-        callee_code_hash.to_fixed_bytes() == *EMPTY_HASH,
-    ) {
-        // 1. Call to precompiled.
-        (true, _) => Ok(vec![exec_step]),
-        // 2. Call to account with empty code.
-        (_, true) => {
-            state.handle_return(geth_step)?;
-            Ok(vec![exec_step])
-        }
-        // 3. Call to account with non-empty code.
-        (_, false) => Ok(vec![exec_step]),
-    }
 }
 
 #[derive(Debug, Copy, Clone)]

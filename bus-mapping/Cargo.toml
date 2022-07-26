@@ -13,8 +13,13 @@ ethers-providers = "0.6"
 itertools = "0.10"
 lazy_static = "1.4"
 log = "0.4.14"
-serde = {version = "1.0.130", features = ["derive"] }
-serde_json = "1.0.66"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dependencies.precompiled-adaptor]
+git = "https://github.com/scroll-tech/precompiled-adaptor.git"
+rev = "927777002cf7d7b0b35d6ace559a18282c766e52"
+features = ["legacy"]
 
 [dev-dependencies]
 hex = "0.4.3"
