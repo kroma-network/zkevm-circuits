@@ -358,7 +358,7 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature="skip")]
 mod return_tests {
     use crate::mock::BlockData;
     use eth_types::geth_types::GethData;
