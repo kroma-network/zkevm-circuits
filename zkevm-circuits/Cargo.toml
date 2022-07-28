@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 ff = "0.11"
-halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "scroll-dev-0607" }
+halo2_proofs = { path = "../../halo2-gpu/halo2_proofs" }
 bigint = "4"
 num = "0.4"
 sha3 = "0.10"
