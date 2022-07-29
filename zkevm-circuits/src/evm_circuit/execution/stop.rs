@@ -120,7 +120,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
             .assign(region, offset, Some(F::from(opcode.as_u64())))?;
 
         self.restore_context
-            .assign(region, offset, block, call, step)?;
+            .assign(region, offset, block, call, step, 0)?;
 
         Ok(())
     }

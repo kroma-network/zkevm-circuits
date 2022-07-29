@@ -38,8 +38,6 @@ impl Opcode for Return {
             state.call_context_read(&mut exec_step, call.call_id, field, value);
         }
 
-        // let result = state.handle_stop(steps);
-
         if call.is_root {
             state.call_context_read(
                 &mut exec_step,
@@ -48,48 +46,48 @@ impl Opcode for Return {
                 call.is_persistent.to_word(),
             );
         } else {
-            // let caller = self.caller()?.clone();
-            // self.call_context_read(
-            //     &mut exec_step,
-            //     call.call_id,
-            //     CallContextField::CallerId,
-            //     caller.call_id.into(),
-            // );
+            let caller = *state.caller()?;
+            state.call_context_read(
+                &mut exec_step,
+                call.call_id,
+                CallContextField::CallerId,
+                caller.call_id.into(),
+            );
 
-            // let geth_step_next = &steps[1];
-            // let caller_gas_left = geth_step_next.gas.0 - geth_step.gas.0;
-            // for (field, value) in [
-            //     (CallContextField::IsRoot, (caller.is_root as u64).into()),
-            //     (
-            //         CallContextField::IsCreate,
-            //         (caller.is_create() as u64).into(),
-            //     ),
-            //     (CallContextField::CodeHash, caller.code_hash.to_word()),
-            //     (CallContextField::ProgramCounter,
-            // geth_step_next.pc.0.into()),     (
-            //         CallContextField::StackPointer,
-            //         geth_step_next.stack.stack_pointer().0.into(),
-            //     ),
-            //     (CallContextField::GasLeft, caller_gas_left.into()),
-            //     (
-            //         CallContextField::MemorySize,
-            //         geth_step_next.memory.word_size().into(),
-            //     ),
-            //     (
-            //         CallContextField::ReversibleWriteCounter,
-            //         self.caller_ctx()?.reversible_write_counter.into(),
-            //     ),
-            // ] {
-            //     self.call_context_read(&mut exec_step, caller.call_id, field,
-            // value); }
-            //
-            // for (field, value) in [
-            //     (CallContextField::LastCalleeId, call.call_id.into()),
-            //     (CallContextField::LastCalleeReturnDataOffset, 0.into()),
-            //     (CallContextField::LastCalleeReturnDataLength, 0.into()),
-            // ] {
-            //     self.call_context_write(&mut exec_step, caller.call_id,
-            // field, value); }
+            let geth_step_next = &steps[1];
+            let caller_gas_left = geth_step_next.gas.0 - step.gas.0;
+            for (field, value) in [
+                (CallContextField::IsRoot, (caller.is_root as u64).into()),
+                (
+                    CallContextField::IsCreate,
+                    (caller.is_create() as u64).into(),
+                ),
+                (CallContextField::CodeHash, caller.code_hash.to_word()),
+                (CallContextField::ProgramCounter, geth_step_next.pc.0.into()),
+                (
+                    CallContextField::StackPointer,
+                    geth_step_next.stack.stack_pointer().0.into(),
+                ),
+                (CallContextField::GasLeft, caller_gas_left.into()),
+                (
+                    CallContextField::MemorySize,
+                    geth_step_next.memory.word_size().into(),
+                ),
+                (
+                    CallContextField::ReversibleWriteCounter,
+                    state.caller_ctx()?.reversible_write_counter.into(),
+                ),
+            ] {
+                state.call_context_read(&mut exec_step, caller.call_id, field, value);
+            }
+
+            for (field, value) in [
+                (CallContextField::LastCalleeId, call.call_id.into()),
+                (CallContextField::LastCalleeReturnDataOffset, offset),
+                (CallContextField::LastCalleeReturnDataLength, length),
+            ] {
+                state.call_context_write(&mut exec_step, caller.call_id, field, value);
+            }
         }
 
         state.handle_return(step)?;

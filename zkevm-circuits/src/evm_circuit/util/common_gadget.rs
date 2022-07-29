@@ -6,7 +6,7 @@ use crate::{
         util::{
             constraint_builder::{
                 ConstraintBuilder, ReversionInfo, StepStateTransition,
-                Transition::{Delta, Same, To},
+                Transition::{Delta, Same, To, Any},
             },
             math_gadget::{AddWordsGadget, RangeCheckGadget},
             Cell, Word,
@@ -151,8 +151,10 @@ impl<F: Field> RestoreContextGadget<F> {
         };
 
         // Do step state transition
+
         cb.require_step_state_transition(StepStateTransition {
-            rw_counter: Delta(rw_counter_delta + 12.expr()),
+            // rw_counter: Delta(rw_counter_delta + 12.expr()),
+            rw_counter: Any,
             call_id: To(caller_id.expr()),
             is_root: To(caller_is_root.expr()),
             is_create: To(caller_is_create.expr()),
@@ -161,7 +163,8 @@ impl<F: Field> RestoreContextGadget<F> {
             stack_pointer: To(caller_stack_pointer.expr()),
             gas_left: To(gas_left.expr()),
             memory_word_size: To(caller_memory_word_size.expr()),
-            reversible_write_counter: To(reversible_write_counter),
+            reversible_write_counter: Any,
+            // reversible_write_counter: To(reversible_write_counter),
             log_id: Same,
         });
 
@@ -185,23 +188,18 @@ impl<F: Field> RestoreContextGadget<F> {
         block: &Block<F>,
         call: &Call,
         step: &ExecStep,
+        rw_offset: usize,
     ) -> Result<(), Error> {
         let [caller_id, caller_is_root, caller_is_create, caller_code_hash, caller_program_counter, caller_stack_pointer, caller_gas_left, caller_memory_word_size, caller_reversible_write_counter] =
             if call.is_root {
                 [U256::zero(); 9]
             } else {
-                [
-                    step.rw_indices[1],
-                    step.rw_indices[2],
-                    step.rw_indices[3],
-                    step.rw_indices[4],
-                    step.rw_indices[5],
-                    step.rw_indices[6],
-                    step.rw_indices[7],
-                    step.rw_indices[8],
-                    step.rw_indices[9],
-                ]
-                .map(|idx| block.rws[idx].call_context_value())
+                [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                    .map(|i| step.rw_indices[i + rw_offset])
+                    .map(|idx| {
+                        // dbg!(idx);
+                        block.rws[idx].call_context_value()
+                    })
             };
 
         for (cell, value) in [
@@ -217,7 +215,9 @@ impl<F: Field> RestoreContextGadget<F> {
                 caller_reversible_write_counter,
             ),
         ] {
+            // dbg!(value, "assigned!!!");
             cell.assign(region, offset, value.to_scalar())?;
+            // dbg!(value, "assigned successfully!!!");
         }
 
         self.caller_code_hash.assign(

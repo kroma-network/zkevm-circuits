@@ -25,7 +25,7 @@ pub(crate) struct ReturnGadget<F> {
     is_root: Cell<F>,
     is_create: Cell<F>,
     is_success: Cell<F>,
-    // restore_context: RestoreContextGadget<F>,
+    restore_context: RestoreContextGadget<F>,
 }
 
 // This will handle reverts too?
@@ -40,12 +40,12 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
 
         let length = cb.query_rlc::<32>();
         let offset = cb.query_rlc::<32>();
-        cb.stack_pop(length.expr());
-        cb.stack_pop(offset.expr());
+        cb.stack_pop(length.expr()); // +1
+        cb.stack_pop(offset.expr()); // +2
 
-        let is_root = cb.call_context(None, CallContextFieldTag::IsRoot);
-        let is_create = cb.call_context(None, CallContextFieldTag::IsCreate);
-        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
+        let is_root = cb.call_context(None, CallContextFieldTag::IsRoot); // +3
+        let is_create = cb.call_context(None, CallContextFieldTag::IsCreate); // +4
+        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess); // +5
 
         cb.condition(is_success.expr(), |cb| {
             cb.require_equal(
@@ -69,13 +69,14 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
                 None,
                 CallContextFieldTag::IsPersistent,
                 is_success.expr(),
-            );
+            ); // maybe + 6
         });
         let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
-            // cb.call_context_lookup(0.expr(), None,
-            // CallContextFieldTag::CallerId); RestoreContextGadget:
-            // :construct(cb, 1.expr(), 0.expr(), 0.expr())
+            // rw_counter_delta: Expression<F>,
+            // return_data_offset: Expression<F>,
+            // return_data_length: Expression<F>,
+            RestoreContextGadget::construct(cb, 5.expr(), offset.expr(), length.expr())
         });
 
         Self {
@@ -85,7 +86,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             is_root,
             is_create,
             is_success,
-            // restore_context,
+            restore_context,
         }
     }
 
@@ -128,8 +129,10 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             Some(if call.is_success { F::one() } else { F::zero() }),
         )?;
 
-        // self.restore_context
-        //     .assign(region, offset, block, call, step)?;
+        if !call.is_root {
+            self.restore_context
+                .assign(region, offset, block, call, step, 4)?;
+        }
 
         Ok(())
     }
