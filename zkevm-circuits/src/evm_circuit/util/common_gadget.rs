@@ -31,7 +31,7 @@ pub(crate) struct SameContextGadget<F> {
 impl<F: Field> SameContextGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
-        opcode: Cell<F>,
+        opcode: Cell<F>, // this doesn't need to be a cell?
         step_state_transition: StepStateTransition<F>,
     ) -> Self {
         cb.opcode_lookup(opcode.expr(), 1.expr());
