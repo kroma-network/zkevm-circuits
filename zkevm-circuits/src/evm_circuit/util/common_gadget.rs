@@ -153,8 +153,8 @@ impl<F: Field> RestoreContextGadget<F> {
         // Do step state transition
 
         cb.require_step_state_transition(StepStateTransition {
-            // rw_counter: Delta(rw_counter_delta + 12.expr()),
-            rw_counter: Any,
+            rw_counter: Delta(rw_counter_delta + 12.expr()),
+            // rw_counter: Any,
             call_id: To(caller_id.expr()),
             is_root: To(caller_is_root.expr()),
             is_create: To(caller_is_create.expr()),

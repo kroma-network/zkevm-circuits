@@ -76,6 +76,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             // rw_counter_delta: Expression<F>,
             // return_data_offset: Expression<F>,
             // return_data_length: Expression<F>,
+            // do you need a condition in here???
             RestoreContextGadget::construct(cb, 5.expr(), offset.expr(), length.expr())
         });
 
