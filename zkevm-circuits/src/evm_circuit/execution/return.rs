@@ -24,6 +24,7 @@ pub(crate) struct ReturnGadget<F> {
     is_success: Cell<F>,
 }
 
+// This will handle reverts too?
 impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
     const NAME: &'static str = "RETURN";
 
@@ -42,30 +43,27 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         let is_create = cb.call_context(None, CallContextFieldTag::IsCreate);
         let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
 
-        // cb.condition(is_success.expr(), |cb| {
-        //     cb.require_equal(
-        //         "Opcode should be RETURN",
-        //         opcode.expr(),
-        //         OpcodeId::RETURN.expr(),
-        //     )
-        // });
-        // cb.condition(not::expr(is_success.expr()), |cb| {
-        //     cb.require_equal(
-        //         "Opcode should be REVERT",
-        //         opcode.expr(),
-        //         OpcodeId::REVERT.expr(),
-        //     )
-        // });
+        cb.condition(is_success.expr(), |cb| {
+            cb.require_equal(
+                "Opcode should be RETURN",
+                opcode.expr(),
+                OpcodeId::RETURN.expr(),
+            )
+        });
+        cb.condition(not::expr(is_success.expr()), |cb| {
+            cb.require_equal(
+                "Opcode should be REVERT",
+                opcode.expr(),
+                OpcodeId::REVERT.expr(),
+            )
+        });
 
-        // cb.call_context_lookup(0.expr(), None, CallContextFieldTag::IsSuccess,
-        // 1.expr());
-
-        // cb.condition(is_root.expr(), |cb| {
-        //     cb.require_next_state(ExecutionState::EndTx);
-        // });
-        // cb.condition(not::expr(is_root.expr()), |cb| {
-        //     cb.require_next_state_not(ExecutionState::EndTx)
-        // });
+        cb.condition(is_root.expr(), |cb| {
+            cb.require_next_state(ExecutionState::EndTx);
+        });
+        cb.condition(not::expr(is_root.expr()), |cb| {
+            cb.require_next_state_not(ExecutionState::EndTx)
+        });
 
         // cb.condition()
 
