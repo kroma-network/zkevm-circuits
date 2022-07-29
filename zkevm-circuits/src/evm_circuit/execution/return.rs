@@ -60,9 +60,13 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
 
         cb.condition(is_root.expr(), |cb| {
             cb.require_next_state(ExecutionState::EndTx);
+            //     rw_counter: Delta(rw_counter.expr() + 1.expr()),
+            //     call_id: Delta(0.expr()),
+            //     ..StepStateTransition::default()
+            // });
         });
         cb.condition(not::expr(is_root.expr()), |cb| {
-            cb.require_next_state_not(ExecutionState::EndTx)
+            cb.require_next_state_not(ExecutionState::EndTx);
         });
 
         // cb.condition()

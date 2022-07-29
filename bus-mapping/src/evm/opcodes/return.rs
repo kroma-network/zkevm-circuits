@@ -38,6 +38,7 @@ impl Opcode for Return {
             state.call_context_read(&mut exec_step, call.call_id, field, value);
         }
 
+        // let result = state.handle_stop(steps);
         state.handle_return(step)?;
         Ok(vec![exec_step])
     }
