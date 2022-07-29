@@ -3,7 +3,10 @@ use crate::{
         execution::ExecutionGadget,
         step::ExecutionState,
         table::{AccountFieldTag, CallContextFieldTag},
-        util::{constraint_builder::ConstraintBuilder, not, CachedRegion, Cell, Word},
+        util::{
+            common_gadget::RestoreContextGadget, constraint_builder::ConstraintBuilder, not,
+            CachedRegion, Cell, Word,
+        },
         witness::{Block, Call, ExecStep, Transaction},
     },
     util::Expr,
@@ -22,6 +25,7 @@ pub(crate) struct ReturnGadget<F> {
     is_root: Cell<F>,
     is_create: Cell<F>,
     is_success: Cell<F>,
+    // restore_context: RestoreContextGadget<F>,
 }
 
 // This will handle reverts too?
@@ -60,16 +64,19 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
 
         cb.condition(is_root.expr(), |cb| {
             cb.require_next_state(ExecutionState::EndTx);
-            //     rw_counter: Delta(rw_counter.expr() + 1.expr()),
-            //     call_id: Delta(0.expr()),
-            //     ..StepStateTransition::default()
-            // });
+            cb.call_context_lookup(
+                0.expr(),
+                None,
+                CallContextFieldTag::IsPersistent,
+                is_success.expr(),
+            );
         });
-        cb.condition(not::expr(is_root.expr()), |cb| {
+        let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
+            // cb.call_context_lookup(0.expr(), None,
+            // CallContextFieldTag::CallerId); RestoreContextGadget:
+            // :construct(cb, 1.expr(), 0.expr(), 0.expr())
         });
-
-        // cb.condition()
 
         Self {
             opcode,
@@ -78,6 +85,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             is_root,
             is_create,
             is_success,
+            // restore_context,
         }
     }
 
@@ -90,7 +98,11 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        self.opcode.assign(region, offset, step.opcode.map(|opcode| F::from(opcode.as_u64())))?;
+        self.opcode.assign(
+            region,
+            offset,
+            step.opcode.map(|opcode| F::from(opcode.as_u64())),
+        )?;
 
         let length = block.rws[step.rw_indices[0]].stack_value();
         self.length
@@ -115,6 +127,9 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             offset,
             Some(if call.is_success { F::one() } else { F::zero() }),
         )?;
+
+        // self.restore_context
+        //     .assign(region, offset, block, call, step)?;
 
         Ok(())
     }

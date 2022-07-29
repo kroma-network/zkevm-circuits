@@ -803,11 +803,8 @@ impl<'a> CircuitInputStateRef<'a> {
         Ok(())
     }
 
-    /// TODOOOOOO
-    pub fn handle_stop(
-        &mut self,
-        steps: &[GethExecStep],
-    ) -> Result<Vec<ExecStep>, Error> {
+    /// TODOOOOOO: rename to handle call end?
+    pub fn handle_stop(&mut self, steps: &[GethExecStep]) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &steps[0];
 
         let mut exec_step = self.new_step(geth_step)?;
