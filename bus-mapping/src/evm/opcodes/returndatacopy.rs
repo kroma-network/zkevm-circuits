@@ -36,9 +36,10 @@ impl Opcode for Returndatacopy {
                 memory.extend_at_least(minimal_length);
                 memory[mem_starts..mem_ends].copy_from_slice(&return_data[data_starts..data_ends]);
             } else {
+                // TODO: RETURNDATACOPY causes an OOG error even if length is 0: https://eips.ethereum.org/EIPS/eip-211
                 assert_eq!(geth_steps.len(), 1);
                 // if overflows this opcode would fails current context, so
-                // there is no more steps.
+                // there are no more steps.
             }
         }
         Ok(vec![exec_step])
