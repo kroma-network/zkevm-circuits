@@ -68,9 +68,8 @@ impl Opcode for Return {
         }
 
         let memory = state.call_ctx()?.memory.clone();
-        // dbg!(offset, length);
-        let offset = offset.low_u64() as usize;
-        let length = length.low_u64() as usize;
+        let offset = offset.as_usize();
+        let length = length.as_usize();
         if !is_root && call.is_create() {
             // this doesn't always need to be true.
             assert!(offset + length <= memory.0.len());
@@ -78,12 +77,12 @@ impl Opcode for Return {
             state.code_db.insert(code);
         } else if !is_root {
             let caller_ctx = state.caller_ctx_mut()?;
-            let return_offset = call.return_data_offset as usize;
+            let return_offset = call.return_data_offset.try_into().unwrap();
 
-            let copy_len = std::cmp::min(call.return_data_length as usize, length);
+            let copy_len = std::cmp::min(call.return_data_length.try_into().unwrap(), length);
             caller_ctx.memory.0[return_offset..return_offset + copy_len]
                 .copy_from_slice(&memory.0[offset..offset + copy_len]);
-            caller_ctx.return_data.resize(length as usize, 0);
+            caller_ctx.return_data.resize(length, 0);
             caller_ctx.return_data[0..copy_len]
                 .copy_from_slice(&memory.0[offset..offset + copy_len]);
 
@@ -92,13 +91,11 @@ impl Opcode for Return {
                     state,
                     &mut exec_step,
                     Source {
-                        tag: CopyDataType::Memory,
                         id: call.call_id,
                         offset: offset.try_into().unwrap(),
                         bytes: memory.0[offset..offset + length].to_vec(),
                     },
                     Destination {
-                        tag: CopyDataType::Memory,
                         id: call.caller_id,
                         offset: call.return_data_offset,
                         length: call.return_data_length.try_into().unwrap(),
@@ -113,14 +110,12 @@ impl Opcode for Return {
 }
 
 struct Source {
-    tag: CopyDataType,
     id: usize,
     offset: u64,
     bytes: Vec<u8>,
 }
 
 struct Destination {
-    tag: CopyDataType,
     id: usize,
     offset: u64,
     length: usize,
@@ -135,7 +130,7 @@ fn handle_copy(
     let mut buffer: Vec<u8> = vec![];
     let mut rw_counters = vec![];
     for i in 0..destination.length {
-        let read_rw_counter = state.block_ctx.rwc;
+        let read_rw_counter = state.block_ctx.rwc.0;
         let byte = match source.bytes.get(i + destination.offset as usize) {
             Some(byte) => {
                 state.push_op(
@@ -151,60 +146,44 @@ fn handle_copy(
             }
             None => 0,
         };
-        // let read_rw_counter = state.block_ctx.rwc;
-        let write_rw_counter = state.block_ctx.rwc;
+        let write_rw_counter = state.block_ctx.rwc.0;
         state.push_op(
             step,
             RW::WRITE,
             MemoryOp::new(destination.id, (destination.offset + i as u64).into(), byte),
         );
-        // let write_rw_counter = state.block_ctx.rwc;
-
         rw_counters.push((read_rw_counter, write_rw_counter));
-
         buffer.push(byte);
     }
 
-    dbg!(&rw_counters);
-
-    let rw_counter_end = rw_counters.last().unwrap().1 .0;
+    let rw_counter_end = rw_counters.last().unwrap().1;
     let mut copy_steps = vec![];
     for ((i, byte), &(read_rw_counter, write_rw_counter)) in
         buffer.iter().enumerate().zip(&rw_counters)
     {
         copy_steps.push(CopyStep {
             addr: source.offset + destination.offset as u64 + i as u64,
-            tag: source.tag,
+            tag: CopyDataType::Memory,
             rw: RW::READ,
             value: *byte,
             is_code: None,
             is_pad: false,
-            rwc: read_rw_counter,
-            rwc_inc_left: (rw_counter_end - read_rw_counter.0 + 1).try_into().unwrap(),
+            rwc: read_rw_counter.into(),
+            rwc_inc_left: (rw_counter_end - read_rw_counter + 1).try_into().unwrap(),
         });
         copy_steps.push(CopyStep {
             addr: destination.offset + i as u64,
-            tag: destination.tag,
+            tag: CopyDataType::Memory,
             rw: RW::WRITE,
             value: *byte,
             is_code: None,
             is_pad: false,
-            rwc: write_rw_counter,
-            rwc_inc_left: (rw_counter_end - write_rw_counter.0 + 1)
-                .try_into()
-                .unwrap(),
+            rwc: write_rw_counter.into(),
+            rwc_inc_left: (rw_counter_end - write_rw_counter + 1).try_into().unwrap(),
         });
-        assert!(rw_counter_end - read_rw_counter.0 + 1 != 0);
-        assert!(rw_counter_end - write_rw_counter.0 + 1 != 0);
     }
 
-    assert_eq!(buffer.len(), destination.length);
-    assert_eq!(2 * buffer.len(), copy_steps.len());
-
-    // dbg!(source.id, destination.id);
     let src_addr_end = source.offset + u64::try_from(source.bytes.len()).unwrap();
-    // dbg!(src_addr_end);
-
     state.push_copy(CopyEvent {
         src_type: CopyDataType::Memory,
         src_id: NumberOrHash::Number(source.id),
@@ -212,7 +191,7 @@ fn handle_copy(
         src_addr_end,
         dst_type: CopyDataType::Memory,
         dst_id: NumberOrHash::Number(destination.id),
-        dst_addr: 0, // not used....
+        dst_addr: 0, // not used
         length: buffer.len().try_into().unwrap(),
         log_id: None,
         steps: copy_steps,
