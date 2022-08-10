@@ -1,10 +1,9 @@
 use super::Opcode;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
-    operation::CallContextField,
     Error,
 };
-use eth_types::{GethExecStep, ToWord};
+use eth_types::GethExecStep;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
 /// corresponding to the [`OpcodeId::STOP`](crate::evm::OpcodeId::STOP)

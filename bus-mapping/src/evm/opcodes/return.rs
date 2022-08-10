@@ -6,12 +6,10 @@ use crate::operation::MemoryOp;
 use crate::{
     circuit_input_builder::CircuitInputStateRef,
     evm::opcodes::ExecStep,
-    operation::{AccountField, CallContextField, TxAccessListAccountOp, RW},
-    state_db::Account,
+    operation::{CallContextField, RW},
     Error,
 };
 use eth_types::{GethExecStep, ToWord};
-use std::cmp::max;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
@@ -27,8 +25,8 @@ impl Opcode for Return {
 
         let offset = step.stack.nth_last(0)?;
         let length = step.stack.nth_last(1)?;
-        state.stack_read(&mut exec_step, step.stack.nth_last_filled(0), offset);
-        state.stack_read(&mut exec_step, step.stack.nth_last_filled(1), length);
+        state.stack_read(&mut exec_step, step.stack.nth_last_filled(0), offset)?;
+        state.stack_read(&mut exec_step, step.stack.nth_last_filled(1), length)?;
 
         if !length.is_zero() {
             state
@@ -66,7 +64,7 @@ impl Opcode for Return {
         );
 
         if !is_root {
-            state.handle_restore_context(steps, &mut exec_step);
+            state.handle_restore_context(steps, &mut exec_step)?;
         }
 
         let memory = state.call_ctx()?.memory.clone();

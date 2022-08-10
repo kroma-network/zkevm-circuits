@@ -4,17 +4,17 @@ use crate::{
         execution::ExecutionGadget,
         step::ExecutionState,
         util::{
-            common_gadget::RestoreContextGadget, constraint_builder::ConstraintBuilder, from_bytes,
-            not, CachedRegion, Cell, Word,
+            common_gadget::RestoreContextGadget, constraint_builder::ConstraintBuilder, not,
+            CachedRegion, Cell,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
-    table::{AccountFieldTag, CallContextFieldTag},
+    table::CallContextFieldTag,
     util::Expr,
 };
 use bus_mapping::circuit_input_builder::CopyDataType;
 use bus_mapping::evm::OpcodeId;
-use eth_types::{Field, ToLittleEndian, ToScalar};
+use eth_types::Field;
 use halo2_proofs::plonk::Error;
 
 use std::cmp::min;
@@ -222,9 +222,9 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
 mod test {
     use crate::evm_circuit::test::run_test_circuit_incomplete_fixed_table;
     use crate::evm_circuit::witness::block_convert;
-    use crate::{evm_circuit::test::rand_word, test_util::run_test_circuits};
+    use crate::test_util::run_test_circuits;
+    use eth_types::geth_types::Account;
     use eth_types::{address, bytecode};
-    use eth_types::{bytecode::Bytecode, evm_types::OpcodeId, geth_types::Account};
     use eth_types::{Address, ToWord, Word};
     use mock::TestContext;
 

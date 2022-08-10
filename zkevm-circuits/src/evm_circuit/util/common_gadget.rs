@@ -6,7 +6,7 @@ use crate::{
         util::{
             constraint_builder::{
                 ConstraintBuilder, ReversionInfo, StepStateTransition,
-                Transition::{Any, Delta, Same, To},
+                Transition::{Delta, Same, To},
             },
             math_gadget::{AddWordsGadget, RangeCheckGadget},
             not, Cell, Word,
