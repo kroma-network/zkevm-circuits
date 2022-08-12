@@ -18,8 +18,8 @@ use halo2_proofs::plonk::Error;
 pub(crate) struct BalanceGadget<F> {
     same_context: SameContextGadget<F>,
     address: RandomLinearCombination<F, N_BYTES_ACCOUNT_ADDRESS>,
-    tx_id: Cell<F>,
     reversion_info: ReversionInfo<F>,
+    tx_id: Cell<F>,
     is_warm: Cell<F>,
     balance: Cell<F>,
 }
@@ -36,7 +36,6 @@ impl<F: Field> ExecutionGadget<F> for BalanceGadget<F> {
         let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
         let mut reversion_info = cb.reversion_info(None);
         let is_warm = cb.query_bool();
-
         cb.account_access_list_write(
             tx_id.expr(),
             from_bytes::expr(&address.cells),
@@ -51,7 +50,6 @@ impl<F: Field> ExecutionGadget<F> for BalanceGadget<F> {
             AccountFieldTag::Balance,
             balance.expr(),
         );
-
         cb.stack_push(balance.expr());
 
         let gas_cost = is_warm.expr() * GasCost::WARM_ACCESS.expr()
@@ -72,8 +70,8 @@ impl<F: Field> ExecutionGadget<F> for BalanceGadget<F> {
         Self {
             same_context,
             address,
-            tx_id,
             reversion_info,
+            tx_id,
             is_warm,
             balance,
         }
@@ -104,11 +102,7 @@ impl<F: Field> ExecutionGadget<F> for BalanceGadget<F> {
             call.is_persistent,
         )?;
 
-        let is_warm = match GasCost::from(step.gas_cost) {
-            GasCost::COLD_ACCOUNT_ACCESS => 0,
-            GasCost::WARM_ACCESS => 1,
-            _ => unreachable!(),
-        };
+        let (_, is_warm) = block.rws[step.rw_indices[4]].tx_access_list_value_pair();
         self.is_warm
             .assign(region, offset, Some(F::from(is_warm)))?;
 
@@ -123,55 +117,53 @@ impl<F: Field> ExecutionGadget<F> for BalanceGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm_circuit::witness::block_convert;
-    use crate::test_util::{test_circuits_using_witness_block, BytecodeTestConfig};
-    use bus_mapping::mock::BlockData;
-    use eth_types::geth_types::{Account, GethData};
+    use crate::evm_circuit::test::rand_bytes;
+    use crate::test_util::run_test_circuits;
+    use eth_types::geth_types::Account;
     use eth_types::{address, bytecode, Address, Bytecode, ToWord, Word, U256};
     use lazy_static::lazy_static;
     use mock::TestContext;
 
     lazy_static! {
-        static ref ADDRESS: Address = address!("0xaabbccddee000000000000000000000000000000");
+        static ref TEST_ADDRESS: Address = address!("0xaabbccddee000000000000000000000000000000");
     }
 
     #[test]
-    fn balance_gadget_of_non_existing_address() {
-        test_ok(None, false);
+    fn balance_gadget_non_existing_account() {
+        test_root_ok(&None, false);
+        test_internal_ok(0x20, 0x00, &None, false);
+        test_internal_ok(0x1010, 0xff, &None, false);
     }
 
     #[test]
-    fn balance_gadget_of_cold_address() {
-        test_ok(
-            Some(Account {
-                address: *ADDRESS,
-                balance: U256::from(900),
-                ..Default::default()
-            }),
-            false,
-        );
+    fn balance_gadget_cold_account() {
+        let account = Some(Account {
+            address: *TEST_ADDRESS,
+            balance: U256::from(900),
+            ..Default::default()
+        });
+
+        test_root_ok(&account, false);
+        test_internal_ok(0x20, 0x00, &account, false);
+        test_internal_ok(0x1010, 0xff, &account, false);
     }
 
     #[test]
-    fn balance_gadget_of_warm_address() {
-        test_ok(
-            Some(Account {
-                address: *ADDRESS,
-                balance: U256::from(900),
-                ..Default::default()
-            }),
-            true,
-        );
+    fn balance_gadget_warm_account() {
+        let account = Some(Account {
+            address: *TEST_ADDRESS,
+            balance: U256::from(900),
+            ..Default::default()
+        });
+
+        test_root_ok(&account, true);
+        test_internal_ok(0x20, 0x00, &account, true);
+        test_internal_ok(0x1010, 0xff, &account, true);
     }
 
-    fn test_ok(external_account: Option<Account>, is_warm: bool) {
-        let address = external_account
-            .as_ref()
-            .map(|a| a.address)
-            .unwrap_or(*ADDRESS);
+    fn test_root_ok(account: &Option<Account>, is_warm: bool) {
+        let address = account.as_ref().map(|a| a.address).unwrap_or(*TEST_ADDRESS);
 
-        // Make the external account warm, if needed, by first getting its external code
-        // hash.
         let mut code = Bytecode::default();
         if is_warm {
             code.append(&bytecode! {
@@ -182,44 +174,98 @@ mod test {
         }
         code.append(&bytecode! {
             PUSH20(address.to_word())
-            #[start]
             BALANCE
             STOP
         });
 
-        // Execute the bytecode and get trace
-        let block: GethData = TestContext::<3, 1>::new(
+        let ctx = TestContext::<3, 1>::new(
             None,
             |accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
-                    .balance(Word::from(1u64 << 20))
+                    .balance(Word::from(1_u64 << 20))
                     .code(code);
                 accs[1].address(address);
-                if let Some(external_account) = external_account {
-                    accs[1].balance(external_account.balance);
+                if let Some(account) = account {
+                    accs[1].balance(account.balance);
                 }
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000000010"))
-                    .balance(Word::from(1u64 << 20));
+                    .balance(Word::from(1_u64 << 20));
             },
             |mut txs, accs| {
                 txs[0].to(accs[0].address).from(accs[2].address);
             },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap()
-        .into();
-
-        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
-        builder
-            .handle_block(&block.eth_block, &block.geth_traces)
-            .expect("could not handle block tx");
-
-        test_circuits_using_witness_block(
-            block_convert(&builder.block, &builder.code_db),
-            BytecodeTestConfig::default(),
+            |block, _tx| block,
         )
         .unwrap();
+
+        assert_eq!(run_test_circuits(ctx, None), Ok(()));
+    }
+
+    fn test_internal_ok(
+        call_data_offset: usize,
+        call_data_length: usize,
+        account: &Option<Account>,
+        is_warm: bool,
+    ) {
+        let address = account.as_ref().map(|a| a.address).unwrap_or(*TEST_ADDRESS);
+        let (addr_a, addr_b) = (mock::MOCK_ACCOUNTS[0], mock::MOCK_ACCOUNTS[1]);
+
+        // code B gets called by code A, so the call is an internal call.
+        let mut code_b = Bytecode::default();
+        if is_warm {
+            code_b.append(&bytecode! {
+                PUSH20(address.to_word())
+                BALANCE
+                POP
+            });
+        }
+        code_b.append(&bytecode! {
+            PUSH20(address.to_word())
+            BALANCE
+            STOP
+        });
+
+        // code A calls code B.
+        let pushdata = rand_bytes(8);
+        let code_a = bytecode! {
+            // populate memory in A's context.
+            PUSH8(Word::from_big_endian(&pushdata))
+            PUSH1(0x00) // offset
+            MSTORE
+            // call ADDR_B.
+            PUSH1(0x00) // retLength
+            PUSH1(0x00) // retOffset
+            PUSH32(call_data_length) // argsLength
+            PUSH32(call_data_offset) // argsOffset
+            PUSH1(0x00) // value
+            PUSH32(addr_b.to_word()) // addr
+            PUSH32(0x1_0000) // gas
+            CALL
+            STOP
+        };
+
+        let ctx = TestContext::<4, 1>::new(
+            None,
+            |accs| {
+                accs[0].address(addr_b).code(code_b);
+                accs[1].address(addr_a).code(code_a);
+                accs[2].address(address);
+                if let Some(account) = account {
+                    accs[2].balance(account.balance);
+                }
+                accs[3]
+                    .address(mock::MOCK_ACCOUNTS[2])
+                    .balance(Word::from(1_u64 << 20));
+            },
+            |mut txs, accs| {
+                txs[0].to(accs[1].address).from(accs[3].address);
+            },
+            |block, _tx| block,
+        )
+        .unwrap();
+
+        assert_eq!(run_test_circuits(ctx, None), Ok(()));
     }
 }

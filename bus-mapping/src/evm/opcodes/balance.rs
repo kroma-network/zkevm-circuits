@@ -87,8 +87,7 @@ mod balance_tests {
     use crate::operation::{AccountOp, CallContextOp, StackOp};
     use eth_types::evm_types::{OpcodeId, StackAddress};
     use eth_types::geth_types::GethData;
-    use eth_types::{address, bytecode, Bytecode, Bytes, Word, U256};
-    use ethers_core::utils::keccak256;
+    use eth_types::{address, bytecode, Bytecode, Word, U256};
     use mock::TestContext;
     use pretty_assertions::assert_eq;
 
