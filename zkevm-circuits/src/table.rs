@@ -10,6 +10,7 @@ use crate::impl_expr;
 use bus_mapping::circuit_input_builder::{CopyDataType, CopyEvent};
 use eth_types::{Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
+use gadgets::util::Expr;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::Region,
@@ -798,19 +799,18 @@ impl CopyTable {
                 }
                 _ => F::from(copy_step.addr),
             };
-            assignments.push((
-                copy_step.tag,
-                [
-                    is_first,
-                    id,
-                    addr,
-                    F::from(copy_event.src_addr_end), // src_addr_end
-                    F::from(copy_event.length - step_idx as u64 / 2), // bytes_left
-                    rlc_acc,                          // rlc_acc
-                    F::from(copy_step.rwc.0 as u64),  // rw_counter
-                    F::from(copy_step.rwc_inc_left),  // rw_inc_left
-                ],
-            ));
+            let x = [
+                is_first,
+                id,
+                addr,
+                F::from(copy_event.src_addr_end), // src_addr_end
+                F::from(copy_event.length - step_idx as u64 / 2), // bytes_left
+                rlc_acc,                          // rlc_acc
+                F::from(copy_step.rwc.0 as u64),  // rw_counter
+                F::from(copy_step.rwc_inc_left),  // rw_inc_left
+            ];
+            // dbg!(x);
+            assignments.push((copy_step.tag, x));
         }
         assignments
     }

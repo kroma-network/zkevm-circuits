@@ -30,7 +30,7 @@ pub(crate) struct ReturnGadget<F> {
     is_success: Cell<F>,
     restore_context: RestoreContextGadget<F>,
 
-    copy_rw_counter_increase: Cell<F>, // TODO: this needs more constraints.
+    copy_length: Cell<F>, // TODO: this needs more constraints.
 
     caller_id: Cell<F>, // can you get this out of restore_context?
     return_data_offset: Cell<F>,
@@ -88,13 +88,13 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             );
         });
 
-        let copy_rw_counter_increase = cb.query_cell();
+        let copy_length = cb.query_cell();
 
         let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
             RestoreContextGadget::construct(
                 cb,
-                8.expr() + copy_rw_counter_increase.expr(),
+                8.expr() + copy_length.expr() + copy_length.expr(),
                 range.offset(),
                 range.length(),
             )
@@ -103,19 +103,18 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         cb.condition(
             not::expr(is_create.expr()) * not::expr(is_root.expr()) * range.has_length(),
             |cb| {
-                // how is this passing????
                 cb.copy_table_lookup(
-                    cb.curr.state.call_id.expr(),               // source id
-                    CopyDataType::Memory.expr(),                // source tag
-                    caller_id.expr(),                           // destination id
-                    CopyDataType::Memory.expr(),                // destination tag
-                    range.offset() + return_data_offset.expr(), // source address
-                    range.address(),                            //
-                    return_data_offset.expr(),                  // destination address
-                    return_data_length.expr(),                  // length
+                    cb.curr.state.call_id.expr(),        // source id
+                    CopyDataType::Memory.expr(),         // source tag
+                    caller_id.expr(),                    // destination id
+                    CopyDataType::Memory.expr(),         // destination tag
+                    range.offset(),                      // source address
+                    range.offset() + copy_length.expr(), //
+                    return_data_offset.expr(),           // destination address
+                    copy_length.expr(),                  // length
                     0.expr(),
                     cb.curr.state.rw_counter.expr() + cb.rw_counter_offset().expr(),
-                    copy_rw_counter_increase.expr(),
+                    copy_length.expr() + copy_length.expr(),
                 );
             },
         );
@@ -137,7 +136,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             is_create,
             is_success,
             caller_id,
-            copy_rw_counter_increase,
+            copy_length,
             return_data_offset,
             return_data_length,
             restore_context,
@@ -192,26 +191,15 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
                 .assign(region, offset, block, call, step, 8)?;
         }
 
-        // rw_counter increase from copy lookup is `length` memory writes + a variable
-        // number of memory reads.
-        let copy_rw_counter_increase = call.return_data_length
-            + if call.is_root {
-                0
-            } else {
-                min(
-                    // TODO: this isn't correct.....
-                    call.return_data_length,
-                    length
-                        .low_u64()
-                        .checked_sub(call.return_data_offset)
-                        .unwrap_or_default(),
-                )
-            };
-        dbg!(copy_rw_counter_increase, call.return_data_length);
-        self.copy_rw_counter_increase.assign(
+        let copy_length = if call.is_root {
+            0
+        } else {
+            min(call.return_data_length, length.as_u64())
+        };
+        self.copy_length.assign(
             region,
             offset,
-            Some(F::from(copy_rw_counter_increase)),
+            Some(F::from(copy_length)),
         )?;
 
         Ok(())

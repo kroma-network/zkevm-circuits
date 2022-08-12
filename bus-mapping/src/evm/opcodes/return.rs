@@ -93,14 +93,14 @@ impl Opcode for Return {
                     Source {
                         id: call.call_id,
                         offset: offset.try_into().unwrap(),
-                        bytes: memory.0[offset..offset + length].to_vec(),
+                        length: length.try_into().unwrap(),
                     },
                     Destination {
                         id: call.caller_id,
-                        offset: call.return_data_offset,
+                        offset: call.return_data_offset.try_into().unwrap(),
                         length: call.return_data_length.try_into().unwrap(),
                     },
-                );
+                )?;
             }
         }
 
@@ -111,13 +111,13 @@ impl Opcode for Return {
 
 struct Source {
     id: usize,
-    offset: u64,
-    bytes: Vec<u8>,
+    offset: usize,
+    length: usize,
 }
 
 struct Destination {
     id: usize,
-    offset: u64,
+    offset: usize,
     length: usize,
 }
 
@@ -126,74 +126,148 @@ fn handle_copy(
     step: &mut ExecStep,
     source: Source,
     destination: Destination,
-) {
-    let mut buffer: Vec<u8> = vec![];
-    let mut rw_counters = vec![];
-    for i in 0..destination.length {
-        let read_rw_counter = state.block_ctx.rwc.0;
-        let byte = match source.bytes.get(i + destination.offset as usize) {
-            Some(byte) => {
-                state.push_op(
-                    step,
-                    RW::READ,
-                    MemoryOp::new(
-                        source.id,
-                        (source.offset + destination.offset + i as u64).into(),
-                        *byte,
-                    ),
-                );
-                *byte
-            }
-            None => 0,
-        };
-        let write_rw_counter = state.block_ctx.rwc.0;
+) -> Result<(), Error> {
+    let copy_length = std::cmp::min(source.length, destination.length);
+    let initial_rw_counter = state.block_ctx.rwc.0;
+    let rw_counter_increase = copy_length * 2;
+
+    let bytes = state.call_ctx()?.memory.0[source.offset..source.offset + copy_length].to_vec();
+
+    let copy_steps = bytes
+        .iter()
+        .enumerate()
+        .flat_map(|(i, &byte)| {
+            [
+                CopyStep {
+                    addr: (source.offset + i).try_into().unwrap(),
+                    tag: CopyDataType::Memory,
+                    rw: RW::READ,
+                    value: byte,
+                    is_code: None,
+                    is_pad: false,
+                    rwc: (initial_rw_counter + 2 * i).into(),
+                    rwc_inc_left: (rw_counter_increase - 2 * i).try_into().unwrap(),
+                },
+                CopyStep {
+                    addr: (destination.offset + i).try_into().unwrap(),
+                    tag: CopyDataType::Memory,
+                    rw: RW::WRITE,
+                    value: byte,
+                    is_code: None,
+                    is_pad: false,
+                    rwc: (initial_rw_counter + 2 * i + 1).into(),
+                    rwc_inc_left: (rw_counter_increase - 2 * i - 1).try_into().unwrap(),
+                },
+            ]
+            .into_iter()
+        })
+        .collect();
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        state.push_op(
+            step,
+            RW::READ,
+            MemoryOp::new(source.id, (source.offset + i).into(), byte),
+        );
         state.push_op(
             step,
             RW::WRITE,
-            MemoryOp::new(destination.id, (destination.offset + i as u64).into(), byte),
+            MemoryOp::new(destination.id, (destination.offset + i).into(), byte),
         );
-        rw_counters.push((read_rw_counter, write_rw_counter));
-        buffer.push(byte);
     }
 
-    let rw_counter_end = rw_counters.last().unwrap().1;
-    let mut copy_steps = vec![];
-    for ((i, byte), &(read_rw_counter, write_rw_counter)) in
-        buffer.iter().enumerate().zip(&rw_counters)
-    {
-        copy_steps.push(CopyStep {
-            addr: source.offset + destination.offset as u64 + i as u64,
-            tag: CopyDataType::Memory,
-            rw: RW::READ,
-            value: *byte,
-            is_code: None,
-            is_pad: false,
-            rwc: read_rw_counter.into(),
-            rwc_inc_left: (rw_counter_end - read_rw_counter + 1).try_into().unwrap(),
-        });
-        copy_steps.push(CopyStep {
-            addr: destination.offset + i as u64,
-            tag: CopyDataType::Memory,
-            rw: RW::WRITE,
-            value: *byte,
-            is_code: None,
-            is_pad: false,
-            rwc: write_rw_counter.into(),
-            rwc_inc_left: (rw_counter_end - write_rw_counter + 1).try_into().unwrap(),
-        });
-    }
-
-    let src_addr_end = source.offset + u64::try_from(source.bytes.len()).unwrap();
     state.push_copy(CopyEvent {
         src_type: CopyDataType::Memory,
-        src_id: NumberOrHash::Number(source.id),
+        src_id: NumberOrHash::Number(source.id.try_into().unwrap()),
         src_addr: 0, // not used
-        src_addr_end,
+        src_addr_end: (source.offset + copy_length).try_into().unwrap(),
         dst_type: CopyDataType::Memory,
-        dst_id: NumberOrHash::Number(destination.id),
+        dst_id: NumberOrHash::Number(destination.id.try_into().unwrap()),
         dst_addr: 0, // not used
-        length: buffer.len().try_into().unwrap(),
+        length: copy_length.try_into().unwrap(),
         log_id: None,
         steps: copy_steps,
     });
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod return_tests {
+    use crate::mock::BlockData;
+    use eth_types::geth_types::GethData;
+    use eth_types::{bytecode, word, Word};
+    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
+    use mock::TestContext;
+
+    fn test_return(
+        callee_return_data_offset: usize,
+        callee_return_data_length: usize,
+        caller_return_data_offset: usize,
+        caller_return_data_length: usize,
+    ) {
+        let contract = bytecode! {
+            PUSH1(0x20)
+            PUSH1(0)
+            PUSH1(0)
+            CALLDATACOPY
+            PUSH1(callee_return_data_length)
+            PUSH1(callee_return_data_offset)
+            RETURN
+        };
+
+        let constructor = bytecode! {
+            PUSH12(Word::from(contract.to_vec().as_slice()))
+            PUSH1(0)
+            MSTORE
+            PUSH1(0xC)
+            PUSH1(0x14)
+            RETURN
+        };
+
+        let code = bytecode! {
+            PUSH21(Word::from(constructor.to_vec().as_slice()))
+            PUSH1(0)
+            MSTORE
+
+            PUSH1 (0x15)
+            PUSH1 (0xB)
+            PUSH1 (0)
+            CREATE
+
+            PUSH1 (caller_return_data_length)
+            PUSH1 (caller_return_data_offset)
+            PUSH1 (0x20)
+            PUSH1 (0)
+            PUSH1 (0)
+            DUP6
+            PUSH2 (0xFFFF)
+            CALL
+
+            STOP
+        };
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<2, 1>::new(
+            None,
+            account_0_code_account_1_no_code(code),
+            tx_from_1_to_0,
+            |block, _tx| block.number(0xcafeu64),
+        )
+        .unwrap()
+        .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_cases() {
+        test_return(0, 0, 0, 0);
+        test_return(10, 10, 10, 10);
+        test_return(0, 0, 0, 0);
+        test_return(0, 0, 0, 100);
+        test_return(0, 0, 0, 0);
+    }
 }
