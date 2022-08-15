@@ -124,19 +124,19 @@ impl<F: Field> ConstraintBuilder<F> {
 
         // When at least one of the keys (tag, id, address, field_tag, or storage_key)
         // in the current row differs from the previous row.
-        //        self.condition(q.first_access(), |cb| {
-        //          cb.require_zero(
-        //            "first access reads don't change value",
-        //          q.is_read() * (q.rw_table.value.clone() - q.initial_value()),
-        //    );
-        //});
+        self.condition(q.first_access(), |cb| {
+            cb.require_zero(
+                "first access reads don't change value",
+                q.is_read() * (q.rw_table.value.clone() - q.initial_value()),
+            );
+        });
 
         // When all the keys in the current row and previous row are equal.
         self.condition(q.not_first_access.clone(), |cb| {
-            //            cb.require_zero(
-            //              "non-first access reads don't change value",
-            //            q.is_read() * (q.rw_table.value.clone() -
-            // q.rw_table.value_prev.clone()),      );
+            cb.require_zero(
+                "non-first access reads don't change value",
+                q.is_read() * (q.rw_table.value.clone() - q.rw_table.value_prev.clone()),
+            );
             cb.require_zero(
                 "initial value doesn't change in an access group",
                 q.initial_value.clone() - q.initial_value_prev(),
