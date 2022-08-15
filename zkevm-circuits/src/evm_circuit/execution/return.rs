@@ -94,7 +94,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             cb.require_next_state_not(ExecutionState::EndTx);
             RestoreContextGadget::construct(
                 cb,
-                8.expr() + copy_length.expr() + copy_length.expr(),
+                copy_length.expr() + copy_length.expr(),
                 range.offset(),
                 range.length(),
             )

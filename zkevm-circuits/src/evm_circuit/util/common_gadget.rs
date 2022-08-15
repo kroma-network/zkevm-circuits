@@ -97,7 +97,7 @@ pub(crate) struct RestoreContextGadget<F> {
 impl<F: Field> RestoreContextGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
-        rw_counter_delta: Expression<F>,
+        copy_lookup_rw_counter_increase: Expression<F>,
         return_data_offset: Expression<F>,
         return_data_length: Expression<F>,
     ) -> Self {
@@ -152,8 +152,7 @@ impl<F: Field> RestoreContextGadget<F> {
         let reversible_write_counter = caller_reversible_write_counter.expr()
             + is_success.expr() * cb.curr.state.reversible_write_counter.expr();
 
-        let rw_counter_offset = rw_counter_delta
-            + 13.expr()
+        let rw_counter_offset = cb.rw_counter_offset() + copy_lookup_rw_counter_increase
             + not::expr(is_success.expr()) * cb.curr.state.reversible_write_counter.expr();
 
         // Do step state transition
