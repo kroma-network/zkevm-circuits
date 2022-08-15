@@ -191,7 +191,7 @@ impl<'a> CircuitInputBuilder {
     ) -> Result<(), Error> {
         let mut tx = self.new_tx(eth_tx, !geth_trace.failed)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
-
+        log::trace!("handle_tx tx {:?} tx_ctx {:?}", tx, tx_ctx);
         if let Some(al) = &eth_tx.access_list {
             for item in &al.0 {
                 self.sdb.add_account_to_access_list(item.address);
@@ -207,18 +207,21 @@ impl<'a> CircuitInputBuilder {
         // Generate BeginTx step
         let mut begin_tx_step = gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
         begin_tx_step.gas_cost = GasCost(tx.gas - geth_trace.struct_logs[0].gas.0);
+        log::trace!("begin_tx_step {:?}", begin_tx_step);
         tx.steps_mut().push(begin_tx_step);
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
             let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
             log::trace!(
-                "handle {}th tx depth {} {}th opcode {:?} pc: {} gas_left: {} args: {}",
+                "handle {}th tx depth {} {}th opcode {:?} pc: {} gas_left: {} rwc: {} call_id: {} args: {}",
                 eth_tx.transaction_index.unwrap_or_default(),
                 geth_step.depth,
                 index,
                 geth_step.op,
                 geth_step.pc.0,
                 geth_step.gas.0,
+                state_ref.block_ctx.rwc.0,
+                state_ref.call().map(|c| c.call_id).unwrap_or(0),
                 if geth_step.op.is_push() {
                     match geth_step.stack.last() {
                         Ok(w) => format!("{:?}", w),
