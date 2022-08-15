@@ -119,15 +119,24 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             },
         );
 
-        // let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
-        //     cb.require_next_state_not(ExecutionState::EndTx);
-        //     RestoreContextGadget::construct(
-        //         cb,
-        //         8.expr() + copy_rw_counter_increase.expr(),
-        //         range.offset(),
-        //         range.length(),
-        //     )
-        // });
+        cb.condition(
+            is_create.expr() * is_success.expr() * range.has_length(),
+            |cb| {
+                cb.copy_table_lookup(
+                    cb.curr.state.call_id.expr(),        // source id
+                    CopyDataType::Memory.expr(),         // source tag
+                    caller_id.expr(),                    // destination id
+                    CopyDataType::Bytecode.expr(),       // destination tag
+                    range.offset(),                      // source address
+                    range.address(),                //
+                    0.expr(),           // destination address
+                    range.length(),                  // length
+                    0.expr(),
+                    cb.curr.state.rw_counter.expr() + cb.rw_counter_offset().expr(),
+                    range.length(),
+                );
+            },
+        );
 
         Self {
             opcode,
@@ -196,11 +205,8 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         } else {
             min(call.return_data_length, length.as_u64())
         };
-        self.copy_length.assign(
-            region,
-            offset,
-            Some(F::from(copy_length)),
-        )?;
+        self.copy_length
+            .assign(region, offset, Some(F::from(copy_length)))?;
 
         Ok(())
     }

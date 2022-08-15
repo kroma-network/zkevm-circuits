@@ -81,7 +81,7 @@ pub enum ExecutionState {
     CREATE,
     CALL,
     CALLCODE,
-    RETURN,
+    RETURN, // RETURN, REVERT
     DELEGATECALL,
     CREATE2,
     STATICCALL,

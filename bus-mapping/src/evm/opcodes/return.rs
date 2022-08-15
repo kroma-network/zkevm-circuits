@@ -9,7 +9,8 @@ use crate::{
     operation::{CallContextField, RW},
     Error,
 };
-use eth_types::{GethExecStep, ToWord};
+use eth_types::{Bytecode, GethExecStep, ToWord, H256};
+use ethers_core::utils::keccak256;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
@@ -70,11 +71,22 @@ impl Opcode for Return {
         let memory = state.call_ctx()?.memory.clone();
         let offset = offset.as_usize();
         let length = length.as_usize();
-        if !is_root && call.is_create() {
-            // this doesn't always need to be true.
+        if call.is_create() && call.is_success {
+            // is this always the case?
             assert!(offset + length <= memory.0.len());
             let code = memory.0[offset..offset + length].to_vec();
             state.code_db.insert(code);
+            if length > 0 {
+                handle_create(
+                    state,
+                    &mut exec_step,
+                    Source {
+                        id: call.call_id,
+                        offset: offset.try_into().unwrap(),
+                        length: length.try_into().unwrap(),
+                    },
+                )?;
+            }
         } else if !is_root {
             let caller_ctx = state.caller_ctx_mut()?;
             let return_offset = call.return_data_offset.try_into().unwrap();
@@ -188,6 +200,68 @@ fn handle_copy(
         log_id: None,
         steps: copy_steps,
     });
+
+    Ok(())
+}
+
+fn handle_create(
+    state: &mut CircuitInputStateRef,
+    step: &mut ExecStep,
+    source: Source,
+) -> Result<(), Error> {
+    let bytes = state.call_ctx()?.memory.0[source.offset..source.offset + source.length].to_vec();
+    let bytecode = Bytecode::from(bytes.clone());
+    let initial_rw_counter = state.block_ctx.rwc.0;
+    let copy_steps = bytes
+        .iter()
+        .enumerate()
+        .flat_map(|(i, &byte)| {
+            [
+                CopyStep {
+                    addr: (source.offset + i).try_into().unwrap(),
+                    tag: CopyDataType::Memory,
+                    rw: RW::READ,
+                    value: byte,
+                    is_code: None, // does this matter?
+                    is_pad: false,
+                    rwc: (initial_rw_counter + i).into(),
+                    rwc_inc_left: (source.length - i).try_into().unwrap(),
+                },
+                CopyStep {
+                    addr: i.try_into().unwrap(),
+                    tag: CopyDataType::Bytecode,
+                    rw: RW::WRITE,
+                    value: byte,
+                    is_code: Some(bytecode.get(i).unwrap().is_code),
+                    is_pad: false,
+                    rwc: (initial_rw_counter + i).into(),
+                    rwc_inc_left: (source.length - i).try_into().unwrap(),
+                },
+            ]
+            .into_iter()
+        })
+        .collect();
+
+    state.push_copy(CopyEvent {
+        src_type: CopyDataType::Memory,
+        src_id: NumberOrHash::Number(source.id.try_into().unwrap()),
+        src_addr: 0, // not used
+        src_addr_end: (source.offset + source.length).try_into().unwrap(),
+        dst_type: CopyDataType::Bytecode,
+        dst_id: NumberOrHash::Hash(H256(keccak256(&bytes))),
+        dst_addr: 0, // not used
+        length: source.length.try_into().unwrap(),
+        log_id: None,
+        steps: copy_steps,
+    });
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        state.push_op(
+            step,
+            RW::READ,
+            MemoryOp::new(source.id, (source.offset + i).into(), byte),
+        );
+    }
 
     Ok(())
 }
