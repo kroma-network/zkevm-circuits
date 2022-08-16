@@ -1190,7 +1190,7 @@ impl<F: Field> ExecutionConfig<F> {
             {
                 assigned_rw_values.push((name.clone(), *v));
             }
-    }
+        }
 
         for idx in 0..assigned_rw_values.len() {
             let log_ctx = || {
