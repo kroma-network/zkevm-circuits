@@ -97,11 +97,12 @@ pub(crate) struct RestoreContextGadget<F> {
 impl<F: Field> RestoreContextGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
+        is_success: Expression<F>,
         copy_lookup_rw_counter_increase: Expression<F>,
         return_data_offset: Expression<F>,
         return_data_length: Expression<F>,
     ) -> Self {
-        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
+        let x = cb.call_context(None, CallContextFieldTag::IsSuccess);
 
         // Read caller's context for restore
         let caller_id = cb.call_context(None, CallContextFieldTag::CallerId);
@@ -150,7 +151,7 @@ impl<F: Field> RestoreContextGadget<F> {
         // failure, we don't need to accumulate reversible_write_counter because
         // what happened in the sub-call has been reverted.
         let reversible_write_counter = caller_reversible_write_counter.expr()
-            + is_success.expr() * cb.curr.state.reversible_write_counter.expr();
+            + is_success.clone() * cb.curr.state.reversible_write_counter.expr();
 
         let rw_counter_offset = cb.rw_counter_offset()
             + copy_lookup_rw_counter_increase
@@ -172,7 +173,7 @@ impl<F: Field> RestoreContextGadget<F> {
         });
 
         Self {
-            is_success,
+            is_success: x,
             caller_id,
             caller_is_root,
             caller_is_create,
