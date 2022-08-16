@@ -586,7 +586,6 @@ impl<F: Field> RwRow<F> {
             .fold(F::zero(), |acc, value| acc * randomness + value)
     }
 }
-}
 
 impl Rw {
     pub fn tx_access_list_value_pair(&self) -> (bool, bool) {
