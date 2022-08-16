@@ -152,7 +152,8 @@ impl<F: Field> RestoreContextGadget<F> {
         let reversible_write_counter = caller_reversible_write_counter.expr()
             + is_success.expr() * cb.curr.state.reversible_write_counter.expr();
 
-        let rw_counter_offset = cb.rw_counter_offset() + copy_lookup_rw_counter_increase
+        let rw_counter_offset = cb.rw_counter_offset()
+            + copy_lookup_rw_counter_increase
             + not::expr(is_success.expr()) * cb.curr.state.reversible_write_counter.expr();
 
         // Do step state transition
