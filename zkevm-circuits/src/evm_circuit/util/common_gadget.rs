@@ -82,7 +82,6 @@ impl<F: Field> SameContextGadget<F> {
 /// Construction of step state transition that restores caller's state.
 #[derive(Clone, Debug)]
 pub(crate) struct RestoreContextGadget<F> {
-    is_success: Cell<F>,
     caller_id: Cell<F>,
     caller_is_root: Cell<F>,
     caller_is_create: Cell<F>,
@@ -97,6 +96,7 @@ pub(crate) struct RestoreContextGadget<F> {
 impl<F: Field> RestoreContextGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
+        is_success: Expression<F>,
         return_data_offset: Expression<F>,
         return_data_length: Expression<F>,
     ) -> Self {
@@ -144,13 +144,11 @@ impl<F: Field> RestoreContextGadget<F> {
         // future even it itself succeeds. Note that when sub-call halts in
         // failure, we don't need to accumulate reversible_write_counter because
         // what happened in the sub-call has been reverted.
-        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
         let reversible_write_counter = caller_reversible_write_counter.expr()
-        //  should just be is_success....
-            + is_success.expr() * cb.curr.state.reversible_write_counter.expr();
+            + is_success.clone() * cb.curr.state.reversible_write_counter.expr();
 
         let rw_counter_offset = cb.rw_counter_offset()
-            + not::expr(is_success.expr()) * cb.curr.state.reversible_write_counter.expr();
+            + not::expr(is_success) * cb.curr.state.reversible_write_counter.expr();
 
         // Do step state transition
 
@@ -169,7 +167,6 @@ impl<F: Field> RestoreContextGadget<F> {
         });
 
         Self {
-            is_success,
             caller_id,
             caller_is_root,
             caller_is_create,
@@ -191,12 +188,6 @@ impl<F: Field> RestoreContextGadget<F> {
         step: &ExecStep,
         rw_offset: usize,
     ) -> Result<(), Error> {
-        self.is_success.assign(
-            region,
-            offset,
-            Some(if call.is_success { F::one() } else { F::zero() }),
-        )?;
-
         let [caller_id, caller_is_root, caller_is_create, caller_code_hash, caller_program_counter, caller_stack_pointer, caller_gas_left, caller_memory_word_size, caller_reversible_write_counter] =
             if call.is_root {
                 [U256::zero(); 9]

@@ -22,7 +22,6 @@ pub(crate) struct ReturnGadget<F> {
     length: Word<F>,
     offset: Word<F>,
 
-    is_root: Cell<F>,
     is_create: Cell<F>,
     is_success: Cell<F>,
     restore_context: RestoreContextGadget<F>,
@@ -43,7 +42,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         cb.stack_pop(length.expr());
         cb.stack_pop(offset.expr());
 
-        let is_root = cb.call_context(None, CallContextFieldTag::IsRoot);
         let is_create = cb.call_context(None, CallContextFieldTag::IsCreate);
         let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
 
@@ -54,19 +52,18 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
                 + not::expr(is_success.expr()) * OpcodeId::REVERT.expr(),
         );
 
-        cb.condition(is_root.expr(), |cb| {
+        cb.condition(cb.curr.state.is_root.expr(), |cb| {
             cb.require_next_state(ExecutionState::EndTx);
         });
-        let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
+        let restore_context = cb.condition(not::expr(cb.curr.state.is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
-            RestoreContextGadget::construct(cb, offset.expr(), length.expr())
+            RestoreContextGadget::construct(cb, is_success.expr(), offset.expr(), length.expr())
         });
 
         Self {
             opcode,
             length,
             offset,
-            is_root,
             is_create,
             is_success,
             restore_context,
@@ -97,7 +94,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             .assign(region, offset, Some(memory_offset.to_le_bytes()))?;
 
         for (cell, value) in [
-            (&self.is_root, call.is_root),
             (&self.is_create, call.is_create),
             (&self.is_success, call.is_success),
         ] {
