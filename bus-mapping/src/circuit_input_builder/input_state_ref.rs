@@ -818,36 +818,7 @@ impl<'a> CircuitInputStateRef<'a> {
         Ok(())
     }
 
-    /// asdfasdfa asf awefas dfa;sldkfj;alskjf
-    pub fn handle_stop(&mut self, steps: &[GethExecStep]) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &steps[0];
-
-        let mut exec_step = self.new_step(geth_step)?;
-
-        let call = self.call()?.clone();
-
-        self.call_context_read(
-            &mut exec_step,
-            call.call_id,
-            CallContextField::IsSuccess,
-            1.into(),
-        );
-        // need to move this into handle_restore_context.
-        self.call_context_read(
-            &mut exec_step,
-            call.call_id,
-            CallContextField::IsSuccess,
-            call.is_success.to_word(),
-        );
-
-        if !call.is_root {
-            self.handle_restore_context(steps, &mut exec_step)?;
-        }
-
-        Ok(vec![exec_step])
-    }
-
-    /// asdfasdfa asf awefas dfa;sldkfj;alskjf
+    ///asdfasdfasdfa
     pub fn handle_restore_context(
         &mut self,
         steps: &[GethExecStep],

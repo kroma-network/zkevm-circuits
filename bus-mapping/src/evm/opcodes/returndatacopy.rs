@@ -25,22 +25,21 @@ impl Opcode for Returndatacopy {
 
         let call_ctx = state.call_ctx_mut()?;
         let memory = &mut call_ctx.memory;
+        let data_starts = offset.as_usize();
         let length = size.as_usize();
-        if length != 0 {
+        let data_ends = data_starts + length;
+        if data_ends > return_data.len() {
+            // If data_ends is past the end of return data, RETURNDATACOPY causes an OOG error
+            // even if length is 0: https://eips.ethereum.org/EIPS/eip-211. In this case, this
+            // opcode fails in the current context, so there are no more steps, and there is no
+            // need to reconstruct the memory.
+            assert_eq!(geth_steps.len(), 1);
+        } else if length != 0 {
             let mem_starts = dest_offset.as_usize();
             let mem_ends = mem_starts + length;
-            let data_starts = offset.as_usize();
-            let data_ends = data_starts + length;
             let minimal_length = dest_offset.as_usize() + length;
-            if data_ends <= return_data.len() {
-                memory.extend_at_least(minimal_length);
-                memory[mem_starts..mem_ends].copy_from_slice(&return_data[data_starts..data_ends]);
-            } else {
-                // TODO: RETURNDATACOPY causes an OOG error even if length is 0: https://eips.ethereum.org/EIPS/eip-211
-                assert_eq!(geth_steps.len(), 1);
-                // if overflows this opcode would fails current context, so
-                // there are no more steps.
-            }
+            memory.extend_at_least(minimal_length);
+            memory[mem_starts..mem_ends].copy_from_slice(&return_data[data_starts..data_ends]);
         }
         Ok(vec![exec_step])
     }
@@ -160,8 +159,8 @@ mod return_tests {
             CALL
 
             PUSH1 (0x40)
+            PUSH10 (0x1000000)
             PUSH1 (0)
-            PUSH1 (0x40)
             RETURNDATACOPY
 
             STOP
