@@ -675,8 +675,7 @@ mod test {
             callee(bytecode! { PUSH1(0) PUSH1(0) REVERT }),
         ];
 
-        for (i, (caller, callee)) in callers.into_iter().cartesian_product(callees.into_iter()).enumerate() {
-            dbg!(i);
+        for (caller, callee) in callers.into_iter().cartesian_product(callees.into_iter()) {
             test_ok(caller, callee, false);
         }
     }

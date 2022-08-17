@@ -9,7 +9,7 @@ use crate::{
                 Transition::{Any, Delta, Same, To},
             },
             math_gadget::{AddWordsGadget, RangeCheckGadget},
-            Cell, Word, not
+            not, Cell, Word,
         },
         witness::{Block, Call, ExecStep},
     },
@@ -31,7 +31,7 @@ pub(crate) struct SameContextGadget<F> {
 impl<F: Field> SameContextGadget<F> {
     pub(crate) fn construct(
         cb: &mut ConstraintBuilder<F>,
-        opcode: Cell<F>, // this doesn't need to be a cell?
+        opcode: Cell<F>,
         step_state_transition: StepStateTransition<F>,
     ) -> Self {
         cb.opcode_lookup(opcode.expr(), 1.expr());
@@ -198,11 +198,7 @@ impl<F: Field> RestoreContextGadget<F> {
         self.is_persistent.assign(
             region,
             offset,
-            Some(if call.is_success {
-                F::one()
-            } else {
-                F::zero()
-            }),
+            Some(if call.is_success { F::one() } else { F::zero() }),
         )?;
 
         let [caller_id, caller_is_root, caller_is_create, caller_code_hash, caller_program_counter, caller_stack_pointer, caller_gas_left, caller_memory_word_size, caller_reversible_write_counter] =

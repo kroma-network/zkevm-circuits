@@ -202,8 +202,7 @@ mod test {
             PUSH32(0)
             REVERT
         };
-        // for bytecode in [bytecode_success, bytecode_failure] {
-        for bytecode in [bytecode_failure] {
+        for bytecode in [bytecode_success, bytecode_failure] {
             let ctx = TestContext::<2, 1>::new(
                 None,
                 |accs| {
