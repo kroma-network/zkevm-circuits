@@ -1,11 +1,8 @@
 use super::Opcode;
 // use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::{
-    circuit_input_builder::CircuitInputStateRef,
-    evm::opcodes::ExecStep,
-    operation::{AccountField, CallContextField, TxAccessListAccountOp, RW},
-    state_db::Account,
-    Error,
+    circuit_input_builder::CircuitInputStateRef, evm::opcodes::ExecStep,
+    operation::CallContextField, Error,
 };
 use eth_types::{GethExecStep, ToWord};
 

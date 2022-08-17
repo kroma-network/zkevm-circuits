@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         step::ExecutionState,
-        table::{AccountFieldTag, CallContextFieldTag},
+        table::CallContextFieldTag,
         util::{
             common_gadget::RestoreContextGadget, constraint_builder::ConstraintBuilder, not,
             CachedRegion, Cell, Word,
