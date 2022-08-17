@@ -29,7 +29,7 @@ impl Opcode for Return {
         let length = step.stack.nth_last(1)?;
         state.stack_read(&mut exec_step, step.stack.nth_last_filled(1), length)?;
 
-        let call = *state.call()?;
+        let call = state.call()?.clone();
         for (field, value) in [
             (CallContextField::IsRoot, call.is_root.to_word()),
             (CallContextField::IsCreate, call.is_create().to_word()),
@@ -46,7 +46,7 @@ impl Opcode for Return {
         );
 
         if !call.is_root {
-            let caller = *state.caller()?;
+            let caller = state.caller()?.clone();
             state.call_context_read(
                 &mut exec_step,
                 call.call_id,
