@@ -68,7 +68,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
             cb.call_context_lookup(
                 false.expr(),
                 None,
-                CallContextFieldTag::IsPersistent,
+                CallContextFieldTag::IsSuccess,
                 1.expr(),
             );
 
@@ -120,7 +120,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
             .assign(region, offset, Some(F::from(opcode.as_u64())))?;
 
         self.restore_context
-            .assign(region, offset, block, call, step, 0)?;
+            .assign(region, offset, block, call, step, 1)?;
 
         Ok(())
     }

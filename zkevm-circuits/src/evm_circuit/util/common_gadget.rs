@@ -6,10 +6,10 @@ use crate::{
         util::{
             constraint_builder::{
                 ConstraintBuilder, ReversionInfo, StepStateTransition,
-                Transition::{Delta, Same, To, Any},
+                Transition::{Any, Delta, Same, To},
             },
             math_gadget::{AddWordsGadget, RangeCheckGadget},
-            Cell, Word,
+            Cell, Word, not
         },
         witness::{Block, Call, ExecStep},
     },
@@ -82,6 +82,7 @@ impl<F: Field> SameContextGadget<F> {
 /// Construction of step state transition that restores caller's state.
 #[derive(Clone, Debug)]
 pub(crate) struct RestoreContextGadget<F> {
+    is_persistent: Cell<F>,
     caller_id: Cell<F>,
     caller_is_root: Cell<F>,
     caller_is_create: Cell<F>,
@@ -100,6 +101,8 @@ impl<F: Field> RestoreContextGadget<F> {
         return_data_offset: Expression<F>,
         return_data_length: Expression<F>,
     ) -> Self {
+        let is_persistent = cb.call_context(None, CallContextFieldTag::IsSuccess);
+
         // Read caller's context for restore
         let caller_id = cb.call_context(None, CallContextFieldTag::CallerId);
         let [caller_is_root, caller_is_create, caller_code_hash, caller_program_counter, caller_stack_pointer, caller_gas_left, caller_memory_word_size, caller_reversible_write_counter] =
@@ -134,6 +137,7 @@ impl<F: Field> RestoreContextGadget<F> {
         }
 
         // Consume all gas_left if call halts in exception
+        // this probably also needs to be run_test_circuit_incomplete_fixed_table
         let gas_left = if cb.execution_state().halts_in_exception() {
             caller_gas_left.expr()
         } else {
@@ -144,17 +148,18 @@ impl<F: Field> RestoreContextGadget<F> {
         // future even it itself succeeds. Note that when sub-call halts in
         // failure, we don't need to accumulate reversible_write_counter because
         // what happened in the sub-call has been reverted.
-        let reversible_write_counter = if cb.execution_state().halts_in_success() {
-            caller_reversible_write_counter.expr() + cb.curr.state.reversible_write_counter.expr()
-        } else {
-            caller_reversible_write_counter.expr()
-        };
+        let reversible_write_counter = caller_reversible_write_counter.expr()
+        //  should just be is_success....
+            + is_persistent.expr() * cb.curr.state.reversible_write_counter.expr();
+
+        let rw_counter_offset = rw_counter_delta
+            + 13.expr()
+            + not::expr(is_persistent.expr()) * cb.curr.state.reversible_write_counter.expr();
 
         // Do step state transition
 
         cb.require_step_state_transition(StepStateTransition {
-            rw_counter: Delta(rw_counter_delta + 12.expr()),
-            // rw_counter: Any,
+            rw_counter: Delta(rw_counter_offset),
             call_id: To(caller_id.expr()),
             is_root: To(caller_is_root.expr()),
             is_create: To(caller_is_create.expr()),
@@ -163,12 +168,12 @@ impl<F: Field> RestoreContextGadget<F> {
             stack_pointer: To(caller_stack_pointer.expr()),
             gas_left: To(gas_left.expr()),
             memory_word_size: To(caller_memory_word_size.expr()),
-            reversible_write_counter: Any,
-            // reversible_write_counter: To(reversible_write_counter),
+            reversible_write_counter: To(reversible_write_counter),
             log_id: Same,
         });
 
         Self {
+            is_persistent,
             caller_id,
             caller_is_root,
             caller_is_create,
@@ -190,6 +195,16 @@ impl<F: Field> RestoreContextGadget<F> {
         step: &ExecStep,
         rw_offset: usize,
     ) -> Result<(), Error> {
+        self.is_persistent.assign(
+            region,
+            offset,
+            Some(if call.is_success {
+                F::one()
+            } else {
+                F::zero()
+            }),
+        )?;
+
         let [caller_id, caller_is_root, caller_is_create, caller_code_hash, caller_program_counter, caller_stack_pointer, caller_gas_left, caller_memory_word_size, caller_reversible_write_counter] =
             if call.is_root {
                 [U256::zero(); 9]

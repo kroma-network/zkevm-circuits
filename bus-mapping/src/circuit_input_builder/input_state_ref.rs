@@ -817,15 +817,14 @@ impl<'a> CircuitInputStateRef<'a> {
             CallContextField::IsSuccess,
             1.into(),
         );
+        self.call_context_read(
+            &mut exec_step,
+            call.call_id,
+            CallContextField::IsSuccess,
+            call.is_success.to_word(),
+        );
 
-        if call.is_root {
-            self.call_context_read(
-                &mut exec_step,
-                call.call_id,
-                CallContextField::IsPersistent,
-                1.into(),
-            );
-        } else {
+        if !call.is_root {
             // The following part corresponds to
             // Instruction.step_self_transition_to_restored_context
             // in python spec, and should be reusable among all expected halting opcodes or

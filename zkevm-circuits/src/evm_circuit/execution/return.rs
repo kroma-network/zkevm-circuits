@@ -67,16 +67,12 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             cb.call_context_lookup(
                 0.expr(),
                 None,
-                CallContextFieldTag::IsPersistent,
+                CallContextFieldTag::IsSuccess,
                 is_success.expr(),
-            ); // maybe + 6
+            );
         });
         let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
-            // rw_counter_delta: Expression<F>,
-            // return_data_offset: Expression<F>,
-            // return_data_length: Expression<F>,
-            // do you need a condition in here???
             RestoreContextGadget::construct(cb, 5.expr(), offset.expr(), length.expr())
         });
 
@@ -132,7 +128,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
 
         if !call.is_root {
             self.restore_context
-                .assign(region, offset, block, call, step, 4)?;
+                .assign(region, offset, block, call, step, 5)?;
         }
 
         Ok(())

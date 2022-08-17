@@ -38,14 +38,14 @@ impl Opcode for Return {
             state.call_context_read(&mut exec_step, call.call_id, field, value);
         }
 
-        if call.is_root {
-            state.call_context_read(
-                &mut exec_step,
-                call.call_id,
-                CallContextField::IsPersistent,
-                call.is_persistent.to_word(),
-            );
-        } else {
+        state.call_context_read(
+            &mut exec_step,
+            call.call_id,
+            CallContextField::IsSuccess,
+            call.is_success.to_word(),
+        );
+
+        if !call.is_root {
             let caller = *state.caller()?;
             state.call_context_read(
                 &mut exec_step,

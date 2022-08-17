@@ -672,10 +672,11 @@ mod test {
             // Success
             callee(bytecode! { PUSH1(0) PUSH1(0) RETURN }),
             // Failure
-            // callee(bytecode! { PUSH1(0) PUSH1(0) REVERT }),
+            callee(bytecode! { PUSH1(0) PUSH1(0) REVERT }),
         ];
 
-        for (caller, callee) in callers.into_iter().cartesian_product(callees.into_iter()) {
+        for (i, (caller, callee)) in callers.into_iter().cartesian_product(callees.into_iter()).enumerate() {
+            dbg!(i);
             test_ok(caller, callee, false);
         }
     }
