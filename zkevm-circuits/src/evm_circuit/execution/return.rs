@@ -73,7 +73,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         });
         let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
-            RestoreContextGadget::construct(cb, 5.expr(), offset.expr(), length.expr())
+            RestoreContextGadget::construct(cb, offset.expr(), length.expr())
         });
 
         Self {

@@ -81,11 +81,10 @@ pub enum ExecutionState {
     CREATE,
     CALL,
     CALLCODE,
-    RETURN,
+    RETURN, // RETURN, REVERT TODO: rename this.
     DELEGATECALL,
     CREATE2,
     STATICCALL,
-    REVERT,
     SELFDESTRUCT,
     // Error cases
     ErrorInvalidOpcode,
@@ -134,10 +133,6 @@ impl ExecutionState {
         Self::iter().count()
     }
 
-    pub(crate) fn halts_in_success(&self) -> bool {
-        matches!(self, Self::STOP | Self::RETURN | Self::SELFDESTRUCT)
-    }
-
     pub(crate) fn halts_in_exception(&self) -> bool {
         matches!(
             self,
@@ -174,7 +169,7 @@ impl ExecutionState {
     }
 
     pub(crate) fn halts(&self) -> bool {
-        self.halts_in_success() || self.halts_in_exception() || matches!(self, Self::REVERT)
+        self.halts_in_exception() || matches!(self, Self::STOP | Self::RETURN | Self::SELFDESTRUCT)
     }
 
     pub(crate) fn responsible_opcodes(&self) -> Vec<OpcodeId> {
@@ -311,11 +306,10 @@ impl ExecutionState {
             Self::CREATE => vec![OpcodeId::CREATE],
             Self::CALL => vec![OpcodeId::CALL],
             Self::CALLCODE => vec![OpcodeId::CALLCODE],
-            Self::RETURN => vec![OpcodeId::RETURN],
+            Self::RETURN => vec![OpcodeId::RETURN, OpcodeId::REVERT],
             Self::DELEGATECALL => vec![OpcodeId::DELEGATECALL],
             Self::CREATE2 => vec![OpcodeId::CREATE2],
             Self::STATICCALL => vec![OpcodeId::STATICCALL],
-            Self::REVERT => vec![OpcodeId::REVERT],
             Self::SELFDESTRUCT => vec![OpcodeId::SELFDESTRUCT],
             _ => vec![],
         }
@@ -471,4 +465,10 @@ impl<F: FieldExt> Step<F> {
             .assign(region, offset, Some(F::from(step.log_id as u64)))?;
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod step_tests {
+    // TODO: add test that execution state -> opcode id is onto and that there
+    // is exactly one execution state for each opcode id.
 }
