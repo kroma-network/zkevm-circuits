@@ -14,7 +14,8 @@ use eth_types::{GethExecStep, ToWord};
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Return;
 
-// rename to ReturnRevertStop?
+// TODO: this also handles Revert, so a better name may be Halt? It could also
+// handle Stop?
 impl Opcode for Return {
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
