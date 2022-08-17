@@ -100,8 +100,6 @@ impl<F: Field> RestoreContextGadget<F> {
         return_data_offset: Expression<F>,
         return_data_length: Expression<F>,
     ) -> Self {
-        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
-
         // Read caller's context for restore
         let caller_id = cb.call_context(None, CallContextFieldTag::CallerId);
         let [caller_is_root, caller_is_create, caller_code_hash, caller_program_counter, caller_stack_pointer, caller_gas_left, caller_memory_word_size, caller_reversible_write_counter] =
@@ -136,7 +134,6 @@ impl<F: Field> RestoreContextGadget<F> {
         }
 
         // Consume all gas_left if call halts in exception
-        // this probably also needs to be run_test_circuit_incomplete_fixed_table
         let gas_left = if cb.execution_state().halts_in_exception() {
             caller_gas_left.expr()
         } else {
@@ -147,6 +144,7 @@ impl<F: Field> RestoreContextGadget<F> {
         // future even it itself succeeds. Note that when sub-call halts in
         // failure, we don't need to accumulate reversible_write_counter because
         // what happened in the sub-call has been reverted.
+        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
         let reversible_write_counter = caller_reversible_write_counter.expr()
         //  should just be is_success....
             + is_success.expr() * cb.curr.state.reversible_write_counter.expr();
@@ -203,7 +201,7 @@ impl<F: Field> RestoreContextGadget<F> {
             if call.is_root {
                 [U256::zero(); 9]
             } else {
-                [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                [0, 1, 2, 3, 4, 5, 6, 7, 8]
                     .map(|i| step.rw_indices[i + rw_offset])
                     .map(|idx| {
                         // dbg!(idx);

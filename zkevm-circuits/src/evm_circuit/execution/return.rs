@@ -12,7 +12,7 @@ use crate::{
     util::Expr,
 };
 use bus_mapping::evm::OpcodeId;
-use eth_types::{Field, ToLittleEndian};
+use eth_types::{Field, ToLittleEndian, ToScalar};
 use halo2_proofs::plonk::Error;
 
 #[derive(Clone, Debug)]
@@ -38,38 +38,24 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         let opcode = cb.query_cell();
         cb.opcode_lookup(opcode.expr(), 1.expr());
 
-        let length = cb.query_rlc::<32>();
-        let offset = cb.query_rlc::<32>();
-        cb.stack_pop(length.expr()); // +1
-        cb.stack_pop(offset.expr()); // +2
+        let length = cb.query_word();
+        let offset = cb.query_word();
+        cb.stack_pop(length.expr());
+        cb.stack_pop(offset.expr());
 
-        let is_root = cb.call_context(None, CallContextFieldTag::IsRoot); // +3
-        let is_create = cb.call_context(None, CallContextFieldTag::IsCreate); // +4
-        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess); // +5
+        let is_root = cb.call_context(None, CallContextFieldTag::IsRoot);
+        let is_create = cb.call_context(None, CallContextFieldTag::IsCreate);
+        let is_success = cb.call_context(None, CallContextFieldTag::IsSuccess);
 
-        cb.condition(is_success.expr(), |cb| {
-            cb.require_equal(
-                "Opcode should be RETURN",
-                opcode.expr(),
-                OpcodeId::RETURN.expr(),
-            )
-        });
-        cb.condition(not::expr(is_success.expr()), |cb| {
-            cb.require_equal(
-                "Opcode should be REVERT",
-                opcode.expr(),
-                OpcodeId::REVERT.expr(),
-            )
-        });
+        cb.require_equal(
+            "Opcode is RETURN if is_success, REVERT otherwise",
+            opcode.expr(),
+            is_success.expr() * OpcodeId::RETURN.expr()
+                + not::expr(is_success.expr()) * OpcodeId::REVERT.expr(),
+        );
 
         cb.condition(is_root.expr(), |cb| {
             cb.require_next_state(ExecutionState::EndTx);
-            cb.call_context_lookup(
-                0.expr(),
-                None,
-                CallContextFieldTag::IsSuccess,
-                is_success.expr(),
-            );
         });
         let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             cb.require_next_state_not(ExecutionState::EndTx);
@@ -110,21 +96,13 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         self.offset
             .assign(region, offset, Some(memory_offset.to_le_bytes()))?;
 
-        self.is_root.assign(
-            region,
-            offset,
-            Some(if call.is_root { F::one() } else { F::zero() }),
-        )?;
-        self.is_create.assign(
-            region,
-            offset,
-            Some(if call.is_create { F::one() } else { F::zero() }),
-        )?;
-        self.is_success.assign(
-            region,
-            offset,
-            Some(if call.is_success { F::one() } else { F::zero() }),
-        )?;
+        for (cell, value) in [
+            (&self.is_root, call.is_root),
+            (&self.is_create, call.is_create),
+            (&self.is_success, call.is_success),
+        ] {
+            cell.assign(region, offset, value.to_scalar())?;
+        }
 
         if !call.is_root {
             self.restore_context
@@ -145,7 +123,7 @@ mod test {
     fn test_return() {
         let bytecode = bytecode! {
             PUSH32(34234)
-            PUSH32(32342) // i think there's a memory expansion issue when there this value is too large?
+            PUSH32(32342)
             RETURN
         };
 

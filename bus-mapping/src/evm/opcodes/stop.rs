@@ -44,13 +44,6 @@ impl Opcode for Stop {
             // Instruction.step_state_transition_to_restored_context
             // in python spec, and should be reusable among all expected halting opcodes or
             // exceptions. TODO: Refactor it as a helper function.
-            state.call_context_read(
-                &mut exec_step,
-                call.call_id,
-                CallContextField::IsSuccess,
-                call.is_success.to_word(),
-            );
-
             let caller = state.caller()?.clone();
             state.call_context_read(
                 &mut exec_step,
@@ -93,6 +86,13 @@ impl Opcode for Stop {
             ] {
                 state.call_context_write(&mut exec_step, caller.call_id, field, value);
             }
+
+            state.call_context_read(
+                &mut exec_step,
+                call.call_id,
+                CallContextField::IsSuccess,
+                call.is_success.to_word(),
+            );
         }
 
         state.handle_return(geth_step)?;
