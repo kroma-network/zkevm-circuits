@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - scroll-dev**
 
 jobs:
   integration-tests:
@@ -17,6 +18,8 @@ jobs:
         working-directory: ./integration-tests
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
           override: false
