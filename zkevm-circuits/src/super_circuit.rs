@@ -215,7 +215,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         // Lookups from TxCircuit
         keccak_inputs.extend_from_slice(&tx_circuit::keccak_inputs(
             &self.tx_circuit.txs,
-            self.block.context.chain_id.as_u64(),
+            self.block.context.chain_id().as_u64(),
         )?);
         // Lookups from BytecodeCircuit
         for bytecode in self.block.bytecodes.values() {
@@ -330,7 +330,7 @@ mod super_circuit_tests {
         // SignVerifyChip -> ECDSAChip -> MainGate instance column
         instance.push(vec![]);
 
-        let chain_id = block.context.chain_id;
+        let chain_id = block.context.chain_id();
         let tx_circuit = TxCircuit::new(aux_generator, block.randomness, chain_id.as_u64(), txs);
         let circuit = SuperCircuit::<F, MAX_TXS, MAX_CALLDATA> {
             block,
@@ -407,7 +407,18 @@ mod super_circuit_tests {
             .collect();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
-        assert_eq!(builder.block.chain_id.as_u64(), chain_id);
+        assert_eq!(
+            builder
+                .block
+                .headers
+                .iter()
+                .next()
+                .unwrap()
+                .1
+                .chain_id
+                .as_u64(),
+            chain_id
+        );
 
         builder
             .handle_block(&block.eth_block, &block.geth_traces)

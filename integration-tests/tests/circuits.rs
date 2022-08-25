@@ -25,10 +25,14 @@ lazy_static! {
 #[tokio::test]
 async fn test_mock_prove_tx() {
     log_init();
-    log::info!("test evm circuit, tx: {}", *TX_ID);
+    let tx_id: &str = &TX_ID;
+    log::info!("test evm circuit, tx: {}", tx_id);
+    if tx_id.is_empty() {
+        return;
+    }
     let cli = get_client();
     let cli = BuilderClient::new(cli).await.unwrap();
-    let builder = cli.gen_inputs_tx(&TX_ID).await.unwrap();
+    let builder = cli.gen_inputs_tx(tx_id).await.unwrap();
 
     if builder.block.txs.is_empty() {
         log::info!("skip empty block");
@@ -81,6 +85,43 @@ async fn test_evm_circuit_all_block() {
     for blk in start..=end {
         test_evm_circuit_block(blk as u64).await;
     }
+}
+
+#[tokio::test]
+async fn test_evm_circuit_batch() {
+    log_init();
+    let start: usize = 1;
+    let end: usize = 8;
+    let cli = get_client();
+    let cli = BuilderClient::new(cli).await.unwrap();
+    let builder = cli
+        .gen_inputs_multi_blocks(start as u64, end as u64 + 1)
+        .await
+        .unwrap();
+
+    if builder.block.txs.is_empty() {
+        log::info!("skip empty block");
+        return;
+    }
+
+    let block = block_convert(&builder.block, &builder.code_db);
+    log::info!("tx num: {}", builder.block.txs.len());
+    let need_bitwise_lookup = builder.block.txs.iter().any(|tx| {
+        tx.steps().iter().any(|step| {
+            matches!(
+                step.exec_state,
+                ExecState::Op(OpcodeId::AND)
+                    | ExecState::Op(OpcodeId::OR)
+                    | ExecState::Op(OpcodeId::XOR)
+            )
+        })
+    });
+    let result = if need_bitwise_lookup {
+        run_test_circuit_complete_fixed_table(block)
+    } else {
+        run_test_circuit_incomplete_fixed_table(block)
+    };
+    log::info!("test evm circuit, result {:?}", result);
 }
 
 async fn test_evm_circuit_block(block_num: u64) {

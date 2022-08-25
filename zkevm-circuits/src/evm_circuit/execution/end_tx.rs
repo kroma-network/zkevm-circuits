@@ -230,11 +230,12 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             vec![gas_fee_refund],
             caller_balance,
         )?;
-        let effective_tip = tx.gas_price - block.context.base_fee;
+        let context = &block.context.blocks[&tx.block_number];
+        let effective_tip = tx.gas_price - context.base_fee;
         self.sub_gas_price_by_base_fee.assign(
             region,
             offset,
-            [effective_tip, block.context.base_fee],
+            [effective_tip, context.base_fee],
             tx.gas_price,
         )?;
         self.mul_effective_tip_by_gas_used.assign(
@@ -245,7 +246,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             effective_tip * gas_used,
         )?;
         self.coinbase
-            .assign(region, offset, block.context.coinbase.to_scalar())?;
+            .assign(region, offset, context.coinbase.to_scalar())?;
         self.coinbase_reward.assign(
             region,
             offset,

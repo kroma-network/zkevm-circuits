@@ -361,6 +361,8 @@ checksum = "8f1e260c3a9040a7c19a12468758f4c16f31a81a1fe087482be9570ec864bb6c"
 name = "bus-mapping"
 version = "0.1.0"
 dependencies = [
+ "ctor",
+ "env_logger",
  "eth-types",
  "ethers-core",
  "ethers-providers",
