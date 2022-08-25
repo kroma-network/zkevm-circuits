@@ -1255,12 +1255,11 @@ impl<F: Field> ExecutionConfig<F> {
                 tx.calls.clear();
                 tx.steps.clear();
                 log::error!(
-                    "ctx: offset {} step {:?}. call: {:?}, tx: {:?}, block number {:?}",
+                    "ctx: offset {} step {:?}. call: {:?}, tx: {:?}",
                     offset,
                     step,
                     call,
-                    tx,
-                    block.context.number
+                    tx
                 );
             };
             if idx >= step.rw_indices.len() {

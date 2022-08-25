@@ -25,7 +25,11 @@ use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::pairing::bn256::Fr;
 use itertools::Itertools;
 use sha3::{Digest, Keccak256};
-use std::{collections::HashMap, iter};
+use std::{
+    collections::{BTreeMap, HashMap},
+    convert::TryInto,
+    iter,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct Block<F> {
@@ -38,13 +42,26 @@ pub struct Block<F> {
     /// Bytecode used in the block
     pub bytecodes: HashMap<Word, Bytecode>,
     /// The block context
-    pub context: BlockContext,
+    pub context: BlockContexts,
     /// Copy events for the EVM circuit's copy table.
     pub copy_events: Vec<CopyEvent>,
     /// ..
     pub evm_circuit_pad_to: usize,
     /// Length to rw table rows in state circuit
     pub state_circuit_pad_to: usize,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct BlockContexts {
+    /// ..
+    pub blocks: BTreeMap<u64, BlockContext>,
+}
+
+impl BlockContexts {
+    /// ..
+    pub fn chain_id(&self) -> Word {
+        self.blocks.iter().next().unwrap().1.chain_id
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -137,6 +154,8 @@ impl BlockContext {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Transaction {
+    /// ..
+    pub block_number: u64,
     /// The transaction identifier in the block
     pub id: usize,
     /// The hash of the transaction
@@ -942,17 +961,28 @@ impl Rw {
     }
 }
 
-impl From<&circuit_input_builder::Block> for BlockContext {
+impl From<&circuit_input_builder::Block> for BlockContexts {
     fn from(block: &circuit_input_builder::Block) -> Self {
         Self {
-            coinbase: block.coinbase,
-            gas_limit: block.gas_limit,
-            number: block.number,
-            timestamp: block.timestamp,
-            difficulty: block.difficulty,
-            base_fee: block.base_fee,
-            history_hashes: block.history_hashes.clone(),
-            chain_id: block.chain_id,
+            blocks: block
+                .headers
+                .values()
+                .map(|block| {
+                    (
+                        block.number.as_u64(),
+                        BlockContext {
+                            coinbase: block.coinbase,
+                            gas_limit: block.gas_limit,
+                            number: block.number,
+                            timestamp: block.timestamp,
+                            difficulty: block.difficulty,
+                            base_fee: block.base_fee,
+                            history_hashes: block.history_hashes.clone(),
+                            chain_id: block.chain_id,
+                        },
+                    )
+                })
+                .collect::<BTreeMap<_, _>>(),
         }
     }
 }
@@ -1374,6 +1404,7 @@ fn step_convert(step: &circuit_input_builder::ExecStep) -> ExecStep {
 
 fn tx_convert(tx: &circuit_input_builder::Transaction, id: usize, is_last_tx: bool) -> Transaction {
     Transaction {
+        block_number: tx.block_num,
         id,
         hash: tx.hash,
         nonce: tx.nonce,

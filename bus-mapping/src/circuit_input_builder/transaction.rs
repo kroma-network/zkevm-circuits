@@ -180,6 +180,8 @@ impl TransactionContext {
 #[derive(Debug, Clone)]
 /// Result of the parsing of an Ethereum Transaction.
 pub struct Transaction {
+    /// ..
+    pub block_num: u64,
     /// Nonce
     pub nonce: u64,
     /// Hash
@@ -261,6 +263,7 @@ impl Transaction {
         };
 
         Ok(Self {
+            block_num: eth_tx.block_number.unwrap().as_u64(),
             hash: eth_tx.hash,
             nonce: eth_tx.nonce.as_u64(),
             gas: eth_tx.gas.as_u64(),

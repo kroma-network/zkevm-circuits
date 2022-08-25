@@ -37,7 +37,7 @@ pub const CONTRACTS: &[(&str, &str)] = &[
 /// Path to gen_blockchain_data output file
 pub const GENDATA_OUTPUT_PATH: &str = "gendata_output.json";
 
-const GETH0_URL_DEFAULT: &str = "http://52.37.45.56:8903";
+const GETH0_URL_DEFAULT: &str = "http://localhost:8545";
 
 lazy_static! {
     /// URL of the integration test geth0 instance, which contains blocks for which proofs will be
@@ -62,7 +62,7 @@ lazy_static! {
     /// ..
     pub static ref TX_ID: String =  match env::var("TX_ID") {
         Ok(val) => val,
-        Err(VarError::NotPresent) => "0x4096e88107bd14522dfc3500325bff580728504580f5103d8247a2a32425889f".to_string(),
+        Err(VarError::NotPresent) => "".to_string(),
         Err(e) => panic!("Error in TX_ID env var: {:?}", e),
     };
     /// ..

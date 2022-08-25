@@ -6,7 +6,7 @@ use crate::{
     Error,
 };
 use eth_types::{Address, Hash, Word};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Context of a [`Block`] which can mutate in a [`Transaction`].
 #[derive(Debug)]
@@ -40,8 +40,8 @@ impl BlockContext {
 }
 
 /// Circuit Input related to a block.
-#[derive(Debug)]
-pub struct Block {
+#[derive(Debug, Clone)]
+pub struct BlockHead {
     /// chain id
     pub chain_id: Word,
     /// history hashes contains most recent 256 block hashes in history, where
@@ -59,16 +59,8 @@ pub struct Block {
     pub difficulty: Word,
     /// base fee
     pub base_fee: Word,
-    /// Container of operations done in this block.
-    pub container: OperationContainer,
-    /// Transactions contained in the block
-    pub txs: Vec<Transaction>,
-    /// Copy events in this block.
-    pub copy_events: Vec<CopyEvent>,
-    code: HashMap<Hash, Vec<u8>>,
 }
-
-impl Block {
+impl BlockHead {
     /// Create a new block.
     pub fn new<TX>(
         chain_id: Word,
@@ -95,11 +87,37 @@ impl Block {
             timestamp: eth_block.timestamp,
             difficulty: eth_block.difficulty,
             base_fee: eth_block.base_fee_per_gas.unwrap_or_default(),
-            container: OperationContainer::new(),
-            txs: Vec::new(),
-            copy_events: Vec::new(),
-            code: HashMap::new(),
         })
+    }
+}
+
+/// Circuit Input related to a block.
+#[derive(Debug, Default)]
+pub struct Block {
+    /// The `Block` struct is in fact "Batch" for l2
+    /// while "headers" are "Blocks" insides a batch
+    pub headers: BTreeMap<u64, BlockHead>,
+    /// Container of operations done in this block.
+    pub container: OperationContainer,
+    /// Transactions contained in the block
+    pub txs: Vec<Transaction>,
+    /// Copy events in this block.
+    pub copy_events: Vec<CopyEvent>,
+    /// ..
+    pub code: HashMap<Hash, Vec<u8>>,
+}
+
+impl Block {
+    /// Create a new block.
+    pub fn new<TX>(
+        chain_id: Word,
+        history_hashes: Vec<Word>,
+        eth_block: &eth_types::Block<TX>,
+    ) -> Result<Self, Error> {
+        let mut block = Self::default();
+        let info = BlockHead::new(chain_id, history_hashes, eth_block)?;
+        block.headers.insert(info.number.as_u64(), info);
+        Ok(block)
     }
 
     /// Return the list of transactions of this block.

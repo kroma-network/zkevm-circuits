@@ -1,10 +1,10 @@
 //! Table definitions used cross-circuits
 
 use crate::copy_circuit::number_or_hash_to_field;
-use crate::evm_circuit::witness::{Rw, RwRow};
+use crate::evm_circuit::witness::{BlockContexts, Rw, RwRow};
 use crate::evm_circuit::{
     util::{rlc, RandomLinearCombination},
-    witness::{Block, BlockContext, Bytecode, RwMap, Transaction},
+    witness::{Block, Bytecode, RwMap, Transaction},
 };
 use crate::impl_expr;
 use bus_mapping::circuit_input_builder::{CopyDataType, CopyEvent};
@@ -562,7 +562,7 @@ impl BlockTable {
     pub fn load<F: Field>(
         &self,
         layouter: &mut impl Layouter<F>,
-        block: &BlockContext,
+        blocks: &BlockContexts,
         randomness: F,
     ) -> Result<(), Error> {
         layouter.assign_region(
@@ -579,17 +579,19 @@ impl BlockTable {
                 }
                 offset += 1;
 
-                let block_table_columns = self.columns();
-                for row in block.table_assignments(randomness) {
-                    for (column, value) in block_table_columns.iter().zip_eq(row) {
-                        region.assign_advice(
-                            || format!("block table row {}", offset),
-                            *column,
-                            offset,
-                            || Ok(value),
-                        )?;
+                for block in blocks.blocks.values() {
+                    let block_table_columns = self.columns();
+                    for row in block.table_assignments(randomness) {
+                        for (column, value) in block_table_columns.iter().zip_eq(row) {
+                            region.assign_advice(
+                                || format!("block table row {}", offset),
+                                *column,
+                                offset,
+                                || Ok(value),
+                            )?;
+                        }
+                        offset += 1;
                     }
-                    offset += 1;
                 }
 
                 Ok(())
