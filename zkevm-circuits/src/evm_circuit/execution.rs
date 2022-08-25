@@ -765,27 +765,28 @@ impl<F: Field> ExecutionConfig<F> {
                         2
                     };
 
-                    for column in iter::empty()
-                        .chain([
-                            self.q_used,
-                            self.q_step,
-                            self.num_rows_until_next_step,
-                            self.num_rows_inv,
-                            self.q_step_last,
-                        ])
-                        .chain(self.advices)
-                    {
-                        for i in 0..end_row {
+                    for i in 0..end_row {
+                        region
+                            .assign_fixed(
+                                || "assgin fixed q_usable rows ",
+                                self.q_usable,
+                                i,
+                                || Ok(F::one()),
+                            )
+                            .unwrap();
+
+                        for column in iter::empty()
+                            .chain([
+                                self.q_used,
+                                self.q_step,
+                                self.num_rows_until_next_step,
+                                self.num_rows_inv,
+                                self.q_step_last,
+                            ])
+                            .chain(self.advices)
+                        {
                             region
                                 .assign_advice(|| "assign advice rows", column, i, || Ok(F::zero()))
-                                .unwrap();
-                            region
-                                .assign_fixed(
-                                    || "assgin fixed q_usable rows ",
-                                    self.q_usable,
-                                    i,
-                                    || Ok(F::one()),
-                                )
                                 .unwrap();
                         }
                     }
