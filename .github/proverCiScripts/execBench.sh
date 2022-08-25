@@ -26,9 +26,6 @@ case $circuit in
     "tx")
         run_suffix="tx_circuit_prover"
         ;;
-    "super")
-        run_suffix="super_circuit_prover"
-        ;;
     *)
         echo "No proper value"
         exit 1
