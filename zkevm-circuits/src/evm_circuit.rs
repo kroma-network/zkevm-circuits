@@ -151,9 +151,7 @@ impl<F: Field> EvmCircuit<F> {
 
 #[cfg(any(feature = "test", test))]
 pub mod test {
-
     use std::convert::TryInto;
-
     use strum::IntoEnumIterator;
 
     use crate::{
@@ -162,7 +160,6 @@ pub mod test {
         util::DEFAULT_RAND,
     };
     use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
-
     use eth_types::{Field, Word};
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner},
@@ -333,9 +330,15 @@ pub mod test {
                     }),
                 self.block.randomness,
             )?;
-            config
-                .evm_circuit
-                .assign_block_exact(&mut layouter, &self.block)?;
+            if self.block.evm_circuit_pad_to != 0 {
+                config
+                    .evm_circuit
+                    .assign_block(&mut layouter, &self.block)?;
+            } else {
+                config
+                    .evm_circuit
+                    .assign_block_exact(&mut layouter, &self.block)?;
+            }
             Ok(())
         }
     }

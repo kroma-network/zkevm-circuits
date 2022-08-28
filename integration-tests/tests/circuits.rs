@@ -1,16 +1,18 @@
 #![cfg(feature = "circuits")]
 
-use bus_mapping::{circuit_input_builder::BuilderClient};
+use bus_mapping::circuit_input_builder::BuilderClient;
 
 use bus_mapping::operation::OperationContainer;
 use eth_types::geth_types;
 use group::{Curve, Group};
 use halo2_proofs::arithmetic::BaseExt;
-use integration_tests::{get_client, log_init, GenDataOutput, CHAIN_ID, END_BLOCK, START_BLOCK, TX_ID};
 use halo2_proofs::{
     arithmetic::{CurveAffine, Field},
     dev::MockProver,
     pairing::bn256::Fr,
+};
+use integration_tests::{
+    get_client, log_init, GenDataOutput, CHAIN_ID, END_BLOCK, START_BLOCK, TX_ID,
 };
 use lazy_static::lazy_static;
 use log::trace;

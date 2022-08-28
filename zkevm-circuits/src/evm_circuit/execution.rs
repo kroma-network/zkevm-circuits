@@ -1228,6 +1228,9 @@ impl<F: Field> ExecutionConfig<F> {
         block: &Block<F>,
     ) {
         let mut assigned_rw_values = Vec::new();
+        // Reversion lookup expressions have different ordering compared to rw table,
+        // making it a bit complex to check,
+        // so we skip checking reversion lookups.
         for (name, v) in assigned_stored_expressions {
             if name.starts_with("rw lookup ")
                 && !name.contains(" with reversion")

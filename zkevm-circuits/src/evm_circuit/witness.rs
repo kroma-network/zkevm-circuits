@@ -581,6 +581,7 @@ pub struct RwRow<F> {
     pub aux1: F,
     pub aux2: F,
 }
+
 impl<F: Field> RwRow<F> {
     pub fn values(&self) -> [F; 11] {
         [

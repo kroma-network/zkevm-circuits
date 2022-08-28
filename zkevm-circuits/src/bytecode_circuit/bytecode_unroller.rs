@@ -653,7 +653,7 @@ fn into_words(message: &[u8]) -> Vec<u64> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::bytecode_circuit::dev::test_bytecode_circuit_unrolled;
+    use crate::{bytecode_circuit::dev::test_bytecode_circuit_unrolled, util::DEFAULT_RAND};
     use eth_types::Bytecode;
     use halo2_proofs::pairing::bn256::Fr;
 
