@@ -38,7 +38,6 @@ maingate =  { git = "https://github.com/scroll-tech/halo2wrong", branch = "scrol
 integer =   { git = "https://github.com/scroll-tech/halo2wrong", branch = "scroll-dev-0801", features = ["kzg"] }
 group = "0.11"
 libsecp256k1 = "0.7"
-rlp = "0.5"
 num-bigint = { version = "0.4" }
 subtle = "2.4"
 
@@ -60,4 +59,5 @@ harness = false
 
 [features]
 default = []
-test = []
+test = [ "dev" ]
+dev = []

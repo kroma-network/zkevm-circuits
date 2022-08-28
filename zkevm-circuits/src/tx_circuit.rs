@@ -23,14 +23,14 @@ use libsecp256k1;
 use log::error;
 use num::Integer;
 use num_bigint::BigUint;
-// use rand_core::RngCore;
-use rlp::RlpStream;
-use secp256k1::Secp256k1Affine;
 use sha3::{Digest, Keccak256};
 use sign_verify::{pk_bytes_swap_endianness, SignData, SignVerifyChip, SignVerifyConfig};
-pub use sign_verify::{POW_RAND_SIZE, VERIF_HEIGHT};
 use std::marker::PhantomData;
 use subtle::CtOption;
+
+pub use group::{Curve, Group};
+pub use secp256k1::Secp256k1Affine;
+pub use sign_verify::{POW_RAND_SIZE, VERIF_HEIGHT};
 
 lazy_static! {
     // Curve Scalar.  Referece: Section 2.4.1 (parameter `n`) in "SEC 2: Recommended Elliptic Curve
@@ -100,7 +100,8 @@ pub fn keccak_inputs(txs: &[Transaction], chain_id: u64) -> Result<Vec<Vec<u8>>,
     Ok(inputs)
 }
 
-fn tx_to_sign_data(tx: &Transaction, chain_id: u64) -> Result<SignData, Error> {
+/// Doc this
+pub(crate) fn tx_to_sign_data(tx: &Transaction, chain_id: u64) -> Result<SignData, Error> {
     let sig_r_le = tx.r.to_le_bytes();
     let sig_s_le = tx.s.to_le_bytes();
     let sig_r =
@@ -114,18 +115,7 @@ fn tx_to_sign_data(tx: &Transaction, chain_id: u64) -> Result<SignData, Error> {
             e
         })?;
     // msg = rlp([nonce, gasPrice, gas, to, value, data, sig_v, r, s])
-    let mut stream = RlpStream::new_list(9);
-    stream
-        .append(&tx.nonce)
-        .append(&tx.gas_price)
-        .append(&tx.gas_limit)
-        .append(&tx.to.unwrap_or_else(Address::zero))
-        .append(&tx.value)
-        .append(&tx.call_data.0)
-        .append(&chain_id)
-        .append(&0u32)
-        .append(&0u32);
-    let msg = stream.out();
+    let msg = Into::<ethers_core::types::TransactionRequest>::into(tx.clone()).rlp(chain_id);
     let msg_hash: [u8; 32] = Keccak256::digest(&msg)
         .as_slice()
         .to_vec()
@@ -207,7 +197,7 @@ impl<F: Field> TxCircuitConfig<F> {
 }
 
 /// Tx Circuit for verifying transaction signatures
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct TxCircuit<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> {
     /// SignVerify chip
     pub sign_verify: SignVerifyChip<F, MAX_TXS>,
@@ -258,6 +248,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                 })
             })
             .try_collect()?;
+
         let assigned_sig_verifs =
             self.sign_verify
                 .assign(&config.sign_verify, layouter, self.randomness, &sign_datas)?;
@@ -278,6 +269,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                     } else {
                         &tx_default
                     };
+
                     let address_cell = assigned_sig_verif.address.cell();
                     let msg_hash_rlc_cell = assigned_sig_verif.msg_hash_rlc.cell();
                     let msg_hash_rlc_value = assigned_sig_verif.msg_hash_rlc.value();
@@ -418,20 +410,16 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
 #[cfg(test)]
 mod tx_circuit_tests {
     use super::*;
-    use eth_types::{address, word, Bytes};
-    use ethers_core::{
-        types::{NameOrAddress, TransactionRequest},
-        utils::keccak256,
-    };
-    use ethers_signers::{LocalWallet, Signer};
+    use eth_types::address;
     use group::{Curve, Group};
     use halo2_proofs::{
         arithmetic::CurveAffine,
         dev::{MockProver, VerifyFailure},
         pairing::bn256::Fr,
     };
+    use mock::AddrOrWallet;
     use pretty_assertions::assert_eq;
-    use rand::{CryptoRng, Rng, SeedableRng};
+    use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
     fn run<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>(
@@ -467,88 +455,40 @@ mod tx_circuit_tests {
         prover.verify()
     }
 
-    fn rand_tx<R: Rng + CryptoRng>(mut rng: R, chain_id: u64) -> Transaction {
-        let wallet0 = LocalWallet::new(&mut rng).with_chain_id(chain_id);
-        let wallet1 = LocalWallet::new(&mut rng).with_chain_id(chain_id);
-        let from = wallet0.address();
-        let to = wallet1.address();
-        let data = b"hello";
-        let tx = TransactionRequest::new()
-            .from(from)
-            .to(to)
-            .nonce(3)
-            .value(1000)
-            .data(data)
-            .gas(500_000)
-            .gas_price(1234);
-        let tx_rlp = tx.rlp(chain_id);
-        let sighash = keccak256(tx_rlp.as_ref()).into();
-        let sig = wallet0.sign_hash(sighash, true);
-        let to = tx.to.map(|to| match to {
-            NameOrAddress::Address(a) => a,
-            _ => unreachable!(),
-        });
-        Transaction {
-            from: tx.from.unwrap(),
-            to,
-            gas_limit: tx.gas.unwrap(),
-            gas_price: tx.gas_price.unwrap(),
-            value: tx.value.unwrap(),
-            call_data: tx.data.unwrap(),
-            nonce: tx.nonce.unwrap(),
-            v: sig.v,
-            r: sig.r,
-            s: sig.s,
-            ..Transaction::default()
-        }
-    }
-
     // High memory usage test.  Run in serial with:
     // `cargo test [...] serial_ -- --ignored --test-threads 1`
     #[ignore]
     #[test]
-    fn serial_test_tx_circuit_rng() {
+    fn serial_test_tx_circuit_2tx() {
         const NUM_TXS: usize = 2;
         const MAX_TXS: usize = 2;
         const MAX_CALLDATA: usize = 32;
 
-        let mut rng = ChaCha20Rng::seed_from_u64(2);
-        let chain_id: u64 = 1337;
-        let mut txs = Vec::new();
-        for _ in 0..NUM_TXS {
-            txs.push(rand_tx(&mut rng, chain_id));
-        }
-
         let k = 19;
-        assert_eq!(run::<Fr, MAX_TXS, MAX_CALLDATA>(k, txs, chain_id), Ok(()));
+        assert_eq!(
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(
+                k,
+                mock::CORRECT_MOCK_TXS[..NUM_TXS]
+                    .iter()
+                    .map(|tx| Transaction::from(tx.clone()))
+                    .collect_vec(),
+                mock::MOCK_CHAIN_ID.as_u64()
+            ),
+            Ok(())
+        );
     }
 
     // High memory usage test.  Run in serial with:
     // `cargo test [...] serial_ -- --ignored --test-threads 1`
     #[ignore]
     #[test]
-    fn serial_test_tx_circuit_fixed() {
+    fn serial_test_tx_circuit_1tx() {
         const MAX_TXS: usize = 1;
         const MAX_CALLDATA: usize = 32;
 
-        let chain_id: u64 = 1337;
-        // Transaction generated with `rand_tx` using `rng =
-        // ChaCha20Rng::seed_from_u64(42)`
-        let tx = Transaction {
-            from: address!("0x5f9b7e36af4ff81688f712fb738bbbc1b7348aae"),
-            to: Some(address!("0x701653d7ae8ddaa5c8cee1ee056849f271827926")),
-            nonce: word!("0x3"),
-            gas_limit: word!("0x7a120"),
-            value: word!("0x3e8"),
-            gas_price: word!("0x4d2"),
-            gas_fee_cap: word!("0x0"),
-            gas_tip_cap: word!("0x0"),
-            call_data: Bytes::from(b"hello"),
-            access_list: None,
-            v: 2710,
-            r: word!("0xaf180d27f90b2b20808bc7670ce0aca862bc2b5fa39c195ab7b1a96225ee14d7"),
-            s: word!("0x61159fa4664b698ea7d518526c96cd94cf4d8adf418000754be106a3a133f866"),
-        };
+        let chain_id: u64 = mock::MOCK_CHAIN_ID.as_u64();
+
+        let tx: Transaction = mock::CORRECT_MOCK_TXS[0].clone().into();
 
         let k = 19;
         assert_eq!(
@@ -565,25 +505,14 @@ mod tx_circuit_tests {
         const MAX_TXS: usize = 1;
         const MAX_CALLDATA: usize = 32;
 
-        let chain_id: u64 = 1337;
-        let tx = Transaction {
-            // This address doesn't correspond to the account that signed this tx.
-            from: address!("0x1230000000000000000000000000000000000456"),
-            to: Some(address!("0x701653d7ae8ddaa5c8cee1ee056849f271827926")),
-            nonce: word!("0x3"),
-            gas_limit: word!("0x7a120"),
-            value: word!("0x3e8"),
-            gas_price: word!("0x4d2"),
-            gas_fee_cap: word!("0x0"),
-            gas_tip_cap: word!("0x0"),
-            call_data: Bytes::from(b"hello"),
-            access_list: None,
-            v: 2710,
-            r: word!("0xaf180d27f90b2b20808bc7670ce0aca862bc2b5fa39c195ab7b1a96225ee14d7"),
-            s: word!("0x61159fa4664b698ea7d518526c96cd94cf4d8adf418000754be106a3a133f866"),
-        };
+        let mut tx = mock::CORRECT_MOCK_TXS[0].clone();
+        // This address doesn't correspond to the account that signed this tx.
+        tx.from = AddrOrWallet::from(address!("0x1230000000000000000000000000000000000456"));
 
         let k = 19;
-        assert!(run::<Fr, MAX_TXS, MAX_CALLDATA>(k, vec![tx], chain_id).is_err(),);
+        assert!(
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, vec![tx.into()], mock::MOCK_CHAIN_ID.as_u64())
+                .is_err(),
+        );
     }
 }
