@@ -650,6 +650,7 @@ fn into_words(message: &[u8]) -> Vec<u64> {
 }
 
 /// test module
+#[cfg(any(feature = "test", test))]
 #[cfg(test)]
 pub mod tests {
     use super::*;
