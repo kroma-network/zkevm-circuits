@@ -28,7 +28,6 @@ use sha3::{Digest, Keccak256};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
-    iter,
 };
 
 #[derive(Debug, Default, Clone)]
@@ -55,14 +54,14 @@ pub struct Block<F> {
 
 #[derive(Debug, Default, Clone)]
 pub struct BlockContexts {
-    /// ..
-    pub blocks: BTreeMap<u64, BlockContext>,
+    /// Hashmap that maps block number to its block context.
+    pub ctxs: BTreeMap<u64, BlockContext>,
 }
 
 impl BlockContexts {
-    /// ..
+    /// Get the chain ID for the block.
     pub fn chain_id(&self) -> Word {
-        self.blocks.iter().next().unwrap().1.chain_id
+        self.ctxs.iter().next().unwrap().1.chain_id
     }
 }
 
@@ -87,27 +86,28 @@ pub struct BlockContext {
 }
 
 impl BlockContext {
-    pub fn table_assignments<F: Field>(&self, randomness: F) -> Vec<[F; 3]> {
+    pub fn table_assignments<F: Field>(&self, num_txs: usize, randomness: F) -> Vec<[F; 3]> {
+        let current_block_number = self.number.to_scalar().unwrap();
         [
             vec![
                 [
                     F::from(BlockContextFieldTag::Coinbase as u64),
-                    F::zero(),
+                    current_block_number,
                     self.coinbase.to_scalar().unwrap(),
                 ],
                 [
                     F::from(BlockContextFieldTag::Timestamp as u64),
-                    F::zero(),
+                    current_block_number,
                     self.timestamp.to_scalar().unwrap(),
                 ],
                 [
                     F::from(BlockContextFieldTag::Number as u64),
-                    F::zero(),
-                    self.number.to_scalar().unwrap(),
+                    current_block_number,
+                    current_block_number,
                 ],
                 [
                     F::from(BlockContextFieldTag::Difficulty as u64),
-                    F::zero(),
+                    current_block_number,
                     RandomLinearCombination::random_linear_combine(
                         self.difficulty.to_le_bytes(),
                         randomness,
@@ -115,12 +115,12 @@ impl BlockContext {
                 ],
                 [
                     F::from(BlockContextFieldTag::GasLimit as u64),
-                    F::zero(),
+                    current_block_number,
                     F::from(self.gas_limit),
                 ],
                 [
                     F::from(BlockContextFieldTag::BaseFee as u64),
-                    F::zero(),
+                    current_block_number,
                     RandomLinearCombination::random_linear_combine(
                         self.base_fee.to_le_bytes(),
                         randomness,
@@ -128,11 +128,16 @@ impl BlockContext {
                 ],
                 [
                     F::from(BlockContextFieldTag::ChainId as u64),
-                    F::zero(),
+                    current_block_number,
                     RandomLinearCombination::random_linear_combine(
                         self.chain_id.to_le_bytes(),
                         randomness,
                     ),
+                ],
+                [
+                    F::from(BlockContextFieldTag::NumTxs as u64),
+                    current_block_number,
+                    F::from(num_txs as u64),
                 ],
             ],
             self.history_hashes
@@ -157,7 +162,7 @@ impl BlockContext {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Transaction {
-    /// ..
+    /// The block number in which this tx is included in
     pub block_number: u64,
     /// The transaction identifier in the block
     pub id: usize,
@@ -347,6 +352,8 @@ pub struct ExecStep {
     pub log_id: usize,
     /// The opcode corresponds to the step
     pub opcode: Option<OpcodeId>,
+    /// The block number in which this step exists.
+    pub block_num: u64,
 }
 
 impl ExecStep {
@@ -968,7 +975,7 @@ impl Rw {
 impl From<&circuit_input_builder::Block> for BlockContexts {
     fn from(block: &circuit_input_builder::Block) -> Self {
         Self {
-            blocks: block
+            ctxs: block
                 .headers
                 .values()
                 .map(|block| {
@@ -1364,7 +1371,7 @@ impl From<&eth_types::bytecode::Bytecode> for Bytecode {
     }
 }
 
-fn step_convert(step: &circuit_input_builder::ExecStep) -> ExecStep {
+fn step_convert(step: &circuit_input_builder::ExecStep, block_num: u64) -> ExecStep {
     ExecStep {
         call_index: step.call_index,
         rw_indices: step
@@ -1402,10 +1409,15 @@ fn step_convert(step: &circuit_input_builder::ExecStep) -> ExecStep {
         memory_size: step.memory_size as u64,
         reversible_write_counter: step.reversible_write_counter,
         log_id: step.log_id,
+        block_num,
     }
 }
 
-fn tx_convert(tx: &circuit_input_builder::Transaction, id: usize, is_last_tx: bool) -> Transaction {
+fn tx_convert(
+    tx: &circuit_input_builder::Transaction,
+    id: usize,
+    next_tx: Option<&circuit_input_builder::Transaction>,
+) -> Transaction {
     Transaction {
         block_number: tx.block_num,
         id,
@@ -1449,21 +1461,38 @@ fn tx_convert(tx: &circuit_input_builder::Transaction, id: usize, is_last_tx: bo
         steps: tx
             .steps()
             .iter()
-            .map(step_convert)
-            .chain(
-                (if is_last_tx {
-                    Some(iter::once(ExecStep {
-                        // if it is the first tx,  less 1 rw lookup, refer to end_tx gadget
-                        rw_counter: tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize,
-                        execution_state: ExecutionState::EndBlock,
+            .map(|step| step_convert(step, tx.block_num))
+            .chain(if let Some(next_tx) = next_tx {
+                debug_assert!(next_tx.block_num >= tx.block_num);
+                let block_gap = next_tx.block_num - tx.block_num;
+                (0..block_gap)
+                    .map(|i| {
+                        let rwc = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                        ExecStep {
+                            rw_counter: rwc,
+                            execution_state: ExecutionState::EndInnerBlock,
+                            block_num: tx.block_num + i,
+                            ..Default::default()
+                        }
+                    })
+                    .collect::<Vec<ExecStep>>()
+            } else {
+                let rwc = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                vec![
+                    ExecStep {
+                        rw_counter: rwc,
+                        execution_state: ExecutionState::EndInnerBlock,
+                        block_num: tx.block_num,
                         ..Default::default()
-                    }))
-                } else {
-                    None
-                })
-                .into_iter()
-                .flatten(),
-            )
+                    },
+                    ExecStep {
+                        rw_counter: rwc,
+                        execution_state: ExecutionState::EndBlock,
+                        block_num: tx.block_num,
+                        ..Default::default()
+                    },
+                ]
+            })
             .collect(),
     }
 }
@@ -1472,6 +1501,7 @@ pub fn block_convert(
     block: &circuit_input_builder::Block,
     code_db: &bus_mapping::state_db::CodeDB,
 ) -> Block<Fr> {
+    let num_txs = block.txs().len();
     Block {
         randomness: Fr::from_u128(DEFAULT_RAND),
         context: block.into(),
@@ -1480,7 +1510,14 @@ pub fn block_convert(
             .txs()
             .iter()
             .enumerate()
-            .map(|(idx, tx)| tx_convert(tx, idx + 1, idx + 1 == block.txs().len()))
+            .map(|(idx, tx)| {
+                let next_tx = if idx + 1 < num_txs {
+                    Some(&block.txs()[idx + 1])
+                } else {
+                    None
+                };
+                tx_convert(tx, idx + 1, next_tx)
+            })
             .collect(),
         bytecodes: block
             .txs()
