@@ -49,6 +49,8 @@ pub struct Block<F> {
     pub evm_circuit_pad_to: usize,
     /// Length to rw table rows in state circuit
     pub state_circuit_pad_to: usize,
+    /// Inputs to the SHA3 opcode
+    pub sha3_inputs: Vec<Vec<u8>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -135,6 +137,7 @@ impl BlockContext {
             ],
             self.history_hashes
                 .iter()
+                .rev()
                 .enumerate()
                 .map(|(idx, hash)| {
                     [
@@ -1309,6 +1312,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::CALLER => ExecutionState::CALLER,
                     OpcodeId::CALLVALUE => ExecutionState::CALLVALUE,
                     OpcodeId::EXTCODEHASH => ExecutionState::EXTCODEHASH,
+                    OpcodeId::BLOCKHASH => ExecutionState::BLOCKHASH,
                     OpcodeId::TIMESTAMP | OpcodeId::NUMBER | OpcodeId::GASLIMIT => {
                         ExecutionState::BLOCKCTXU64
                     }
@@ -1317,7 +1321,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::GAS => ExecutionState::GAS,
                     OpcodeId::SELFBALANCE => ExecutionState::SELFBALANCE,
                     OpcodeId::SHA3 => ExecutionState::SHA3,
-                    OpcodeId::SHR => ExecutionState::SHR,
+                    OpcodeId::SHL | OpcodeId::SHR => ExecutionState::SHL_SHR,
                     OpcodeId::SLOAD => ExecutionState::SLOAD,
                     OpcodeId::SSTORE => ExecutionState::SSTORE,
                     OpcodeId::CALLDATASIZE => ExecutionState::CALLDATASIZE,
@@ -1332,9 +1336,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::RETURN,
                     // dummy ops
                     OpcodeId::BALANCE => dummy!(ExecutionState::BALANCE),
-                    OpcodeId::BLOCKHASH => dummy!(ExecutionState::BLOCKHASH),
                     OpcodeId::EXP => dummy!(ExecutionState::EXP),
-                    OpcodeId::SHL => dummy!(ExecutionState::SHL),
                     OpcodeId::SAR => dummy!(ExecutionState::SAR),
                     OpcodeId::EXTCODESIZE => dummy!(ExecutionState::EXTCODESIZE),
                     OpcodeId::EXTCODECOPY => dummy!(ExecutionState::EXTCODECOPY),
@@ -1497,6 +1499,7 @@ pub fn block_convert(
             })
             .collect(),
         copy_events: block.copy_events.clone(),
+        sha3_inputs: block.sha3_inputs.clone(),
         evm_circuit_pad_to: 0,
         state_circuit_pad_to: 0,
     }

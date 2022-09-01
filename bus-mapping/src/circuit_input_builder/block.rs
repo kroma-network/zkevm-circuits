@@ -5,7 +5,7 @@ use crate::{
     operation::{OperationContainer, RWCounter},
     Error,
 };
-use eth_types::{Address, Hash, Word};
+use eth_types::{Address, Hash, Word, U256};
 use std::collections::{BTreeMap, HashMap};
 
 /// Context of a [`Block`] which can mutate in a [`Transaction`].
@@ -105,6 +105,8 @@ pub struct Block {
     pub copy_events: Vec<CopyEvent>,
     /// ..
     pub code: HashMap<Hash, Vec<u8>>,
+    /// Inputs to the SHA3 opcode
+    pub sha3_inputs: Vec<Vec<u8>>,
 }
 
 impl Block {
@@ -123,6 +125,11 @@ impl Block {
     /// Return the list of transactions of this block.
     pub fn txs(&self) -> &[Transaction] {
         &self.txs
+    }
+
+    /// Return the chain id.
+    pub fn chain_id(&self) -> U256 {
+        self.headers.iter().next().unwrap().1.number
     }
 
     #[cfg(test)]
