@@ -87,7 +87,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             (BlockContextFieldTag::Coinbase, coinbase.expr()),
             (BlockContextFieldTag::BaseFee, base_fee.expr()),
         ] {
-            cb.block_lookup(tag.expr(), None, value);
+            cb.block_lookup(tag.expr(), cb.curr.state.block_number.expr(), value);
         }
         let effective_tip = cb.query_word();
         let sub_gas_price_by_base_fee =
@@ -230,7 +230,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             vec![gas_fee_refund],
             caller_balance,
         )?;
-        let context = &block.context.blocks[&tx.block_number];
+        let context = &block.context.ctxs[&tx.block_number];
         let effective_tip = tx.gas_price - context.base_fee;
         self.sub_gas_price_by_base_fee.assign(
             region,
