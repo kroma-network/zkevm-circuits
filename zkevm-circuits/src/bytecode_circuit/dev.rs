@@ -12,9 +12,12 @@ use std::vec;
 /// tester for bytecode circuit
 #[derive(Default)]
 pub struct BytecodeCircuitTester<F: Field> {
-    bytecodes: Vec<UnrolledBytecode<F>>,
-    size: usize,
-    randomness: F,
+    /// byte codes
+    pub bytecodes: Vec<UnrolledBytecode<F>>,
+    /// size
+    pub size: usize,
+    /// randomness
+    pub randomness: F,
 }
 
 fn get_randomness<F: Field>() -> F {
