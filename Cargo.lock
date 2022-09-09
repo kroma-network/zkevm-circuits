@@ -4406,8 +4406,3 @@ dependencies = [
  "strum_macros",
  "subtle",
 ]
-
-[[patch.unused]]
-name = "halo2_proofs"
-version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2.git?tag=v2022_08_19#0cccba00d16065465c36dce51714637c428bd24c"

@@ -13,7 +13,7 @@ members = [
 ]
 
 [patch.crates-io]
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2022_08_19" }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2", branch = "zz/merge_upstream_0902", default-features = true }
 
 # Definition of benchmarks profile to use.
 [profile.bench]
