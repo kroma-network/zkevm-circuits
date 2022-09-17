@@ -853,12 +853,7 @@ impl CopyTable {
     ) -> Vec<(CopyDataType, [F; 8])> {
         let mut assignments = Vec::new();
         let rlc_acc = if copy_event.dst_type == CopyDataType::RlcAcc {
-            let values = copy_event
-                .bytes
-                .iter()
-                .map(|value| *value)
-                .collect::<Vec<u8>>();
-            rlc::value(values.iter().rev(), randomness)
+            rlc::value(copy_event.bytes.iter().rev(), randomness)
         } else {
             F::zero()
         };

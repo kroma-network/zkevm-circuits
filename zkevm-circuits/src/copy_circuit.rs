@@ -386,12 +386,7 @@ impl<F: Field> CopyCircuit<F> {
                 let mut offset = 0;
                 for copy_event in block.copy_events.iter() {
                     let rlc_acc = if copy_event.dst_type == CopyDataType::RlcAcc {
-                        let values = copy_event
-                            .bytes
-                            .iter()
-                            .map(|value| *value)
-                            .collect::<Vec<u8>>();
-                        rlc::value(values.iter().rev(), randomness)
+                        rlc::value(copy_event.bytes.iter().rev(), randomness)
                     } else {
                         F::zero()
                     };
@@ -423,7 +418,6 @@ impl<F: Field> CopyCircuit<F> {
                             randomness,
                             copy_event,
                             step_idx,
-                            &copy_step,
                             value,
                             rlc_acc,
                             &tag_chip,
@@ -450,7 +444,6 @@ impl<F: Field> CopyCircuit<F> {
         randomness: F,
         copy_event: &CopyEvent,
         step_idx: usize,
-        copy_step: &CopyStep,
         value: F,
         rlc_acc: F,
         tag_chip: &BinaryNumberChip<F, CopyDataType, 3>,

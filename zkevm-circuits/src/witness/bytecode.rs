@@ -1,4 +1,3 @@
-use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian, Word};
 use sha3::{Digest, Keccak256};
 
@@ -34,15 +33,7 @@ impl Bytecode {
             F::from(self.bytes.len() as u64),
         ]);
 
-        let mut push_data_left = 0;
         for (idx, byte) in self.bytes.iter().enumerate() {
-            let mut is_code = true;
-            if push_data_left > 0 {
-                is_code = false;
-                push_data_left -= 1;
-            } else if (OpcodeId::PUSH1.as_u8()..=OpcodeId::PUSH32.as_u8()).contains(byte) {
-                push_data_left = *byte as usize - (OpcodeId::PUSH1.as_u8() - 1) as usize;
-            }
             rows.push([
                 hash,
                 F::from(BytecodeFieldTag::Byte as u64),
