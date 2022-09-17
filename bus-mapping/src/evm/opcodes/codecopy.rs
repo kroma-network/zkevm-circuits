@@ -87,12 +87,12 @@ fn gen_copy_steps(
     dst_addr: u64,
     bytes_left: u64,
     bytecode: &Bytecode,
-) -> Result<Vec<(u8, bool)>, Error> {
+) -> Result<Vec<u8>, Error> {
     let mut steps = Vec::with_capacity(bytes_left as usize);
     for idx in 0..bytes_left {
         let addr = src_addr + idx;
         let bytecode_element = bytecode.get(addr as usize).unwrap_or_default();
-        steps.push((bytecode_element.value, bytecode_element.is_code));
+        steps.push(bytecode_element.value);
         state.memory_write(exec_step, (dst_addr + idx).into(), bytecode_element.value)?;
     }
     Ok(steps)
@@ -255,10 +255,9 @@ mod codecopy_tests {
         assert_eq!(copy_events[0].dst_type, CopyDataType::Memory);
         assert!(copy_events[0].log_id.is_none());
 
-        for (idx, (value, is_code)) in copy_events[0].bytes.iter().enumerate() {
+        for (idx, value) in copy_events[0].bytes.iter().enumerate() {
             let bytecode_element = code.get(code_offset + idx).unwrap_or_default();
             assert_eq!(*value, bytecode_element.value);
-            assert_eq!(*is_code, bytecode_element.is_code);
         }
     }
 }

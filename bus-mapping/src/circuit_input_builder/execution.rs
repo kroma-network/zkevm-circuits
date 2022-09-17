@@ -187,9 +187,6 @@ impl_expr!(CopyDataType);
 pub struct CopyStep {
     /// Byte value copied in this step.
     pub value: u8,
-    /// Optional field which is enabled only for the source being `bytecode`,
-    /// and represents whether or not the byte is an opcode.
-    pub is_code: Option<bool>,
 }
 
 /// Defines an enum type that can hold either a number or a hash value.
@@ -225,8 +222,8 @@ pub struct CopyEvent {
     pub log_id: Option<u64>,
     /// Value of rw counter at start of this copy event
     pub rw_counter_start: RWCounter,
-    /// Represents the list of (bytes, is_code) copied during this copy event
-    pub bytes: Vec<(u8, bool)>,
+    /// Represents the list of bytes copied during this copy event
+    pub bytes: Vec<u8>,
 }
 
 impl CopyEvent {

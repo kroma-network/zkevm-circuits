@@ -52,10 +52,10 @@ impl<F: Field> ExecutionGadget<F> for PushGadget<F> {
             let index = cb.curr.state.program_counter.expr() + opcode.expr()
                 - (OpcodeId::PUSH1.as_u8() - 1 + idx as u8).expr();
             if idx == 0 {
-                cb.opcode_lookup_at(index, byte.expr(), 0.expr())
+                cb.opcode_lookup_at(index, byte.expr())
             } else {
                 cb.condition(selectors[idx - 1].expr(), |cb| {
-                    cb.opcode_lookup_at(index, byte.expr(), 0.expr())
+                    cb.opcode_lookup_at(index, byte.expr())
                 });
             }
         }

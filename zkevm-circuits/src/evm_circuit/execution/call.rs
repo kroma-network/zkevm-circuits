@@ -66,7 +66,7 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let opcode = cb.query_cell();
-        cb.opcode_lookup(opcode.expr(), 1.expr());
+        cb.opcode_lookup(opcode.expr());
 
         // We do the responsible opcode check explicitly here because we're not using
         // the `SameContextGadget` for `CALL`.

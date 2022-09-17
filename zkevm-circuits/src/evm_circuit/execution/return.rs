@@ -22,7 +22,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let opcode = cb.query_cell();
-        cb.opcode_lookup(opcode.expr(), 1.expr());
+        cb.opcode_lookup(opcode.expr());
 
         // TODO: Other constraints are ignored now for RETURN to serve as a
         // mocking terminator

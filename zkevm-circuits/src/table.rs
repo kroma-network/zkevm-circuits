@@ -530,8 +530,6 @@ pub struct BytecodeTable {
     pub tag: Column<Advice>,
     /// Index
     pub index: Column<Advice>,
-    /// Is Code is true when the byte is not an argument to a PUSH* instruction.
-    pub is_code: Column<Advice>,
     /// Value
     pub value: Column<Advice>,
 }
@@ -543,12 +541,11 @@ impl BytecodeTable {
             code_hash: meta.advice_column(),
             tag: meta.advice_column(),
             index: meta.advice_column(),
-            is_code: meta.advice_column(),
             value: meta.advice_column(),
         }
     }
 
-    /// Assign the `BytecodeTable` from a list of bytecodes, followig the same
+    /// Assign the `BytecodeTable` from a list of bytecodes, following the same
     /// table layout that the Bytecode Circuit uses.
     pub fn load<'a, F: Field>(
         &self,
@@ -592,13 +589,7 @@ impl BytecodeTable {
 
 impl DynamicTableColumns for BytecodeTable {
     fn columns(&self) -> Vec<Column<Advice>> {
-        vec![
-            self.code_hash,
-            self.tag,
-            self.index,
-            self.is_code,
-            self.value,
-        ]
+        vec![self.code_hash, self.tag, self.index, self.value]
     }
 }
 
@@ -865,7 +856,7 @@ impl CopyTable {
             let values = copy_event
                 .bytes
                 .iter()
-                .map(|(value, _)| *value)
+                .map(|value| *value)
                 .collect::<Vec<u8>>();
             rlc::value(values.iter().rev(), randomness)
         } else {

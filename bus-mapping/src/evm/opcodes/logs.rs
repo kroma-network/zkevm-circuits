@@ -133,7 +133,7 @@ fn gen_copy_steps(
     exec_step: &mut ExecStep,
     src_addr: u64,
     bytes_left: usize,
-) -> Result<Vec<(u8, bool)>, Error> {
+) -> Result<Vec<u8>, Error> {
     // Get memory data
     let mem = state
         .call_ctx()?
@@ -147,7 +147,7 @@ fn gen_copy_steps(
         // Read memory
         state.memory_read(exec_step, (addr as usize).into(), *byte)?;
 
-        copy_steps.push((*byte, false));
+        copy_steps.push(*byte);
 
         // Write log
         state.tx_log_write(
@@ -447,9 +447,8 @@ mod log_tests {
         assert_eq!(copy_events[0].dst_addr as usize, 0);
         assert_eq!(copy_events[0].log_id, Some(step.log_id as u64 + 1));
 
-        for (idx, (byte, is_code)) in copy_events[0].bytes.iter().enumerate() {
+        for (idx, byte) in copy_events[0].bytes.iter().enumerate() {
             assert_eq!(Some(byte), memory_data.get(mstart + idx));
-            assert!(!*is_code);
         }
     }
 }

@@ -486,21 +486,15 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
 
     // Opcode
 
-    pub(crate) fn opcode_lookup(&mut self, opcode: Expression<F>, is_code: Expression<F>) {
+    pub(crate) fn opcode_lookup(&mut self, opcode: Expression<F>) {
         self.opcode_lookup_at(
             self.curr.state.program_counter.expr() + self.program_counter_offset.expr(),
             opcode,
-            is_code,
         );
         self.program_counter_offset += 1;
     }
 
-    pub(crate) fn opcode_lookup_at(
-        &mut self,
-        index: Expression<F>,
-        opcode: Expression<F>,
-        is_code: Expression<F>,
-    ) {
+    pub(crate) fn opcode_lookup_at(&mut self, index: Expression<F>, opcode: Expression<F>) {
         let is_root_create = self.curr.state.is_root.expr() * self.curr.state.is_create.expr();
         self.add_constraint(
             "The opcode source when is_root and is_create (Root creation transaction) is not determined yet",
@@ -512,7 +506,6 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 hash: self.curr.state.code_hash.expr(),
                 tag: BytecodeFieldTag::Byte.expr(),
                 index,
-                is_code,
                 value: opcode,
             }
             .conditional(1.expr() - is_root_create),
@@ -525,7 +518,6 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         &mut self,
         code_hash: Expression<F>,
         index: Expression<F>,
-        is_code: Expression<F>,
         value: Expression<F>,
     ) {
         self.add_lookup(
@@ -534,7 +526,6 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 hash: code_hash,
                 tag: BytecodeFieldTag::Byte.expr(),
                 index,
-                is_code,
                 value,
             },
         )
@@ -548,7 +539,6 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 hash: code_hash,
                 tag: BytecodeFieldTag::Length.expr(),
                 index: 0.expr(),
-                is_code: 0.expr(),
                 value: cell.expr(),
             },
         );

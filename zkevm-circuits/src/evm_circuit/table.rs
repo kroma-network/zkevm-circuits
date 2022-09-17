@@ -190,9 +190,6 @@ pub(crate) enum Lookup<F> {
         tag: Expression<F>,
         /// Index to specify which byte of bytecode.
         index: Expression<F>,
-        /// A boolean value to specify if the value is executable opcode or the
-        /// data portion of PUSH* operations.
-        is_code: Expression<F>,
         /// Value corresponding to the tag.
         value: Expression<F>,
     },
@@ -307,16 +304,9 @@ impl<F: Field> Lookup<F> {
                 hash,
                 tag,
                 index,
-                is_code,
                 value,
             } => {
-                vec![
-                    hash.clone(),
-                    tag.clone(),
-                    index.clone(),
-                    is_code.clone(),
-                    value.clone(),
-                ]
+                vec![hash.clone(), tag.clone(), index.clone(), value.clone()]
             }
             Self::Block {
                 field_tag,

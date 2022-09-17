@@ -37,7 +37,7 @@ impl<F: Field> SameContextGadget<F> {
         opcode: Cell<F>,
         step_state_transition: StepStateTransition<F>,
     ) -> Self {
-        cb.opcode_lookup(opcode.expr(), 1.expr());
+        cb.opcode_lookup(opcode.expr());
         cb.add_lookup(
             "Responsible opcode lookup",
             Lookup::Fixed {

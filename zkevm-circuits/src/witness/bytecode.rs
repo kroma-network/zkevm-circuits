@@ -21,7 +21,7 @@ impl Bytecode {
     }
 
     /// Assignments for bytecode table
-    pub fn table_assignments<F: Field>(&self, randomness: F) -> Vec<[F; 5]> {
+    pub fn table_assignments<F: Field>(&self, randomness: F) -> Vec<[F; 4]> {
         let n = 1 + self.bytes.len();
         let mut rows = Vec::with_capacity(n);
         let hash =
@@ -30,7 +30,6 @@ impl Bytecode {
         rows.push([
             hash,
             F::from(BytecodeFieldTag::Length as u64),
-            F::zero(),
             F::zero(),
             F::from(self.bytes.len() as u64),
         ]);
@@ -48,7 +47,6 @@ impl Bytecode {
                 hash,
                 F::from(BytecodeFieldTag::Byte as u64),
                 F::from(idx as u64),
-                F::from(is_code as u64),
                 F::from(*byte as u64),
             ])
         }

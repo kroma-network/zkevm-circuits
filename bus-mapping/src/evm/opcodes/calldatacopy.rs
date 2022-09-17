@@ -113,7 +113,7 @@ fn gen_copy_steps(
     src_addr_end: u64,
     bytes_left: u64,
     is_root: bool,
-) -> Result<Vec<(u8, bool)>, Error> {
+) -> Result<Vec<u8>, Error> {
     let mut copy_steps = Vec::with_capacity(bytes_left as usize);
     for idx in 0..bytes_left {
         let addr = src_addr + idx;
@@ -131,7 +131,7 @@ fn gen_copy_steps(
         } else {
             0
         };
-        copy_steps.push((value, false));
+        copy_steps.push(value);
         state.memory_write(exec_step, (dst_addr + idx).into(), value)?;
     }
 
@@ -386,9 +386,8 @@ mod calldatacopy_tests {
         );
         assert_eq!(copy_events[0].dst_addr as usize, dst_offset);
 
-        for (idx, (value, is_code)) in copy_events[0].bytes.iter().enumerate() {
+        for (idx, value) in copy_events[0].bytes.iter().enumerate() {
             assert_eq!(Some(value), memory_a.get(offset + call_data_offset + idx));
-            assert!(!is_code);
         }
     }
 
@@ -579,9 +578,8 @@ mod calldatacopy_tests {
         assert_eq!(copy_events.len(), 1);
         assert_eq!(copy_events[0].bytes.len(), size);
 
-        for (idx, (value, is_code)) in copy_events[0].bytes.iter().enumerate() {
+        for (idx, value) in copy_events[0].bytes.iter().enumerate() {
             assert_eq!(value, calldata.get(offset as usize + idx).unwrap_or(&0));
-            assert!(!is_code);
         }
     }
 }

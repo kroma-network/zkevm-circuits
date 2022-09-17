@@ -57,7 +57,7 @@ impl Opcode for Sha3 {
         for (i, byte) in memory.iter().enumerate() {
             // Read step
             state.memory_read(&mut exec_step, (offset.as_usize() + i).into(), *byte)?;
-            steps.push((*byte, false));
+            steps.push(*byte);
         }
         state.block.sha3_inputs.push(memory);
 
@@ -249,9 +249,8 @@ pub mod sha3_tests {
         assert_eq!(copy_events.len(), 1);
         assert_eq!(copy_events[0].bytes.len(), size);
 
-        for (idx, (value, is_code)) in copy_events[0].bytes.iter().enumerate() {
+        for (idx, value) in copy_events[0].bytes.iter().enumerate() {
             assert_eq!(Some(value), memory_view.get(idx));
-            assert!(!is_code);
         }
     }
 

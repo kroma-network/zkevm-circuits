@@ -60,9 +60,6 @@ pub struct CopyCircuit<F> {
     pub copy_table: CopyTable,
     /// The value copied in this copy step.
     pub value: Column<Advice>,
-    /// In case of a bytecode tag, this denotes whether or not the copied byte
-    /// is an opcode or push data byte.
-    pub is_code: Column<Advice>,
     /// Whether the row is padding.
     pub is_pad: Column<Advice>,
     /// Lt chip to check: src_addr < src_addr_end.
@@ -86,7 +83,6 @@ impl<F: Field> CopyCircuit<F> {
         let q_step = meta.complex_selector();
         let is_last = meta.advice_column();
         let value = meta.advice_column();
-        let is_code = meta.advice_column();
         let is_pad = meta.advice_column();
         let is_first = copy_table.is_first;
         let id = copy_table.id;
@@ -339,7 +335,6 @@ impl<F: Field> CopyCircuit<F> {
                 meta.query_advice(id, Rotation::cur()),
                 BytecodeFieldTag::Byte.expr(),
                 meta.query_advice(addr, Rotation::cur()),
-                meta.query_advice(is_code, Rotation::cur()),
                 meta.query_advice(value, Rotation::cur()),
             ]
             .into_iter()
@@ -369,7 +364,6 @@ impl<F: Field> CopyCircuit<F> {
             q_step,
             is_last,
             value,
-            is_code,
             is_pad,
             addr_lt_addr_end,
             copy_table,
@@ -395,7 +389,7 @@ impl<F: Field> CopyCircuit<F> {
                         let values = copy_event
                             .bytes
                             .iter()
-                            .map(|(value, _is_code)| *value)
+                            .map(|value| *value)
                             .collect::<Vec<u8>>();
                         rlc::value(values.iter().rev(), randomness)
                     } else {
@@ -405,23 +399,9 @@ impl<F: Field> CopyCircuit<F> {
                     for (step_idx, (is_read_step, copy_step)) in copy_event
                         .bytes
                         .iter()
-                        .flat_map(|(value, is_code)| {
-                            let read_step = CopyStep {
-                                value: *value,
-                                is_code: if copy_event.src_type == CopyDataType::Bytecode {
-                                    Some(*is_code)
-                                } else {
-                                    None
-                                },
-                            };
-                            let write_step = CopyStep {
-                                value: *value,
-                                is_code: if copy_event.dst_type == CopyDataType::Bytecode {
-                                    Some(*is_code)
-                                } else {
-                                    None
-                                },
-                            };
+                        .flat_map(|value| {
+                            let read_step = CopyStep { value: *value };
+                            let write_step = CopyStep { value: *value };
                             once((true, read_step)).chain(once((false, write_step)))
                         })
                         .enumerate()
@@ -561,13 +541,6 @@ impl<F: Field> CopyCircuit<F> {
             offset,
             || Value::known(rlc_acc),
         )?;
-        // is_code
-        region.assign_advice(
-            || format!("assign is_code {}", offset),
-            self.is_code,
-            offset,
-            || Value::known(copy_step.is_code.map_or(F::zero(), |v| F::from(v))),
-        )?;
         // is_pad
         let is_pad = is_read && copy_step_addr >= copy_event.src_addr_end;
         region.assign_advice(
@@ -690,13 +663,6 @@ impl<F: Field> CopyCircuit<F> {
         region.assign_advice(
             || format!("assign rlc_acc {}", offset),
             self.copy_table.rlc_acc,
-            offset,
-            || Value::known(F::zero()),
-        )?;
-        // is_code
-        region.assign_advice(
-            || format!("assign is_code {}", offset),
-            self.is_code,
             offset,
             || Value::known(F::zero()),
         )?;
