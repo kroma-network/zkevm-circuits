@@ -181,14 +181,6 @@ impl Default for CopyDataType {
 
 impl_expr!(CopyDataType);
 
-/// Defines a single copy step in a copy event. This type is unified over the
-/// source/destination row in the copy table.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CopyStep {
-    /// Byte value copied in this step.
-    pub value: u8,
-}
-
 /// Defines an enum type that can hold either a number or a hash value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NumberOrHash {

@@ -2,7 +2,7 @@
 //! copied bytes while execution opcodes such as CALLDATACOPY, CODECOPY, LOGS,
 //! etc.
 
-use bus_mapping::circuit_input_builder::{CopyDataType, CopyEvent, CopyStep, NumberOrHash};
+use bus_mapping::circuit_input_builder::{CopyDataType, CopyEvent, NumberOrHash};
 
 use eth_types::{Field, ToAddress, ToScalar, U256};
 use gadgets::{
@@ -391,26 +391,25 @@ impl<F: Field> CopyCircuit<F> {
                         F::zero()
                     };
                     let mut value_acc = F::zero();
-                    for (step_idx, (is_read_step, copy_step)) in copy_event
+                    for (step_idx, (is_read_step, value)) in copy_event
                         .bytes
                         .iter()
                         .flat_map(|value| {
-                            let read_step = CopyStep { value: *value };
-                            let write_step = CopyStep { value: *value };
+                            let read_step = *value;
+                            let write_step = *value;
                             once((true, read_step)).chain(once((false, write_step)))
                         })
                         .enumerate()
                     {
                         let value = if copy_event.dst_type == CopyDataType::RlcAcc {
                             if is_read_step {
-                                F::from(copy_step.value as u64)
+                                F::from(value as u64)
                             } else {
-                                value_acc =
-                                    value_acc * randomness + F::from(copy_step.value as u64);
+                                value_acc = value_acc * randomness + F::from(value as u64);
                                 value_acc
                             }
                         } else {
-                            F::from(copy_step.value as u64)
+                            F::from(value as u64)
                         };
                         self.assign_step(
                             &mut region,
