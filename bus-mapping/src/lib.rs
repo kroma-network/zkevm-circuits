@@ -228,6 +228,7 @@ extern crate alloc;
 extern crate core;
 
 pub mod circuit_input_builder;
+pub mod codehash;
 pub mod error;
 pub mod evm;
 pub mod exec_trace;
@@ -236,5 +237,4 @@ pub mod mock;
 pub mod operation;
 pub mod rpc;
 pub mod state_db;
-mod codehash;
 pub use error::Error;

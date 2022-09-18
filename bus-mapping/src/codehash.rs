@@ -1,8 +1,11 @@
+//! Implementation of Poseidon codehash
+
 use ff::*;
 use poseidon_rs::{Fr, Poseidon};
 
 const POSEIDON_RATE: u32 = 2;
 
+/// Poseidon code hasher
 pub struct PoseidonCodehash {
     poseidon: Poseidon,
 }
@@ -15,12 +18,14 @@ impl PoseidonCodehash {
         }
     }
 
-    ///
+    /// Pad the code and compute the codehash using Poseidon hash function
     pub fn codehash(&self, code: &Vec<u8>) -> Fr {
+        // todo!
         Fr::from_str("0").unwrap()
     }
 }
 
+/// Compute the codehash with Poseidon
 pub fn codehash(code: &Vec<u8>) -> [u8; 32] {
     let hasher = PoseidonCodehash::new();
     let codehash = hasher.codehash(code);
