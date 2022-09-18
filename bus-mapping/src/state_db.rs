@@ -1,6 +1,7 @@
 //! Implementation of an in-memory key-value database to represent the
 //! Ethereum State Trie.
 
+use super::codehash::codehash;
 use eth_types::{Address, Hash, Word, H256, U256};
 use ethers_core::utils::keccak256;
 use lazy_static::lazy_static;
@@ -29,7 +30,7 @@ impl CodeDB {
     }
     /// Insert code indexed by code hash, and return the code hash.
     pub fn insert(&mut self, code: Vec<u8>) -> Hash {
-        let hash = H256(keccak256(&code));
+        let hash = H256(codehash(&code));
         self.0.insert(hash, code);
         hash
     }

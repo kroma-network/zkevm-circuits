@@ -236,4 +236,5 @@ pub mod mock;
 pub mod operation;
 pub mod rpc;
 pub mod state_db;
+mod codehash;
 pub use error::Error;
