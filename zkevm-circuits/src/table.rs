@@ -80,6 +80,8 @@ pub enum TxFieldTag {
     TxSignHash,
     /// CallData
     CallData,
+    /// The block number in which this tx is included.
+    BlockNumber,
 }
 impl_expr!(TxFieldTag);
 
@@ -535,9 +537,11 @@ pub enum BlockContextFieldTag {
     /// add it here for convenience.
     ChainId,
     /// In a multi-block setup, this variant represents the total number of txs
-    /// included in the blocks upto this block, including the txs in this
-    /// block.
+    /// included in this block.
     NumTxs,
+    /// In a multi-block setup, this variant represents the cumulative number of
+    /// txs included up to this block, including the txs in this block.
+    CumNumTxs,
 }
 impl_expr!(BlockContextFieldTag);
 
@@ -585,13 +589,14 @@ impl BlockTable {
                 }
                 offset += 1;
 
-                let mut num_txs = 0;
+                let mut cum_num_txs = 0usize;
                 for block_ctx in block_ctxs.ctxs.values() {
-                    num_txs += txs
+                    let num_txs = txs
                         .iter()
                         .filter(|tx| tx.block_number == block_ctx.number.as_u64())
                         .count();
-                    for row in block_ctx.table_assignments(num_txs, randomness) {
+                    cum_num_txs += num_txs;
+                    for row in block_ctx.table_assignments(num_txs, cum_num_txs, randomness) {
                         for (column, value) in block_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
                                 || format!("block table row {}", offset),
