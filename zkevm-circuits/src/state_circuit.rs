@@ -197,7 +197,9 @@ impl<F: Field> StateCircuitConfig<F> {
                     }
 
                     if matches!(row.tag(), RwTableTag::CallContext) && !row.is_write() {
-                        assert_eq!(row.value_assignment(randomness), F::zero(), "{:?}", row);
+                        if row.value_assignment(randomness) != F::zero() {
+                            log::error!("invalid first read CallContext {:?}", row);
+                        }
                     }
                 }
             }
