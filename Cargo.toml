@@ -13,7 +13,7 @@ members = [
 ]
 
 [patch.crates-io]
-halo2_proofs = { git = "https://github.com/zhenfeizhang/halo2.git", branch = "scroll-dev-1004" }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "sync-halo2-ecc-1013"  }
 
 # Definition of benchmarks profile to use.
 [profile.bench]

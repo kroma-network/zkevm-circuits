@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/zhenfeizhang/halo2.git", branch = "scroll-dev-1004" }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "sync-halo2-ecc-1013" }
 num = "0.4"
 sha3 = "0.10"
 array-init = "2.0.0"
@@ -27,10 +27,10 @@ lazy_static = "1.4"
 keccak256 = { path = "../keccak256"}
 log = "0.4"
 env_logger = "0.9"
-ecdsa = { git = "https://github.com/zhenfeizhang/halo2wrong", branch = "sync-halo2-ecc" }
-ecc = { git = "https://github.com/zhenfeizhang/halo2wrong", branch = "sync-halo2-ecc" }
-maingate = { git = "https://github.com/zhenfeizhang/halo2wrong", branch = "sync-halo2-ecc" }
-integer = { git = "https://github.com/zhenfeizhang/halo2wrong", branch = "sync-halo2-ecc" }
+ecdsa = { git = "https://github.com/scroll-tech/halo2wrong", branch = "sync-halo2-ecc-1013" }
+ecc = { git = "https://github.com/scroll-tech/halo2wrong", branch = "sync-halo2-ecc-1013" }
+maingate = { git = "https://github.com/scroll-tech/halo2wrong", branch = "sync-halo2-ecc-1013" }
+integer = { git = "https://github.com/scroll-tech/halo2wrong", branch = "sync-halo2-ecc-1013" }
 libsecp256k1 = "0.7"
 num-bigint = { version = "0.4" }
 subtle = "2.4"

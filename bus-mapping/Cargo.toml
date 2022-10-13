@@ -13,7 +13,7 @@ mock = { path = "../mock", optional = true }
 
 ethers-core = "0.17.0"
 ethers-providers = "0.17.0"
-halo2_proofs = { git = "https://github.com/zhenfeizhang/halo2.git", branch = "scroll-dev-1004" }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "sync-halo2-ecc-1013"  }
 itertools = "0.10"
 lazy_static = "1.4"
 log = "0.4.14"
