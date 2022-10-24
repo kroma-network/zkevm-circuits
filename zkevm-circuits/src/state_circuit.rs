@@ -196,8 +196,11 @@ impl<F: Field> StateCircuitConfig<F> {
                         state_root = new_root;
                     }
 
-                    if matches!(row.tag(), RwTableTag::CallContext) && !row.is_write() {
-                        assert_eq!(row.value_assignment(randomness), F::zero(), "{:?}", row);
+                    if matches!(row.tag(), RwTableTag::CallContext)
+                        && !row.is_write()
+                        && row.value_assignment(randomness) != F::zero()
+                    {
+                        log::error!("invalid call context: {:?}", row);
                     }
                 }
             }
@@ -226,7 +229,7 @@ impl<F: Field> StateCircuitConfig<F> {
                 )?;
             }
 
-            if offset == n_rows - 1 {
+            if offset + 1 == n_rows {
                 // The last row is always a last access, so we need to handle the case where the
                 // state root changes because of an mpt lookup on the last row.
                 if let Some(update) = updates.get(&row) {
