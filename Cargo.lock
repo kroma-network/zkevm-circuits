@@ -2143,12 +2143,14 @@ dependencies = [
  "env_logger",
  "eth-types",
  "ethers",
+ "ethers-core",
  "halo2_proofs",
  "hex",
  "lazy_static",
  "log",
  "paste",
  "pretty_assertions",
+ "protobuf",
  "rand_chacha",
  "serde",
  "serde_json",
@@ -3011,6 +3013,12 @@ checksum = "0a2ca2c61bc9f3d74d2886294ab7b9853abd9c1ad903a3ac7815c58989bb7bab"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "quote"
