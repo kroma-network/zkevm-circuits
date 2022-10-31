@@ -9,6 +9,7 @@ use crate::witness::{
     Block, BlockContext, Bytecode, MptUpdateRow, MptUpdates, Rw, RwMap, RwRow, Transaction,
 };
 use bus_mapping::circuit_input_builder::{CopyDataType, CopyEvent, CopyStep};
+use rand::rngs::OsRng;
 use core::iter::once;
 use eth_types::{Field, ToLittleEndian, ToScalar, Word};
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
@@ -437,6 +438,19 @@ impl RwTable {
         for (offset, row) in rows.iter().enumerate() {
             self.assign(region, offset, &row.table_assignment(randomness))?;
         }
+        self.assign(region, rows.len() + 3, &RwRow {
+            rw_counter: F::random(OsRng),
+            is_write:  F::random(OsRng),
+            tag: F::random(OsRng),
+            id: F::random(OsRng),
+            address: F::random(OsRng),
+            field_tag: F::random(OsRng),
+            storage_key: F::random(OsRng),
+            value: F::random(OsRng),
+            value_prev: F::random(OsRng),
+            aux1: F::random(OsRng),
+            aux2: F::random(OsRng),
+        })?;
         Ok(())
     }
 }

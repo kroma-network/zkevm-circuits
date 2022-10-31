@@ -998,7 +998,8 @@ fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, isize), Fr>) -> MockP
 fn verify(rows: Vec<Rw>) -> Result<(), Vec<VerifyFailure>> {
     let used_rows = rows.len();
     prover(rows, HashMap::new())
-        .verify_at_rows(N_ROWS - used_rows..N_ROWS, N_ROWS - used_rows..N_ROWS)
+        .verify_par()
+        //.verify_at_rows(N_ROWS - used_rows..N_ROWS, N_ROWS - used_rows..N_ROWS)
 }
 
 fn verify_with_overrides(
