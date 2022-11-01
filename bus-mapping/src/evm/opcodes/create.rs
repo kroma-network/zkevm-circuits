@@ -27,37 +27,6 @@ impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
         }
 
         let mut exec_step = state.new_step(geth_step)?;
-        let n_stack_reads = if IS_CREATE2 { 4 } else { 3 };
-        // First three are value, offset, length, respectively, and in the case of
-        // CREATE2, the fourth one is the salt.
-        for i in 0..n_stack_reads {
-            state.stack_read(
-                &mut exec_step,
-                geth_step.stack.nth_last_filled(i),
-                geth_step.stack.nth_last(i)?,
-            )?;
-        }
-
-        let n_pop = if IS_CREATE2 { 4 } else { 3 };
-        for i in 0..n_pop {
-            state.stack_read(
-                &mut exec_step,
-                geth_step.stack.nth_last_filled(i),
-                geth_step.stack.nth_last(i)?,
-            )?;
-        }
-
-        let address = if IS_CREATE2 {
-            state.create2_address(&geth_steps[0])?
-        } else {
-            state.create_address()?
-        };
-
-        state.stack_write(
-            &mut exec_step,
-            geth_step.stack.nth_last_filled(n_pop - 1),
-            address.to_word(),
-        )?;
 
         let n_pop = if IS_CREATE2 { 4 } else { 3 };
         for i in 0..n_pop {
@@ -89,7 +58,6 @@ impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
         // > whether or not the address is unclaimed)
         // > add the address being created to accessed_addresses,
         // > but gas costs of CREATE and CREATE2 are unchanged
-
         let is_warm = state.sdb.check_account_in_access_list(&address);
         state.push_op_reversible(
             &mut exec_step,
