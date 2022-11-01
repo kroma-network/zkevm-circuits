@@ -53,8 +53,8 @@ impl Default for CircuitsParams {
     /// Default values for most of the unit tests of the Circuit Parameters
     fn default() -> Self {
         CircuitsParams {
-            max_rws: 1000,
-            max_txs: 1,
+            max_rws: 0,
+            max_txs: 20,
         }
     }
 }
@@ -273,12 +273,14 @@ impl<'a> CircuitInputBuilder {
         // We need at least 1 extra Start row
         #[allow(clippy::int_plus_one)]
         {
-            assert!(
-                total_rws + 1 <= max_rws,
-                "total_rws + 1 <= max_rws, total_rws={}, max_rws={}",
-                total_rws,
-                max_rws
-            );
+            if max_rws != 0 {
+                assert!(
+                    total_rws + 1 <= max_rws,
+                    "total_rws + 1 <= max_rws, total_rws={}, max_rws={}",
+                    total_rws,
+                    max_rws
+                );
+            }
         }
         push_op(&mut end_block_last, RWCounter(1), RW::READ, StartOp {});
         push_op(
