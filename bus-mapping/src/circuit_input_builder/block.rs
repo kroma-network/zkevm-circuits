@@ -7,8 +7,8 @@ use crate::{
     operation::{OperationContainer, RWCounter},
     Error,
 };
-use eth_types::{Address, Hash, Word};
-use std::collections::HashMap;
+use eth_types::{Address, Hash, Word, U256};
+use std::collections::{BTreeMap, HashMap};
 
 /// Context of a [`Block`] which can mutate in a [`Transaction`].
 #[derive(Debug)]
@@ -42,7 +42,7 @@ impl BlockContext {
 }
 
 /// Block-wise execution steps that don't belong to any Transaction.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockSteps {
     /// EndBlock step that is repeated after the last transaction and before
     /// reaching the last EVM row.
@@ -51,9 +51,24 @@ pub struct BlockSteps {
     pub end_block_last: ExecStep,
 }
 
+impl Default for BlockSteps {
+    fn default() -> Self {
+        Self {
+            end_block_not_last: ExecStep {
+                exec_state: ExecState::EndBlock,
+                ..ExecStep::default()
+            },
+            end_block_last: ExecStep {
+                exec_state: ExecState::EndBlock,
+                ..ExecStep::default()
+            },
+        }
+    }
+}
+
 /// Circuit Input related to a block.
-#[derive(Debug)]
-pub struct Block {
+#[derive(Debug, Clone)]
+pub struct BlockHead {
     /// chain id
     pub chain_id: Word,
     /// history hashes contains most recent 256 block hashes in history, where
@@ -71,30 +86,13 @@ pub struct Block {
     pub difficulty: Word,
     /// base fee
     pub base_fee: Word,
-    /// Container of operations done in this block.
-    pub container: OperationContainer,
-    /// Transactions contained in the block
-    pub txs: Vec<Transaction>,
-    /// Block-wise steps
-    pub block_steps: BlockSteps,
-    /// Copy events in this block.
-    pub copy_events: Vec<CopyEvent>,
-    /// Inputs to the SHA3 opcode
-    pub sha3_inputs: Vec<Vec<u8>>,
-    /// Exponentiation events in the block.
-    pub exp_events: Vec<ExpEvent>,
-    code: HashMap<Hash, Vec<u8>>,
-    /// Circuits Setup Paramteres
-    pub circuits_params: CircuitsParams,
 }
-
-impl Block {
+impl BlockHead {
     /// Create a new block.
     pub fn new<TX>(
         chain_id: Word,
         history_hashes: Vec<Word>,
         eth_block: &eth_types::Block<TX>,
-        circuits_params: CircuitsParams,
     ) -> Result<Self, Error> {
         if eth_block.base_fee_per_gas.is_none() {
             // FIXME: resolve this once we have proper EIP-1559 support
@@ -118,8 +116,38 @@ impl Block {
             timestamp: eth_block.timestamp,
             difficulty: eth_block.difficulty,
             base_fee: eth_block.base_fee_per_gas.unwrap_or_default(),
-            container: OperationContainer::new(),
-            txs: Vec::new(),
+        })
+    }
+}
+
+/// Circuit Input related to a block.
+#[derive(Debug, Default, Clone)]
+pub struct Block {
+    /// The `Block` struct is in fact "Batch" for l2
+    /// while "headers" are "Blocks" insides a batch
+    pub headers: BTreeMap<u64, BlockHead>,
+    /// Container of operations done in this block.
+    pub container: OperationContainer,
+    /// Transactions contained in the block
+    pub txs: Vec<Transaction>,
+    /// Copy events in this block.
+    pub copy_events: Vec<CopyEvent>,
+    /// ..
+    pub code: HashMap<Hash, Vec<u8>>,
+    /// Inputs to the SHA3 opcode
+    pub sha3_inputs: Vec<Vec<u8>>,
+    /// Block-wise steps
+    pub block_steps: BlockSteps,
+    /// Exponentiation events in the block.
+    pub exp_events: Vec<ExpEvent>,
+    /// Circuits Setup Paramteres
+    pub circuits_params: CircuitsParams,
+}
+
+impl Block {
+    /// ...
+    pub fn from_headers(headers: &[BlockHead]) -> Self {
+        Self {
             block_steps: BlockSteps {
                 end_block_not_last: ExecStep {
                     exec_state: ExecState::EndBlock,
@@ -130,17 +158,48 @@ impl Block {
                     ..ExecStep::default()
                 },
             },
-            copy_events: Vec::new(),
+            headers: headers
+                .iter()
+                .map(|b| (b.number.as_u64(), b.clone()))
+                .collect::<BTreeMap<_, _>>(),
+            ..Default::default()
+        }
+    }
+    /// Create a new block.
+    pub fn new<TX>(
+        chain_id: Word,
+        history_hashes: Vec<Word>,
+        eth_block: &eth_types::Block<TX>,
+        circuits_params: CircuitsParams,
+    ) -> Result<Self, Error> {
+        let mut block = Self {
+            block_steps: BlockSteps {
+                end_block_not_last: ExecStep {
+                    exec_state: ExecState::EndBlock,
+                    ..ExecStep::default()
+                },
+                end_block_last: ExecStep {
+                    exec_state: ExecState::EndBlock,
+                    ..ExecStep::default()
+                },
+            },
             exp_events: Vec::new(),
-            code: HashMap::new(),
-            sha3_inputs: Vec::new(),
             circuits_params,
-        })
+            ..Default::default()
+        };
+        let info = BlockHead::new(chain_id, history_hashes, eth_block)?;
+        block.headers.insert(info.number.as_u64(), info);
+        Ok(block)
     }
 
     /// Return the list of transactions of this block.
     pub fn txs(&self) -> &[Transaction] {
         &self.txs
+    }
+
+    /// Return the chain id.
+    pub fn chain_id(&self) -> U256 {
+        self.headers.iter().next().unwrap().1.chain_id
     }
 
     #[cfg(test)]
