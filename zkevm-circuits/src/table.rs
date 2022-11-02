@@ -725,6 +725,12 @@ pub struct KeccakTable {
     pub input_len: Column<Advice>,
     /// RLC of the hash result
     pub output_rlc: Column<Advice>, // RLC of hash of input bytes
+    /// ..
+    pub hash_counter: Column<Advice>,
+    /// ..
+    pub byte_value: Column<Advice>,
+    /// ..
+    pub bytes_left: Column<Advice>,
 }
 
 impl KeccakTable {
@@ -735,14 +741,18 @@ impl KeccakTable {
             input_rlc: meta.advice_column_in(SecondPhase),
             input_len: meta.advice_column(),
             output_rlc: meta.advice_column_in(SecondPhase),
+            hash_counter: meta.advice_column(),
+            byte_value: meta.advice_column(),
+            bytes_left: meta.advice_column(),
         }
     }
 
     /// Generate the keccak table assignments from a byte array input.
     pub fn assignments<F: Field>(
+        counter: usize,
         input: &[u8],
         challenges: &Challenges<Value<F>>,
-    ) -> Vec<[Value<F>; 4]> {
+    ) -> Vec<[Value<F>; 7]> {
         let input_rlc = challenges
             .keccak_input()
             .map(|challenge| rlc::value(input.iter().rev(), challenge));
@@ -757,12 +767,30 @@ impl KeccakTable {
             )
         });
 
-        vec![[
+        let mut assignments = Vec::new();
+        for (idx, byte) in input.iter().enumerate() {
+            assignments.push([
+                
+            Value::known(F::zero()),
+            Value::known(F::zero()),
+            Value::known(F::zero()),
+            Value::known(F::zero()),
+            Value::known(F::from_u128(counter as u128)),
+            Value::known(F::from_u128(*byte as u128)),
+            Value::known(F::from_u128((input.len() - idx) as u128)),
+            
+            ]);
+        }
+        assignments.push([
             Value::known(F::one()),
             input_rlc,
             Value::known(input_len),
             output_rlc,
-        ]]
+            Value::known(F::zero()),
+            Value::known(F::zero()),
+            Value::known(F::zero()),
+        ]);
+        assignments
     }
 
     /// Assign a table row for keccak table
@@ -770,7 +798,7 @@ impl KeccakTable {
         &self,
         region: &mut Region<F>,
         offset: usize,
-        values: [F; 4],
+        values: [F; 7],
     ) -> Result<(), Error> {
         for (column, value) in self.columns().iter().zip(values.iter()) {
             region.assign_advice(
@@ -806,8 +834,8 @@ impl KeccakTable {
                 offset += 1;
 
                 let keccak_table_columns = self.columns();
-                for input in inputs.clone() {
-                    for row in Self::assignments(input, challenges) {
+                for (idx, input) in inputs.clone().into_iter().enumerate() {
+                    for row in Self::assignments(idx + 1, input, challenges) {
                         // let mut column_index = 0;
                         for (column, value) in keccak_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
@@ -833,6 +861,9 @@ impl DynamicTableColumns for KeccakTable {
             self.input_rlc,
             self.input_len,
             self.output_rlc,
+            self.hash_counter,
+            self.byte_value,
+            self.bytes_left,
         ]
     }
 }
