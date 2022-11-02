@@ -444,7 +444,9 @@ mod super_circuit_tests {
         let chain_id = (*MOCK_CHAIN_ID).as_u64();
 
         let bytecode = bytecode! {
-            GAS
+            PUSH32(100)
+            PUSH32(0)
+            SHA3
             STOP
         };
 
@@ -481,6 +483,7 @@ mod super_circuit_tests {
         let (k, circuit, instance) =
             SuperCircuit::<_, 1, 32, 256>::build(block, &mut ChaCha20Rng::seed_from_u64(2))
                 .unwrap();
+        println!("k is {}", k);
         let prover = MockProver::run(k, &circuit, instance).unwrap();
         let res = prover.verify_par();
         if let Err(err) = res {

@@ -354,7 +354,7 @@ impl<F: Field> Config<F> {
                 enable.clone(),
                 meta.query_advice(keccak_table.is_enabled, Rotation::cur()),
             )];
-            for (i, column) in keccak_table.columns().iter().skip(1).enumerate() {
+            for (i, column) in keccak_table.columns().iter().take(4).skip(1).enumerate() {
                 constraints.push((
                     enable.clone() * meta.query_advice(lookup_columns[i], Rotation::cur()),
                     meta.query_advice(*column, Rotation::cur()),
