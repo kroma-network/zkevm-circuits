@@ -218,9 +218,13 @@ pub fn block_convert(
                     .unique()
                     .into_iter()
                     .map(|code_hash| {
-                        let bytecode =
-                            Bytecode::new(code_db.0.get(&code_hash).cloned().unwrap_or_default());
-                        (bytecode.hash, bytecode)
+                        let bytes = code_db
+                            .0
+                            .get(&code_hash)
+                            .cloned()
+                            .expect("code db should has contain the code");
+                        let hash = Word::from_big_endian(code_hash.as_bytes());
+                        (hash, Bytecode { hash, bytes })
                     })
             })
             .collect(),

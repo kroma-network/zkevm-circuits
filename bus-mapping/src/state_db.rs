@@ -13,14 +13,13 @@ lazy_static! {
 }
 
 /// Define any object can encode the code to a 32 bytes hash
-pub trait CodeHash : std::fmt::Debug {
+pub trait CodeHash: std::fmt::Debug {
     /// encode code
     fn hash_code(&self, code: &[u8]) -> Hash;
-
 }
 
 /// Helper trait for clone object in a object-safe way
-pub trait CodeHashCopy : CodeHash {
+pub trait CodeHashCopy: CodeHash {
     /// clone to a boxed obect
     fn clone_box(&self) -> Box<dyn CodeHashCopy>;
 }
@@ -29,11 +28,10 @@ impl<T> CodeHashCopy for T
 where
     T: 'static + CodeHash + Clone,
 {
-    fn clone_box(&self) -> Box<dyn CodeHashCopy>{
+    fn clone_box(&self) -> Box<dyn CodeHashCopy> {
         Box::new(self.clone())
     }
 }
-
 
 /// Memory storage for contract code by code hash.
 #[derive(Debug)]
@@ -69,10 +67,14 @@ impl CodeDB {
     pub fn new() -> Self {
         Self::new_with_code_hasher(Box::new(EthCodeHash))
     }
-    /// Insert code indexed by code hash, and return the code hash. Notice we always
-    /// return Self::empty_code_hash() for empty code
+    /// Insert code indexed by code hash, and return the code hash. Notice we
+    /// always return Self::empty_code_hash() for empty code
     pub fn insert(&mut self, code: Vec<u8>) -> Hash {
-        let hash = if code.is_empty() { Self::empty_code_hash() } else {self.1.hash_code(&code)};
+        let hash = if code.is_empty() {
+            Self::empty_code_hash()
+        } else {
+            self.1.hash_code(&code)
+        };
         self.0.insert(hash, code);
         hash
     }

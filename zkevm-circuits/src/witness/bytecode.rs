@@ -1,6 +1,5 @@
 use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian, Word};
-use sha3::{Digest, Keccak256};
 
 use crate::{evm_circuit::util::RandomLinearCombination, table::BytecodeFieldTag};
 
@@ -14,12 +13,6 @@ pub struct Bytecode {
 }
 
 impl Bytecode {
-    /// Construct from bytecode bytes
-    pub fn new(bytes: Vec<u8>) -> Self {
-        let hash = Word::from_big_endian(Keccak256::digest(&bytes).as_slice());
-        Self { hash, bytes }
-    }
-
     /// Assignments for bytecode table
     pub fn table_assignments<F: Field>(&self, randomness: F) -> Vec<[F; 5]> {
         let n = 1 + self.bytes.len();
@@ -53,11 +46,5 @@ impl Bytecode {
             ])
         }
         rows
-    }
-}
-
-impl From<&eth_types::bytecode::Bytecode> for Bytecode {
-    fn from(b: &eth_types::bytecode::Bytecode) -> Self {
-        Bytecode::new(b.to_vec())
     }
 }
