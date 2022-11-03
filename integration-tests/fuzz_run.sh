@@ -16,6 +16,6 @@ for testcase in $(ls $DIRECTORY); do
     path=$DIRECTORY/$testcase
     for phase in evm state tx bytecode copy; do
         echo "cargo run --bin test_fuzz $path $phase"
-        RUSTFLAGS=-Awarnings cargo run --bin test_fuzz $path $phase
+        RUSTFLAGS=-Awarnings cargo run --release --bin test_fuzz $path $phase
     done
 done

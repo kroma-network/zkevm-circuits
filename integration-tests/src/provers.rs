@@ -1,6 +1,7 @@
 //! ZKEVM provers
 use bus_mapping::circuit_input_builder::{BuilderClient, CircuitInputBuilder};
 use bus_mapping::operation::OperationContainer;
+use halo2_proofs::halo2curves::FieldExt;
 use zkevm_circuits::bytecode_circuit::dev::test_bytecode_circuit;
 use zkevm_circuits::copy_circuit::dev::test_copy_circuit;
 use zkevm_circuits::evm_circuit::witness::RwMap;
@@ -93,6 +94,7 @@ pub async fn prove_tx_circuit_direct(eth_block: eth_types::Block<eth_types::Tran
             window_size: 2,
             _marker: PhantomData,
         },
+        randomness: Fr::from_u128(0x10000),
         txs,
         chain_id: CHAIN_ID,
     };
@@ -112,7 +114,7 @@ pub async fn prove_tx_circuit(block_number: u64) {
 pub async fn prove_bytecode_circuit_direct(builder: CircuitInputBuilder) {
     const BYTECODE_DEGREE: u32 = 16;
     let bytecodes: Vec<Vec<u8>> = builder.code_db.0.values().cloned().collect();
-    test_bytecode_circuit::<Fr>(BYTECODE_DEGREE, bytecodes);
+    test_bytecode_circuit::<Fr>(BYTECODE_DEGREE, bytecodes, Fr::from_u128(0x1000));
 }
 
 /// Prove and verify bytecode circuit
