@@ -20,7 +20,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use log::{debug, info};
-use std::{env::var, marker::PhantomData, vec};
+use std::{marker::PhantomData, vec};
 
 const MAX_DEGREE: usize = 4;
 const ABSORB_LOOKUP_RANGE: usize = 3;
@@ -1344,7 +1344,7 @@ impl<F: Field> KeccakPackedConfig<F> {
         });
 
         let q = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
-            meta.query_fixed(col.clone(), Rotation::cur())
+            meta.query_fixed(col, Rotation::cur())
         };
         let q_r = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             (0..get_num_rows_per_round() as i32)
@@ -1356,11 +1356,11 @@ impl<F: Field> KeccakPackedConfig<F> {
                 .map(|i| meta.query_fixed(col, Rotation(-i)))
                 .fold(0.expr(), |acc, elem| acc + elem)
         };
-        let q_prev = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
-            meta.query_fixed(col.clone(), Rotation::prev())
+        let _q_prev = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
+            meta.query_fixed(col, Rotation::prev())
         };
         let q_prev_r = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
-            meta.query_fixed(col.clone(), Rotation(-(get_num_rows_per_round() as i32)))
+            meta.query_fixed(col, Rotation(-(get_num_rows_per_round() as i32)))
         };
         /*
                 input is "12345678abc"
@@ -1642,7 +1642,7 @@ impl<F: Field> KeccakPackedConfig<F> {
             cb.gate(1.expr())
         });
 
-        let slot_selector = |meta: &mut VirtualCells<'_, F>, q_col| {
+        let _slot_selector = |meta: &mut VirtualCells<'_, F>, q_col| {
             let mut exp = 0.expr();
             for i in 0..get_num_rows_per_round() {
                 exp = exp + meta.query_fixed(q_col, Rotation(i as i32));
@@ -1824,7 +1824,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 //row.data_rlc,
                 //F::from(row.length as u64),
                 row.hash_rlc,
-                F::from(row.hash_counter),
+                row.hash_counter,
                 //F::from(row.value),
                 //F::from(row.bytes_left),
             ],
@@ -1832,9 +1832,9 @@ impl<F: Field> KeccakPackedConfig<F> {
         for (column, value) in [
             (self.keccak_table.input_rlc, row.data_rlc),
             (self.keccak_table.input_len, F::from(row.length as u64)),
-            (self.keccak_table.byte_value, F::from(row.value)),
-            (self.keccak_table.bytes_left, F::from(row.bytes_left)),
-            ] {
+            (self.keccak_table.byte_value, row.value),
+            (self.keccak_table.bytes_left, row.bytes_left),
+        ] {
             region.assign_advice(
                 || format!("assign {}", offset),
                 column,
@@ -2242,7 +2242,7 @@ fn keccak<F: Field>(counter: usize, rows: &mut Vec<KeccakRow<F>>, bytes: &[u8], 
                     is_final: is_final_block && round == NUM_ROUNDS && row_idx == 0,
                     length: round_lengths[round],
                     data_rlc: round_data_rlcs[round],
-                    hash_rlc: hash_rlc, // + F::from_u128(row_idx as u128),
+                    hash_rlc, // + F::from_u128(row_idx as u128),
                     cell_values: regions[round].rows[row_idx].clone(),
                     value: F::from_u128(byte as u128),
                     // from len to 1

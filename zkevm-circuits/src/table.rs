@@ -753,10 +753,10 @@ impl KeccakTable {
         input: &[u8],
         challenges: &Challenges<Value<F>>,
     ) -> Vec<[Value<F>; 3]> {
-        let input_rlc = challenges
+        let _input_rlc = challenges
             .keccak_input()
             .map(|challenge| rlc::value(input.iter().rev(), challenge));
-        let input_len = F::from(input.len() as u64);
+        let _input_len = F::from(input.len() as u64);
         let mut keccak = Keccak::default();
         keccak.update(input);
         let output = keccak.digest();
@@ -768,7 +768,7 @@ impl KeccakTable {
         });
 
         let mut assignments = Vec::new();
-        for (idx, byte) in input.iter().enumerate() {
+        for (_idx, _byte) in input.iter().enumerate() {
             assignments.push([
                 Value::known(F::zero()),
                 //Value::known(F::zero()),

@@ -1,4 +1,4 @@
-use bus_mapping::{circuit_input_builder::{CopyDataType}, evm::OpcodeId};
+use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::{not, Expr};
 use halo2_proofs::{circuit::Value, plonk::Error};
@@ -52,13 +52,13 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             cb.copy_table_lookup(
                 cb.curr.state.call_id.expr(),
                 CopyDataType::Memory.expr(),
-                cb.curr.state.call_id.expr(),
-                CopyDataType::RlcAcc.expr(),
+                cb.curr.state.hash_counter.expr() + 1.expr(),
+                CopyDataType::SHA3.expr(),
                 memory_address.offset(),
                 memory_address.address(),
                 0.expr(), // dst_addr for CopyDataType::RlcAcc is 0.
                 memory_address.length(),
-                rlc_acc.expr(),
+                0.expr(),
                 copy_rwc_inc.expr(),
             );
         });
@@ -66,7 +66,10 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             cb.require_zero("copy_rwc_inc == 0 for size = 0", copy_rwc_inc.expr());
             cb.require_zero("rlc_acc == 0 for size = 0", rlc_acc.expr());
         });
-        cb.keccak_table_lookup(cb.curr.state.hash_counter.expr() + 1.expr(), sha3_rlc.expr());
+        cb.keccak_table_lookup(
+            cb.curr.state.hash_counter.expr() + 1.expr(),
+            sha3_rlc.expr(),
+        );
 
         let memory_expansion = MemoryExpansionGadget::construct(
             cb,

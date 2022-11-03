@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::util::{
         and, constraint_builder::BaseConstraintBuilder, not, or, select, RandomLinearCombination,
     },
-    table::{BytecodeFieldTag, BytecodeTable, DynamicTableColumns, KeccakTable},
+    table::{BytecodeFieldTag, BytecodeTable, KeccakTable},
     util::{Challenges, Expr},
 };
 use bus_mapping::evm::OpcodeId;
@@ -351,7 +351,11 @@ impl<F: Field> Config<F> {
                 not::expr(meta.query_advice(padding, Rotation::cur())),
             ]);
             let lookup_input_columns = vec![hash_input_rlc, code_length, bytecode_table.code_hash];
-            let lookup_table_columns = vec![keccak_table.input_rlc, keccak_table.input_len, keccak_table.output_rlc];
+            let lookup_table_columns = vec![
+                keccak_table.input_rlc,
+                keccak_table.input_len,
+                keccak_table.output_rlc,
+            ];
             let mut constraints = vec![(
                 enable.clone(),
                 meta.query_advice(keccak_table.is_enabled, Rotation::cur()),

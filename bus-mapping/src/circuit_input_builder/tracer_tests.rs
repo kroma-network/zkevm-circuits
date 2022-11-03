@@ -54,7 +54,7 @@ impl CircuitInputBuilderTx {
         };
 
         let call_ctx = tx_ctx.call_ctx().unwrap();
-        let exec_step = ExecStep::new(geth_step, call_ctx, RWCounter::new(), 0, prev_log_id);
+        let exec_step = ExecStep::new(geth_step, call_ctx, RWCounter::new(), 0, prev_log_id, 0);
         Self {
             builder,
             tx,

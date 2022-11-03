@@ -19,7 +19,6 @@ impl Opcode for Sha3 {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-        state.block_ctx.hash_counter += 1;
 
         let expected_sha3 = geth_steps[1].stack.last()?;
 
@@ -69,13 +68,14 @@ impl Opcode for Sha3 {
             src_type: CopyDataType::Memory,
             src_id: NumberOrHash::Number(call_id),
             dst_addr: 0,
-            dst_type: CopyDataType::RlcAcc,
-            dst_id: NumberOrHash::Number(call_id),
+            dst_type: CopyDataType::SHA3,
+            dst_id: NumberOrHash::Number(state.block_ctx.hash_counter + 1),
             log_id: None,
             rw_counter_start,
             bytes: steps,
         });
 
+        state.block_ctx.hash_counter += 1;
         Ok(vec![exec_step])
     }
 }

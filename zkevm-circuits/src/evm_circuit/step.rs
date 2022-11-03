@@ -451,7 +451,7 @@ pub(crate) struct StepState<F> {
     pub(crate) reversible_write_counter: Cell<F>,
     /// The counter for log index
     pub(crate) log_id: Cell<F>,
-    /// 
+    ///
     pub(crate) hash_counter: Cell<F>,
 }
 
@@ -570,8 +570,11 @@ impl<F: FieldExt> Step<F> {
         self.state
             .log_id
             .assign(region, offset, Value::known(F::from(step.log_id as u64)))?;
-        self.state.hash_counter
-                .assign(region, offset, Value::known(F::from(step.hash_counter as u64)))?;
+        self.state.hash_counter.assign(
+            region,
+            offset,
+            Value::known(F::from(step.hash_counter as u64)),
+        )?;
         Ok(())
     }
 }
