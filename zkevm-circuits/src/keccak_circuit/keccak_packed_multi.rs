@@ -22,7 +22,7 @@ use halo2_proofs::{
 use log::{debug, info};
 use std::{env::var, marker::PhantomData, vec};
 
-const MAX_DEGREE: usize = 3;
+const MAX_DEGREE: usize = 4;
 const ABSORB_LOOKUP_RANGE: usize = 3;
 const THETA_C_LOOKUP_RANGE: usize = 6;
 const RHO_PI_LOOKUP_RANGE: usize = 4;
@@ -324,8 +324,9 @@ pub struct KeccakPackedConfig<F> {
     // q_enable only on the first row of valid rounds,
     // while q_enable_row on every row of valid rounds
     // q_enable_row can be optimzied out using expression like
-    // (1..get_num_rows_per_round() as i32).map(|i| meta.query_fixed(q_enable, Rotation(-i))).fold(0.expr(), |acc, elem| acc + elem),
-    // now we keep it here to make codes easier to read
+    // (1..get_num_rows_per_round() as i32).map(|i| meta.query_fixed(q_enable,
+    // Rotation(-i))).fold(0.expr(), |acc, elem| acc + elem), now we keep it here to make codes
+    // easier to read
     q_enable: Column<Fixed>,
     q_enable_row: Column<Fixed>,
     q_first: Column<Fixed>,
@@ -809,10 +810,10 @@ impl<F: Field> KeccakPackedConfig<F> {
         let data_rlc = keccak_table.input_rlc;
         let hash_rlc = keccak_table.output_rlc;
 
-        /* 
+        /*
         meta.create_gate("is_enabled in keccak table", |meta| {
-           
-            vec![meta.query_advice(is_final, Rotation::cur()) * meta.query_fixed(q_enable, Rotation::cur()) 
+
+            vec![meta.query_advice(is_final, Rotation::cur()) * meta.query_fixed(q_enable, Rotation::cur())
                 - meta.query_advice(keccak_table.is_enabled, Rotation::cur())]
         });
         */
@@ -1347,13 +1348,13 @@ impl<F: Field> KeccakPackedConfig<F> {
         };
         let q_r = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             (0..get_num_rows_per_round() as i32)
-            .map(|i| meta.query_fixed(col, Rotation(-i)))
-            .fold(0.expr(), |acc, elem| acc + elem)
+                .map(|i| meta.query_fixed(col, Rotation(-i)))
+                .fold(0.expr(), |acc, elem| acc + elem)
         };
         let q_round_trailing = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             (1..get_num_rows_per_round() as i32)
-            .map(|i| meta.query_fixed(col, Rotation(-i)))
-            .fold(0.expr(), |acc, elem| acc + elem)
+                .map(|i| meta.query_fixed(col, Rotation(-i)))
+                .fold(0.expr(), |acc, elem| acc + elem)
         };
         let q_prev = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             meta.query_fixed(col.clone(), Rotation::prev())
@@ -1361,99 +1362,154 @@ impl<F: Field> KeccakPackedConfig<F> {
         let q_prev_r = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             meta.query_fixed(col.clone(), Rotation(-(get_num_rows_per_round() as i32)))
         };
-/*
-                        input is "12345678abc" 
-                offset  value bytes_left  is_padding q_enable q_padding_last
-                8         1      11          0         1        0
-                9         2      10          0         0        0
-                10        3      9           0         0        0
-                11        4      8           0         0        0
-                12        5      7           0         0        0
-                13        6      6           0         0        0
-                14        7      5           0         0        0
-                15        8      4           0         0        0  // 1st round end
-                16        a      3           0         1        1  // 2nd round start
-                17        b      2           0         0        0
-                18        c      1           0         0        0
-                19        0      0           1         0        0
-                20        0      0           1         0        0
-                21        0      0           1         0        0
-                22        0      0           1         0        0
-                23        0      0           1         0        0 // 2nd round end
+        /*
+                input is "12345678abc"
+        offset  value bytes_left  is_padding q_enable q_padding_last
+        8         1      11          0         1        0
+        9         2      10          0         0        0
+        10        3      9           0         0        0
+        11        4      8           0         0        0
+        12        5      7           0         0        0
+        13        6      6           0         0        0
+        14        7      5           0         0        0
+        15        8      4           0         0        0  // 1st round end
+        16        a      3           0         1        1  // 2nd round start
+        17        b      2           0         0        0
+        18        c      1           0         0        0
+        19        0      0           1         0        0
+        20        0      0           1         0        0
+        21        0      0           1         0        0
+        22        0      0           1         0        0
+        23        0      0           1         0        0 // 2nd round end
 
-                     */
+             */
 
         meta.create_gate("counter", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            
+
             cb.condition(q_r(q_first, meta), |cb| {
-                cb.require_zero("hash_counter needs to be zero on the first row", meta.query_advice(keccak_table.hash_counter, Rotation::cur()));
+                cb.require_zero(
+                    "hash_counter needs to be zero on the first row",
+                    meta.query_advice(keccak_table.hash_counter, Rotation::cur()),
+                );
             });
-            cb.condition(q(q_enable, meta) *  q_prev_r(q_absorb, meta), |cb| {
-                let counter = meta.query_advice(keccak_table.hash_counter, Rotation::cur());
-                let counter_prev = meta.query_advice(keccak_table.hash_counter, Rotation::prev());
-                cb.require_equal("hash_counter increases by 1 after each hash input", counter_prev + 1.expr(), counter);
-            });
-            cb.condition(q_r(q_enable, meta) - q_r(q_first, meta) - q(q_enable, meta) * q_prev_r(q_absorb, meta), |cb| {
-                let counter = meta.query_advice(keccak_table.hash_counter, Rotation::cur());
-                let counter_prev = meta.query_advice(keccak_table.hash_counter, Rotation::prev());
-                cb.require_equal("hash_counter keeps same when no new hash input", counter_prev, counter);
-            });
+            cb.condition(
+                (q(q_enable, meta) - q(q_first, meta))
+                    * meta.query_advice(is_final, Rotation(-(get_num_rows_per_round() as i32))),
+                |cb| {
+                    let counter = meta.query_advice(keccak_table.hash_counter, Rotation::cur());
+                    let counter_prev =
+                        meta.query_advice(keccak_table.hash_counter, Rotation::prev());
+                    cb.require_equal(
+                        "hash_counter increases by 1 after each hash input",
+                        counter_prev + 1.expr(),
+                        counter,
+                    );
+                },
+            );
+            cb.condition(
+                q_r(q_enable, meta)
+                    - q_r(q_first, meta)
+                    - q(q_enable, meta) * q_prev_r(q_absorb, meta),
+                |cb| {
+                    let counter = meta.query_advice(keccak_table.hash_counter, Rotation::cur());
+                    let counter_prev =
+                        meta.query_advice(keccak_table.hash_counter, Rotation::prev());
+                    cb.require_equal(
+                        "hash_counter keeps same when no new hash input",
+                        counter_prev,
+                        counter,
+                    );
+                },
+            );
             cb.gate(1.expr())
         });
         meta.create_gate("byte_value", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
             for idx in 0..get_num_rows_per_round() {
-                cb.condition(not::expr(is_paddings[idx].expr()), |cb| {
-                    cb.require_equal("input byte", 
-                    input_bytes[idx].expr.clone(),
-                    meta.query_advice(keccak_table.byte_value, Rotation::cur())
+                cb.condition(
+                    q_r(q_padding, meta) * not::expr(is_paddings[idx].expr()),
+                    |cb| {
+                        cb.require_equal(
+                            "input byte",
+                            input_bytes[idx].expr.clone(),
+                            meta.query_advice(keccak_table.byte_value, Rotation(idx as i32)),
+                        );
+                    },
                 );
-                });
             }
             cb.gate(q(q_enable, meta))
         });
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            // TODO: is this needed? 
+            // TODO: is this needed?
             cb.condition(q_r(q_first, meta), |cb| {
-                cb.require_zero("bytes_left needs to be zero on the first row", meta.query_advice(keccak_table.bytes_left, Rotation::cur()));
+                cb.require_zero(
+                    "bytes_left needs to be zero on the first row",
+                    meta.query_advice(keccak_table.bytes_left, Rotation::cur()),
+                );
             });
-            // is_paddings only be true when 
-            
-            
-            cb.condition(q(q_padding, meta) /*- q_prev_r(q_absorb, meta)*/, |cb| {
+            // is_paddings only be true when
 
-                for i in 0..get_num_rows_per_round() {
-                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation(i as i32));
-                    let bytes_left_next = meta.query_advice(keccak_table.bytes_left, Rotation(i as i32 + 1));
-                    cb.require_equal("if not padding, bytes_left decreases by 1, else, stay same", bytes_left_next, bytes_left.clone() - not::expr(is_paddings[i].expr()));
-                   // cb.require_zero("bytes_left should be 0 when padding", bytes_left * is_paddings[i].expr());
-                }
-                //cb.require_equal("bytes_left decreases by 1 for each row", bytes_left_next + 1.expr(), bytes_left);
-            //    let counter_prev = meta.query_advice(keccak_table.hash_counter, Rotation::prev());
-            });
-            /* 
+            cb.condition(
+                q(q_padding, meta), /* - q(q_padding_last, meta) */
+                |cb| {
+                    for i in 0..get_num_rows_per_round() {
+                        let bytes_left =
+                            meta.query_advice(keccak_table.bytes_left, Rotation(i as i32));
+                        let bytes_left_next =
+                            meta.query_advice(keccak_table.bytes_left, Rotation(i as i32 + 1));
+                        cb.require_equal(
+                            "if not padding, bytes_left decreases by 1, else, stay same",
+                            bytes_left_next,
+                            bytes_left.clone() - (not::expr(is_paddings[i].expr())),
+                        );
+                        // cb.require_zero("bytes_left should be 0 when
+                        // padding", bytes_left * is_paddings[i].expr());
+                    }
+                    //cb.require_equal("bytes_left decreases by 1 for each
+                    // row", bytes_left_next + 1.expr(), bytes_left);
+                    //    let counter_prev =
+                    // meta.query_advice(keccak_table.hash_counter,
+                    // Rotation::prev());
+                },
+            );
+            /*
             cb.condition(q(q_padding_last, meta), |cb| {
                 for i in 0..get_num_rows_per_round() {
 
                 let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
                 let bytes_left_next = meta.query_advice(keccak_table.bytes_left, Rotation::next());
-                    
+
                     cb.require_equal("bytes_left decreases by 1 when not padding", bytes_left_next, bytes_left.clone() - not::expr(is_paddings[i].expr()));
                     cb.require_zero("bytes_left should be 0 when padding", bytes_left * is_paddings[i].expr());
                 }
             });
             */
-            cb.condition(q_r(q_enable, meta) - q_r(q_padding, meta) - q_r(q_first, meta), |cb| {
-                let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
-                let bytes_left_next = meta.query_advice(keccak_table.bytes_left, Rotation::next());
-                cb.require_equal("bytes_left should stay same on non absorb round", bytes_left, bytes_left_next);
-            });
-            cb.condition(q(q_enable, meta) * meta.query_advice(is_final, Rotation::cur()), |cb| {
-                let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
-                cb.require_zero("bytes_left should be 0 when is_final", bytes_left);
-            });
+            // offset 1400 row KeccakRow { q_enable: true, q_enable_row: true, q_round:
+            // false, q_absorb: true, q_round_last: true, q_padding: false, q_padding_last:
+            // false,
+            cb.condition(
+                (q_r(q_enable, meta) - q_r(q_padding, meta) - q_r(q_first, meta))
+                    * meta.query_advice(is_final, Rotation::next()),
+                |cb| {
+                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
+                    let bytes_left_next =
+                        meta.query_advice(keccak_table.bytes_left, Rotation::next());
+                    cb.require_equal(
+                        "bytes_left should stay same on non absorb round",
+                        bytes_left,
+                        bytes_left_next,
+                    );
+                },
+            );
+            cb.condition(
+                q(q_enable, meta) * meta.query_advice(is_final, Rotation::cur()),
+                |cb| {
+                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
+                    cb.require_zero("bytes_left should be 0 when is_final", bytes_left);
+                },
+            );
             cb.gate(1.expr())
         });
 
@@ -1480,11 +1536,11 @@ impl<F: Field> KeccakPackedConfig<F> {
             // TODO: debug q_enable_row?
             cb.condition(
                 q_round_trailing(q_enable, meta),
-                //meta.query_fixed(q_enable_row, Rotation::cur()) - 
-               // meta.query_fixed(q_enable, Rotation::cur()),
+                //meta.query_fixed(q_enable_row, Rotation::cur()) -
+                // meta.query_fixed(q_enable, Rotation::cur()),
                 //(1..get_num_rows_per_round() as i32)
-                    //.map(|i| meta.query_fixed(q_enable, Rotation(-i)))
-                   // .fold(0.expr(), |acc, elem| acc + elem),
+                //.map(|i| meta.query_fixed(q_enable, Rotation(-i)))
+                // .fold(0.expr(), |acc, elem| acc + elem),
                 |cb| {
                     cb.require_zero(
                         "is_final only when q_enable",
@@ -1494,7 +1550,6 @@ impl<F: Field> KeccakPackedConfig<F> {
             );
             cb.gate(1.expr())
         });
-
 
         // Padding
         // May be cleaner to do this padding logic in the byte conversion lookup but
@@ -1790,7 +1845,7 @@ impl<F: Field> KeccakPackedConfig<F> {
             )?;
         }
 
-        /* 
+        /*
         region.assign_advice(
             || format!("assign is_final {}", offset),
             self.is_final,
@@ -2146,7 +2201,12 @@ fn keccak<F: Field>(counter: usize, rows: &mut Vec<KeccakRow<F>>, bytes: &[u8], 
         for round in 0..NUM_ROUNDS + 1 {
             let round_cst = pack_u64(ROUND_CST[round]);
             for row_idx in 0..get_num_rows_per_round() {
-                let byte_idx = round * 8 + row_idx;
+                let byte_idx = if round < NUM_WORDS_TO_ABSORB {
+                    round * 8 + row_idx
+                } else {
+                    NUM_WORDS_TO_ABSORB * 8
+                } + idx * NUM_WORDS_TO_ABSORB * 8;
+
                 let byte = if byte_idx >= bytes.len() {
                     0
                 } else {
@@ -2259,10 +2319,10 @@ mod tests {
         let k = 11;
         let inputs = vec![
             vec![],
-            //(0u8..1).collect::<Vec<_>>(),
-            //(0u8..135).collect::<Vec<_>>(),
-            //(0u8..136).collect::<Vec<_>>(),
-            //(0u8..200).collect::<Vec<_>>(),
+            (0u8..1).collect::<Vec<_>>(),
+            (0u8..135).collect::<Vec<_>>(),
+            (0u8..136).collect::<Vec<_>>(),
+            (0u8..200).collect::<Vec<_>>(),
         ];
         verify::<Fr>(k, inputs, true);
     }

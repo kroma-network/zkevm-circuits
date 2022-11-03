@@ -770,15 +770,13 @@ impl KeccakTable {
         let mut assignments = Vec::new();
         for (idx, byte) in input.iter().enumerate() {
             assignments.push([
-                
-            Value::known(F::zero()),
-            Value::known(F::zero()),
-            Value::known(F::zero()),
-            Value::known(F::zero()),
-            Value::known(F::from_u128(counter as u128)),
-            Value::known(F::from_u128(*byte as u128)),
-            Value::known(F::from_u128((input.len() - idx) as u128)),
-            
+                Value::known(F::zero()),
+                Value::known(F::zero()),
+                Value::known(F::zero()),
+                Value::known(F::zero()),
+                Value::known(F::from_u128(counter as u128)),
+                Value::known(F::from_u128(*byte as u128)),
+                Value::known(F::from_u128((input.len() - idx) as u128)),
             ]);
         }
         assignments.push([
