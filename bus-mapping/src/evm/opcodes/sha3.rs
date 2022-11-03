@@ -19,6 +19,7 @@ impl Opcode for Sha3 {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
+        state.block_ctx.hash_counter += 1;
 
         let expected_sha3 = geth_steps[1].stack.last()?;
 
@@ -141,6 +142,9 @@ pub mod sha3_tests {
         }
         // append SHA3 related opcodes at the tail end.
         let code_tail = bytecode! {
+            PUSH32(size)
+            PUSH32(offset)
+            SHA3
             PUSH32(size)
             PUSH32(offset)
             SHA3

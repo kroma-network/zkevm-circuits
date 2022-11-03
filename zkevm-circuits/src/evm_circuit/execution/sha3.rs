@@ -1,4 +1,4 @@
-use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
+use bus_mapping::{circuit_input_builder::{CopyDataType}, evm::OpcodeId};
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::{not, Expr};
 use halo2_proofs::{circuit::Value, plonk::Error};
@@ -66,7 +66,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             cb.require_zero("copy_rwc_inc == 0 for size = 0", copy_rwc_inc.expr());
             cb.require_zero("rlc_acc == 0 for size = 0", rlc_acc.expr());
         });
-        cb.keccak_table_lookup(rlc_acc.expr(), memory_address.length(), sha3_rlc.expr());
+        cb.keccak_table_lookup(cb.curr.state.hash_counter.expr() + 1.expr(), sha3_rlc.expr());
 
         let memory_expansion = MemoryExpansionGadget::construct(
             cb,
@@ -87,6 +87,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             gas_left: Transition::Delta(
                 -(OpcodeId::SHA3.constant_gas_cost().expr() + memory_copier_gas.gas_cost()),
             ),
+            hash_counter: Transition::Delta(1.expr()),
             ..Default::default()
         };
         let same_context = SameContextGadget::construct(cb, opcode, step_state_transition);
@@ -171,7 +172,7 @@ mod tests {
                 TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
                 None,
                 CircuitsParams {
-                    max_rws: 5500,
+                    max_rws: 11000,
                     ..Default::default()
                 }
             ),

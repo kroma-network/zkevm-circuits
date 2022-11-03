@@ -53,6 +53,7 @@ impl<'a> CircuitInputStateRef<'a> {
             self.block_ctx.rwc,
             call_ctx.reversible_write_counter,
             self.tx_ctx.log_id,
+            self.block_ctx.hash_counter,
         ))
     }
 

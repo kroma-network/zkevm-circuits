@@ -752,7 +752,7 @@ impl KeccakTable {
         counter: usize,
         input: &[u8],
         challenges: &Challenges<Value<F>>,
-    ) -> Vec<[Value<F>; 7]> {
+    ) -> Vec<[Value<F>; 3]> {
         let input_rlc = challenges
             .keccak_input()
             .map(|challenge| rlc::value(input.iter().rev(), challenge));
@@ -771,23 +771,25 @@ impl KeccakTable {
         for (idx, byte) in input.iter().enumerate() {
             assignments.push([
                 Value::known(F::zero()),
-                Value::known(F::zero()),
-                Value::known(F::zero()),
+                //Value::known(F::zero()),
+                //Value::known(F::zero()),
                 Value::known(F::zero()),
                 Value::known(F::from_u128(counter as u128)),
-                Value::known(F::from_u128(*byte as u128)),
-                Value::known(F::from_u128((input.len() - idx) as u128)),
+                //Value::known(F::from_u128(*byte as u128)),
+                //Value::known(F::from_u128((input.len() - idx) as u128)),
             ]);
         }
-        assignments.push([
+        let final_row = [
             Value::known(F::one()),
-            input_rlc,
-            Value::known(input_len),
+            //input_rlc,
+            //Value::known(input_len),
             output_rlc,
-            Value::known(F::zero()),
-            Value::known(F::zero()),
-            Value::known(F::zero()),
-        ]);
+            Value::known(F::from_u128(counter as u128)),
+            //Value::known(F::zero()),
+            //Value::known(F::zero()),
+        ];
+        //println!("final row {:?}", final_row);
+        assignments.push(final_row);
         assignments
     }
 
@@ -796,8 +798,9 @@ impl KeccakTable {
         &self,
         region: &mut Region<F>,
         offset: usize,
-        values: [F; 7],
+        values: [F; 3],
     ) -> Result<(), Error> {
+        //println!("keccak table assign row {:?}", values);
         for (column, value) in self.columns().iter().zip(values.iter()) {
             region.assign_advice(
                 || format!("assign {}", offset),
@@ -856,12 +859,12 @@ impl DynamicTableColumns for KeccakTable {
     fn columns(&self) -> Vec<Column<Advice>> {
         vec![
             self.is_enabled,
-            self.input_rlc,
-            self.input_len,
+            //self.input_rlc,
+            //self.input_len,
             self.output_rlc,
             self.hash_counter,
-            self.byte_value,
-            self.bytes_left,
+            //self.byte_value,
+            //self.bytes_left,
         ]
     }
 }
