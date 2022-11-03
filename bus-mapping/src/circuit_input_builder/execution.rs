@@ -167,6 +167,8 @@ pub enum CopyDataType {
     /// scenario where we wish to accumulate the value (RLC) over all rows.
     /// This is used for Copy Lookup from SHA3 opcode verification.
     RlcAcc,
+    /// 
+    SHA3,
 }
 
 impl From<CopyDataType> for usize {
@@ -252,10 +254,10 @@ impl CopyEvent {
                     .checked_sub(self.src_addr)
                     .unwrap_or_default(),
             ),
-            CopyDataType::RlcAcc | CopyDataType::TxLog => unreachable!(),
+            CopyDataType::RlcAcc | CopyDataType::TxLog | CopyDataType::SHA3=> unreachable!(),
         };
         let destination_rw_increase = match self.dst_type {
-            CopyDataType::RlcAcc | CopyDataType::Bytecode => 0,
+            CopyDataType::RlcAcc | CopyDataType::Bytecode |CopyDataType::SHA3 => 0,
             CopyDataType::TxLog | CopyDataType::Memory => u64::try_from(step_index).unwrap() / 2,
             CopyDataType::TxCalldata => unreachable!(),
         };

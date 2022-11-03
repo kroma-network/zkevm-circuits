@@ -16,6 +16,7 @@ use halo2_proofs::{
     },
     poly::Rotation,
 };
+use itertools::zip;
 use keccak256::plain::Keccak;
 use std::vec;
 
@@ -349,15 +350,16 @@ impl<F: Field> Config<F> {
                 meta.query_advice(is_final, Rotation::cur()),
                 not::expr(meta.query_advice(padding, Rotation::cur())),
             ]);
-            let lookup_columns = vec![hash_input_rlc, code_length, bytecode_table.code_hash];
+            let lookup_input_columns = vec![hash_input_rlc, code_length, bytecode_table.code_hash];
+            let lookup_table_columns = vec![keccak_table.input_rlc, keccak_table.input_len, keccak_table.output_rlc];
             let mut constraints = vec![(
                 enable.clone(),
                 meta.query_advice(keccak_table.is_enabled, Rotation::cur()),
             )];
-            for (i, column) in keccak_table.columns().iter().take(4).skip(1).enumerate() {
+            for (input_column, table_column) in zip(lookup_input_columns, lookup_table_columns) {
                 constraints.push((
-                    enable.clone() * meta.query_advice(lookup_columns[i], Rotation::cur()),
-                    meta.query_advice(*column, Rotation::cur()),
+                    enable.clone() * meta.query_advice(input_column, Rotation::cur()),
+                    meta.query_advice(table_column, Rotation::cur()),
                 ))
             }
             constraints

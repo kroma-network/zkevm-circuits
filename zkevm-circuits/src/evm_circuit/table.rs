@@ -389,6 +389,12 @@ impl<F: Field> Lookup<F> {
                 input_rlc.clone(),
                 input_len.clone(),
                 output_rlc.clone(),
+            //self.hash_counter,
+            //self.byte_value,
+            //self.bytes_left,
+                1.expr(), 
+                0.expr(), 
+                0.expr(),
             ],
             Self::ExpTable {
                 identifier,
