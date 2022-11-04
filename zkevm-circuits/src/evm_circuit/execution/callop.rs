@@ -23,8 +23,7 @@ use halo2_proofs::plonk::{Error, Expression};
 use keccak256::EMPTY_HASH_LE;
 
 /// Gadget for call related opcodes. It supports `OpcodeId::CALL`,
-/// `OpcodeId::DELEGATECALL` and `OpcodeId::STATICCALL` for now
-/// (will add `OpcodeId::CALLCODE`).
+/// `OpcodeId::CALLCODE`, `OpcodeId::DELEGATECALL` and `OpcodeId::STATICCALL`.
 #[derive(Clone, Debug)]
 pub(crate) struct CallOpGadget<F> {
     opcode: Cell<F>,
@@ -57,22 +56,24 @@ pub(crate) struct CallOpGadget<F> {
 }
 
 impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
-    const NAME: &'static str = "CALL_DELEGATECALL_STATICCALL";
+    const NAME: &'static str = "CALL_OP";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::CALL_DELEGATECALL_STATICCALL;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::CALL_OP;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let opcode = cb.query_cell();
         cb.opcode_lookup(opcode.expr(), 1.expr());
         let is_call = is_opcode(&opcode, OpcodeId::CALL);
+        let is_callcode = is_opcode(&opcode, OpcodeId::CALLCODE);
         let is_delegatecall = is_opcode(&opcode, OpcodeId::DELEGATECALL);
         let is_staticcall = is_opcode(&opcode, OpcodeId::STATICCALL);
 
-        // We do the responsible opcode check explicitly here because we're not using
-        // the `SameContextGadget` for `CALL`, `DELEGATECALL` or `STATICCALL`.
+        // We do the responsible opcode check explicitly here because we're not
+        // using the `SameContextGadget` for `CALL`, `CALLCODE`, `DELEGATECALL`
+        // or `STATICCALL`.
         cb.require_equal(
-            "Opcode should be CALL, DELEGATECALL or STATICCALL",
-            is_call.expr() + is_delegatecall.expr() + is_staticcall.expr(),
+            "Opcode should be CALL, CALLCODE, DELEGATECALL or STATICCALL",
+            is_call.expr() + is_callcode.expr() + is_delegatecall.expr() + is_staticcall.expr(),
             1.expr(),
         );
 
@@ -134,10 +135,12 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
             [cd_address.address(), rd_address.address()],
         );
 
-        // `code_address` is poped from stack and used to check if it exists in access
-        // list and get code hash. Caller and callee addresses are `parent_address` and
-        // `current_address` for opcode `DELEGATECALL`, otherwise are `current_address`
-        // and `code_address`.
+        // `code_address` is poped from stack and used to check if it exists in
+        // access list and get code hash. For opcode `CALLCODE`, both caller and
+        // callee addresses are `current_address` (caller address). For opcode
+        // `DELEGATECALL`, caller address is `parent_address` and callee address
+        // is `current_address`. Otherwise caller address is `current_address`
+        // and callee address is `code_address`.
         let code_address = from_bytes::expr(&code_address_word.cells[..N_BYTES_ACCOUNT_ADDRESS]);
         let caller_address = select::expr(
             is_delegatecall.expr(),
@@ -145,7 +148,7 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
             current_address.expr(),
         );
         let callee_address = select::expr(
-            is_delegatecall.expr(),
+            is_callcode.expr() + is_delegatecall.expr(),
             current_address.expr(),
             code_address.expr(),
         );
@@ -245,7 +248,8 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
 
         // TODO: Handle precompiled
 
-        let stack_pointer_delta = select::expr(is_call.expr(), 6.expr(), 5.expr());
+        let stack_pointer_delta =
+            select::expr(is_call.expr() + is_callcode.expr(), 6.expr(), 5.expr());
         cb.condition(is_empty_code_hash.expr(), |cb| {
             // Save caller's call state
             for field_tag in [
@@ -256,9 +260,11 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
                 cb.call_context_lookup(true.expr(), None, field_tag, 0.expr());
             }
 
-            // Opcode `CALL` has an extra stack pop `value`, and opcode `DELEGATECALL` has
-            // two extra call context lookups - parent caller address and value.
-            let rw_counter_delta = 23.expr() + is_call.expr() + is_delegatecall.expr() * 2.expr();
+            // Both `CALL` and `CALLCODE` have an extra stack pop `value`, and
+            // opcode `DELEGATECALL` has two extra call context lookups - parent
+            // caller address and value.
+            let rw_counter_delta =
+                23.expr() + is_call.expr() + is_callcode.expr() + is_delegatecall.expr() * 2.expr();
             cb.require_step_state_transition(StepStateTransition {
                 rw_counter: Delta(rw_counter_delta),
                 program_counter: Delta(1.expr()),
@@ -329,9 +335,10 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
             // Give gas stipend if value is not zero
             let callee_gas_left = callee_gas_left + has_value * GAS_STIPEND_CALL_WITH_VALUE.expr();
 
-            // Opcode `CALL` has an extra stack pop `value`, and opcode `DELEGATECALL` has
-            // two extra call context lookups - parent caller address and value.
-            let rw_counter_delta = 43.expr() + is_call.expr() + is_delegatecall.expr() * 2.expr();
+            // Both `CALL` and `CALLCODE` have an extra stack pop `value`, and
+            // opcode `DELEGATECALL` has two extra call context lookups - parent
+            // caller address and value.
+            let rw_counter_delta = 43.expr() + is_call + is_callcode + is_delegatecall * 2.expr();
             cb.require_step_state_transition(StepStateTransition {
                 rw_counter: Delta(rw_counter_delta),
                 call_id: To(callee_call_id.expr()),
@@ -385,7 +392,7 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
         step: &ExecStep,
     ) -> Result<(), Error> {
         let opcode = step.opcode.unwrap();
-        let is_call = opcode == OpcodeId::CALL;
+        let is_call_or_callcode = opcode == OpcodeId::CALL || opcode == OpcodeId::CALLCODE;
         let is_delegatecall = opcode == OpcodeId::DELEGATECALL;
         let [tx_id, is_static, depth, current_address] = [
             step.rw_indices[0],
@@ -394,10 +401,10 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
             step.rw_indices[5],
         ]
         .map(|idx| block.rws[idx].call_context_value());
-        // This offset is used to change the index offset of `step.rw_indices`. Since
-        // opcode `CALL` has an extra stack pop `value`, and opcode
-        // `DELEGATECALL` has two extra call context lookups - parent caller
-        // address and value.
+        // This offset is used to change the index offset of `step.rw_indices`.
+        // Since both `CALL` and `CALLCODE `have an extra stack pop `value`, and
+        // opcode `DELEGATECALL` has two extra call context lookups - parent
+        // caller address and value.
         let mut rw_offset = 0;
         let [parent_address, parent_value] = if is_delegatecall {
             rw_offset += 2;
@@ -410,7 +417,7 @@ impl<F: Field> ExecutionGadget<F> for CallOpGadget<F> {
             step.rw_indices[7 + rw_offset],
         ]
         .map(|idx| block.rws[idx].stack_value());
-        let value = if is_call {
+        let value = if is_call_or_callcode {
             rw_offset += 1;
             block.rws[step.rw_indices[7 + rw_offset]].stack_value()
         } else {
@@ -612,17 +619,23 @@ mod test {
     use mock::TestContext;
     use std::default::Default;
 
+    const TEST_CALL_OPCODES: &[OpcodeId] = &[
+        OpcodeId::CALL,
+        OpcodeId::CALLCODE,
+        OpcodeId::DELEGATECALL,
+        OpcodeId::STATICCALL,
+    ];
+
     #[test]
     fn callop_insufficient_balance() {
-        let opcodes = [OpcodeId::CALL, OpcodeId::DELEGATECALL, OpcodeId::STATICCALL];
         let stacks = [Stack {
             // this value is bigger than caller's balance
             value: Word::from(11).pow(18.into()),
             ..Default::default()
         }];
         let callees = [callee(bytecode! {}), callee(bytecode! { STOP })];
-        for ((opcode, stack), callee) in opcodes
-            .into_iter()
+        for ((opcode, stack), callee) in TEST_CALL_OPCODES
+            .iter()
             .cartesian_product(stacks.into_iter())
             .cartesian_product(callees.into_iter())
         {
@@ -632,14 +645,13 @@ mod test {
 
     #[test]
     fn callop_nested() {
-        for opcode in [OpcodeId::CALL, OpcodeId::DELEGATECALL, OpcodeId::STATICCALL] {
+        for opcode in TEST_CALL_OPCODES {
             test_nested(opcode);
         }
     }
 
     #[test]
     fn callop_oog() {
-        let opcodes = [OpcodeId::CALL, OpcodeId::DELEGATECALL, OpcodeId::STATICCALL];
         let stacks = [
             // With gas and memory expansion
             Stack {
@@ -658,8 +670,8 @@ mod test {
             STOP
         };
         let callees = [callee(bytecode)];
-        for ((opcode, stack), callee) in opcodes
-            .into_iter()
+        for ((opcode, stack), callee) in TEST_CALL_OPCODES
+            .iter()
             .cartesian_product(stacks.into_iter())
             .cartesian_product(callees.into_iter())
         {
@@ -669,14 +681,13 @@ mod test {
 
     #[test]
     fn callop_recursive() {
-        for opcode in [OpcodeId::CALL, OpcodeId::DELEGATECALL, OpcodeId::STATICCALL] {
+        for opcode in TEST_CALL_OPCODES {
             test_recursive(opcode);
         }
     }
 
     #[test]
     fn callop_simple() {
-        let opcodes = [OpcodeId::CALL, OpcodeId::DELEGATECALL, OpcodeId::STATICCALL];
         let stacks = [
             // With nothing
             Stack::default(),
@@ -718,8 +729,8 @@ mod test {
             },
         ];
         let callees = [callee(bytecode! {}), callee(bytecode! { STOP })];
-        for ((opcode, stack), callee) in opcodes
-            .into_iter()
+        for ((opcode, stack), callee) in TEST_CALL_OPCODES
+            .iter()
             .cartesian_product(stacks.into_iter())
             .cartesian_product(callees.into_iter())
         {
@@ -749,8 +760,8 @@ mod test {
         }
     }
 
-    fn caller(opcode: OpcodeId, stack: Stack, caller_is_success: bool) -> Account {
-        let is_call = opcode == OpcodeId::CALL;
+    fn caller(opcode: &OpcodeId, stack: Stack, caller_is_success: bool) -> Account {
+        let is_call = opcode == &OpcodeId::CALL;
         let terminator = if caller_is_success {
             OpcodeId::RETURN
         } else {
@@ -770,7 +781,7 @@ mod test {
         bytecode.append(&bytecode! {
             PUSH32(Address::repeat_byte(0xff).to_word())
             PUSH32(Word::from(stack.gas))
-            .write_op(opcode)
+            .write_op(*opcode)
             PUSH32(Word::from(stack.rd_length))
             PUSH32(Word::from(stack.rd_offset))
             PUSH32(Word::from(stack.cd_length))
@@ -782,7 +793,7 @@ mod test {
         bytecode.append(&bytecode! {
             PUSH32(Address::repeat_byte(0xff).to_word())
             PUSH32(Word::from(stack.gas))
-            .write_op(opcode)
+            .write_op(*opcode)
             PUSH1(0)
             PUSH1(0)
             .write_op(terminator)
@@ -796,8 +807,8 @@ mod test {
         }
     }
 
-    fn caller_for_insufficient_balance(opcode: OpcodeId, stack: Stack) -> Account {
-        let is_call = opcode == OpcodeId::CALL;
+    fn caller_for_insufficient_balance(opcode: &OpcodeId, stack: Stack) -> Account {
+        let is_call = opcode == &OpcodeId::CALL;
         let terminator = OpcodeId::STOP;
 
         let mut bytecode = bytecode! {
@@ -812,7 +823,7 @@ mod test {
         bytecode.append(&bytecode! {
             PUSH32(Address::repeat_byte(0xff).to_word())
             PUSH32(Word::from(stack.gas))
-            .write_op(opcode)
+            .write_op(*opcode)
             .write_op(terminator)
         });
 
@@ -824,7 +835,7 @@ mod test {
         }
     }
 
-    fn test_nested(opcode: OpcodeId) {
+    fn test_nested(opcode: &OpcodeId) {
         let callers = [
             caller(
                 opcode,
@@ -926,8 +937,8 @@ mod test {
         assert_eq!(run_test_circuit_geth_data_default::<Fr>(block), Ok(()));
     }
 
-    fn test_recursive(opcode: OpcodeId) {
-        let is_call = opcode == OpcodeId::CALL;
+    fn test_recursive(opcode: &OpcodeId) {
+        let is_call = opcode == &OpcodeId::CALL;
         let mut caller_bytecode = bytecode! {
             PUSH1(0)
             PUSH1(0)
@@ -940,7 +951,7 @@ mod test {
         caller_bytecode.append(&bytecode! {
             PUSH32(Address::repeat_byte(0xff).to_word())
             PUSH2(if is_call {10000} else {10032})
-            .write_op(opcode)
+            .write_op(*opcode)
             STOP
         });
         // The following bytecode calls itself recursively if gas_left is greater than
@@ -968,7 +979,7 @@ mod test {
             PUSH1(if is_call {132} else {129}) // gas
             GAS
             SUB
-            .write_op(opcode)
+            .write_op(*opcode)
 
             JUMPDEST // 41 for static_call, 43 for call
             GAS
