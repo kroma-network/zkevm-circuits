@@ -18,6 +18,7 @@ pub mod is_equal;
 pub mod is_zero;
 pub mod less_than;
 pub mod monotone;
+pub mod mul_add;
 pub mod util;
 
 use eth_types::Field;
