@@ -59,7 +59,7 @@ impl<F: Field, C: Into<Column<Any>> + Clone, const W: usize> LookupTable<F> for 
 
 /// Tag used to identify each field in the transaction in a row of the
 /// transaction table.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumIter)]
 pub enum TxFieldTag {
     /// Unused tag
     Null = 0,
@@ -90,6 +90,12 @@ pub enum TxFieldTag {
     CallData,
 }
 impl_expr!(TxFieldTag);
+
+impl From<TxFieldTag> for usize {
+    fn from(t: TxFieldTag) -> Self {
+        t as usize
+    }
+}
 
 /// Alias for TxFieldTag used by EVM Circuit
 pub type TxContextFieldTag = TxFieldTag;

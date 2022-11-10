@@ -6,14 +6,18 @@
 
 pub mod sign_verify;
 
-use crate::table::{KeccakTable, RlpTable, TxFieldTag, TxTable};
+use crate::table::{KeccakTable, LookupTable, RlpTable, TxFieldTag, TxTable};
 use crate::util::{random_linear_combine_word as rlc, Challenges};
-use crate::witness::signed_tx_from_geth_tx;
+use crate::witness::{signed_tx_from_geth_tx, RlpDataType};
 use bus_mapping::circuit_input_builder::keccak_inputs_tx_circuit;
 use eth_types::{
     sign_types::SignData,
     {geth_types::Transaction, Address, Field, ToLittleEndian, ToScalar},
 };
+use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
+use gadgets::util::{and, Expr};
+use halo2_proofs::plonk::Fixed;
+use halo2_proofs::poly::Rotation;
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
@@ -35,8 +39,9 @@ pub use halo2_proofs::halo2curves::{
 /// Config for TxCircuit
 #[derive(Clone, Debug)]
 pub struct TxCircuitConfig<F: Field> {
+    q_enable: Column<Fixed>,
     tx_id: Column<Advice>,
-    tag: Column<Advice>,
+    tag: BinaryNumberConfig<TxFieldTag, 4>,
     index: Column<Advice>,
     value: Column<Advice>,
     sign_verify: SignVerifyConfig,
@@ -54,15 +59,197 @@ impl<F: Field> TxCircuitConfig<F> {
         rlp_table: RlpTable,
         challenges: Challenges<Expression<F>>,
     ) -> Self {
+        let q_enable = meta.fixed_column();
         let tx_id = tx_table.tx_id;
-        let tag = tx_table.tag;
+        let tag = BinaryNumberChip::configure(meta, q_enable, None);
         let index = tx_table.index;
         let value = tx_table.value;
         meta.enable_equality(value);
 
+        // lookup tx nonce.
+        meta.lookup_any("tx nonce in RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Nonce, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::Nonce.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("tx nonce in RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Nonce, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::Nonce.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup tx gasprice.
+        meta.lookup_any("tx gasprice in RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::GasPrice, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::GasPrice.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("tx gasprice in RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::GasPrice, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::GasPrice.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup tx gas.
+        meta.lookup_any("tx gas in RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Gas, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::Gas.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("tx gas in RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Gas, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::Gas.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup tx callee address.
+        meta.lookup_any("tx callee address in RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::CalleeAddress, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::CalleeAddress.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("tx callee address in RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::CalleeAddress, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::CalleeAddress.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup tx value.
+        meta.lookup_any("tx value in RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Value, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::Value.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("tx value in RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Value, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_id, Rotation::cur()),
+                TxFieldTag::Value.expr(),
+                1.expr(),
+                meta.query_advice(value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
         let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone(), challenges);
 
         Self {
+            q_enable,
             tx_id,
             tag,
             index,
@@ -90,18 +277,22 @@ impl<F: Field> TxCircuitConfig<F> {
         index: usize,
         value: Value<F>,
     ) -> Result<AssignedCell<F, F>, Error> {
+        region.assign_fixed(
+            || "q_enable",
+            self.q_enable,
+            offset,
+            || Value::known(F::one()),
+        )?;
         region.assign_advice(
             || "tx_id",
             self.tx_id,
             offset,
             || Value::known(F::from(tx_id as u64)),
         )?;
-        region.assign_advice(
-            || "tag",
-            self.tag,
-            offset,
-            || Value::known(F::from(tag as u64)),
-        )?;
+
+        let tag_chip = BinaryNumberChip::construct(self.tag);
+        tag_chip.assign(region, offset, &tag)?;
+
         region.assign_advice(
             || "index",
             self.index,
@@ -202,12 +393,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                     };
 
                     for (tag, value) in [
-                        (
-                            TxFieldTag::Nonce,
-                            challenges
-                                .evm_word()
-                                .map(|challenge| rlc(tx.nonce.to_le_bytes(), challenge)),
-                        ),
+                        (TxFieldTag::Nonce, Value::known(F::from(tx.nonce.as_u64()))),
                         (
                             TxFieldTag::Gas,
                             Value::known(F::from(tx.gas_limit.as_u64())),
