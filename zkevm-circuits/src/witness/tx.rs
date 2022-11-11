@@ -258,10 +258,10 @@ pub fn signed_tx_from_geth_tx(
     chain_id: u64,
 ) -> Vec<SignedTransaction> {
     let mut signed_txs = Vec::with_capacity(txs.len());
-    for (id, geth_tx) in txs.iter().enumerate() {
+    for (i, geth_tx) in txs.iter().enumerate() {
         signed_txs.push(SignedTransaction {
             tx: Transaction {
-                id,
+                id: i + 1,
                 nonce: geth_tx.nonce.as_u64(),
                 gas: geth_tx.gas_limit.as_u64(),
                 gas_price: geth_tx.gas_price,
@@ -271,6 +271,10 @@ pub fn signed_tx_from_geth_tx(
                 value: geth_tx.value,
                 call_data: geth_tx.call_data.to_vec(),
                 call_data_length: geth_tx.call_data.len(),
+                call_data_gas_cost: geth_tx
+                    .call_data
+                    .iter()
+                    .fold(0, |acc, byte| acc + if *byte == 0 { 4 } else { 16 }),
                 chain_id,
                 ..Default::default()
             },

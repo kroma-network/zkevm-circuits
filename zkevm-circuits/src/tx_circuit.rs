@@ -151,6 +151,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -168,6 +170,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -187,6 +191,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -204,6 +210,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -223,6 +231,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -240,6 +250,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -259,6 +271,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -276,6 +290,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -295,6 +311,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -312,6 +330,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
+                0.expr(),
+                0.expr(),
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -331,6 +351,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
+                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -348,6 +370,8 @@ impl<F: Field> TxCircuitConfig<F> {
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
+                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
             ]
             .into_iter()
             .zip(rlp_table.table_exprs(meta).into_iter())
@@ -441,14 +465,14 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                     for (tag, value) in [
                         (TxFieldTag::Nonce, Value::known(F::from(tx.nonce.as_u64()))),
                         (
-                            TxFieldTag::Gas,
-                            Value::known(F::from(tx.gas_limit.as_u64())),
-                        ),
-                        (
                             TxFieldTag::GasPrice,
                             challenges
                                 .evm_word()
                                 .map(|challenge| rlc(tx.gas_price.to_le_bytes(), challenge)),
+                        ),
+                        (
+                            TxFieldTag::Gas,
+                            Value::known(F::from(tx.gas_limit.as_u64())),
                         ),
                         (
                             TxFieldTag::CallerAddress,
@@ -485,6 +509,14 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                                     .iter()
                                     .fold(0, |acc, byte| acc + if *byte == 0 { 4 } else { 16 }),
                             )),
+                        ),
+                        (
+                            TxFieldTag::CallDataRlc,
+                            challenges.evm_word().map(|challenge| {
+                                tx.call_data.iter().fold(F::zero(), |acc, byte| {
+                                    acc * challenge + F::from(*byte as u64)
+                                })
+                            }),
                         ),
                         (
                             TxFieldTag::TxSignHash,

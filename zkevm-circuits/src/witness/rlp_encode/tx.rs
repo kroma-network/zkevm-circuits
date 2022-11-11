@@ -123,6 +123,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
             RlpTxTag::DataPrefix as u8,
             RlpTxTag::Data as u8,
             &self.call_data,
+            self.call_data_gas_cost,
             idx,
         );
         let idx = handle_u256(
@@ -178,9 +179,8 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
             tag: RlpTxTag::Rlp as u8,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         }
     }
 }
@@ -257,6 +257,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
             RlpTxTag::DataPrefix as u8,
             RlpTxTag::Data as u8,
             &self.tx.call_data,
+            self.tx.call_data_gas_cost,
             idx,
         );
         let idx = handle_u256(
@@ -312,9 +313,8 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
             tag: RlpTxTag::Rlp as u8,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         }
     }
 }

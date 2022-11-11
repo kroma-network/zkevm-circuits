@@ -27,9 +27,8 @@ pub fn handle_prefix<F: FieldExt>(
             tag,
             tag_length,
             tag_index: tag_length,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         });
         idx += 1;
         let mut length_acc = 0;
@@ -44,9 +43,8 @@ pub fn handle_prefix<F: FieldExt>(
                 tag,
                 tag_length,
                 tag_index: tag_length - (1 + k),
-                aux_tag_index: [0; 2],
-                aux_tag_length: [0; 2],
                 length_acc,
+                ..Default::default()
             });
             idx += 1;
         }
@@ -68,9 +66,8 @@ pub fn handle_prefix<F: FieldExt>(
             tag,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: (rlp_data[idx] - 192) as u64,
+            ..Default::default()
         });
         idx += 1;
     }
@@ -111,9 +108,8 @@ pub fn handle_u256<F: FieldExt>(
             tag,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         });
         idx += 1;
     } else if value_bytes.len() == 1 && value_bytes[0] < 128 {
@@ -131,9 +127,8 @@ pub fn handle_u256<F: FieldExt>(
             tag,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         });
         idx += 1;
     } else {
@@ -151,10 +146,9 @@ pub fn handle_u256<F: FieldExt>(
             value_acc: F::from(rlp_data[idx] as u64),
             tag,
             tag_length,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             tag_index: tag_length,
             length_acc: value_bytes.len() as u64,
+            ..Default::default()
         });
         idx += 1;
 
@@ -190,9 +184,8 @@ pub fn handle_u256<F: FieldExt>(
                 tag,
                 tag_length,
                 tag_index: tag_length - (1 + i),
-                aux_tag_index: [0; 2],
-                aux_tag_length: [0; 2],
                 length_acc: 0,
+                ..Default::default()
             });
             idx += 1;
         }
@@ -228,9 +221,8 @@ pub fn handle_address<F: FieldExt>(
         tag: prefix_tag,
         tag_length: 1,
         tag_index: 1,
-        aux_tag_index: [0; 2],
-        aux_tag_length: [0; 2],
         length_acc: 20,
+        ..Default::default()
     });
     idx += 1;
 
@@ -252,9 +244,8 @@ pub fn handle_address<F: FieldExt>(
             tag,
             tag_length: 20,
             tag_index: 20 - i,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         });
         idx += 1;
     }
@@ -272,6 +263,7 @@ pub fn handle_bytes<F: FieldExt>(
     prefix_tag: u8,
     tag: u8,
     call_data: &[u8],
+    call_data_gas_cost: u64,
     mut idx: usize,
 ) -> usize {
     let length = call_data.len();
@@ -291,9 +283,8 @@ pub fn handle_bytes<F: FieldExt>(
             tag: prefix_tag,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            ..Default::default()
         });
         idx += 1;
         return idx;
@@ -314,9 +305,8 @@ pub fn handle_bytes<F: FieldExt>(
             tag: prefix_tag,
             tag_length: 1,
             tag_index: 1,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: length as u64,
+            ..Default::default()
         });
         idx += 1;
 
@@ -338,9 +328,9 @@ pub fn handle_bytes<F: FieldExt>(
                 tag,
                 tag_length: length,
                 tag_index: length - i,
-                aux_tag_index: [0; 2],
-                aux_tag_length: [0; 2],
                 length_acc: 0,
+                call_data_length: Some(call_data.len() as u64),
+                call_data_gas_cost: Some(call_data_gas_cost),
             });
             idx += 1;
         }
@@ -364,9 +354,8 @@ pub fn handle_bytes<F: FieldExt>(
         tag: prefix_tag,
         tag_length,
         tag_index: tag_length,
-        aux_tag_index: [0; 2],
-        aux_tag_length: [0; 2],
         length_acc: 0,
+        ..Default::default()
     });
     idx += 1;
 
@@ -394,9 +383,8 @@ pub fn handle_bytes<F: FieldExt>(
             tag: prefix_tag,
             tag_length,
             tag_index: tag_length - (1 + i),
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc,
+            ..Default::default()
         });
         idx += 1;
     }
@@ -420,9 +408,9 @@ pub fn handle_bytes<F: FieldExt>(
             tag,
             tag_length,
             tag_index: tag_length - i,
-            aux_tag_index: [0; 2],
-            aux_tag_length: [0; 2],
             length_acc: 0,
+            call_data_length: Some(call_data.len() as u64),
+            call_data_gas_cost: Some(call_data_gas_cost),
         });
         idx += 1;
     }

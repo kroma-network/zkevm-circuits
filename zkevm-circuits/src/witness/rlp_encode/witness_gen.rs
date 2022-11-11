@@ -4,10 +4,11 @@ use rlp::Encodable;
 use crate::impl_expr;
 
 /// Data types that are supported by the RLP circuit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RlpDataType {
     /// Data type for an RLP-encoded unsigned transaction. The encoding consists
     /// of: [nonce, gas, gasprice, to, value, input, chainid, 0, 0].
+    #[default]
     TxSign,
     /// Data type for an RLP-encoded signed transaction. The encoding consists
     /// of: [nonce, gas, gasprice, to, value, input, v, r, s].
@@ -19,7 +20,7 @@ pub enum RlpDataType {
 impl_expr!(RlpDataType);
 
 /// Represents the witness in a single row of the RLP circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RlpWitnessRow<F> {
     /// Denotes the transaction or receipt ID.
     pub id: usize,
@@ -40,13 +41,13 @@ pub struct RlpWitnessRow<F> {
     /// Denotes a decrementing index specific to the tag in in the current block
     /// of bytes.
     pub tag_index: usize,
-    /// Denotes the aux tag's index.
-    pub aux_tag_index: [usize; 2],
-    /// Denotes the aux tag's length.
-    pub aux_tag_length: [usize; 2],
     /// Denotes an accumulator for the length of data, in the case where len >
     /// 55 and the length is represented in its big-endian form.
     pub length_acc: u64,
+    /// Optional field to hold the calldata length.
+    pub call_data_length: Option<u64>,
+    /// Optional field to hold the calldata gas cost.
+    pub call_data_gas_cost: Option<u64>,
 }
 
 /// The RlpWitnessGen trait is implemented by data types who's RLP encoding can
