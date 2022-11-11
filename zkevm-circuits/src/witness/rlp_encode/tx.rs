@@ -1,6 +1,10 @@
 use halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
 
-use crate::{evm_circuit::witness::Transaction, impl_expr, witness::tx::SignedTransaction};
+use crate::{
+    evm_circuit::witness::Transaction,
+    impl_expr,
+    witness::{rlp_encode::common::handle_u64, tx::SignedTransaction},
+};
 
 use super::{
     common::{handle_address, handle_bytes, handle_prefix, handle_u256},
@@ -64,8 +68,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
             RlpTxTag::Prefix as u8,
             0,
         );
-        let idx = handle_u256(
-            randomness,
+        let idx = handle_u64(
             self.id,
             rlp_data.as_ref(),
             &mut rows,
@@ -84,8 +87,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
             self.gas_price,
             idx,
         );
-        let idx = handle_u256(
-            randomness,
+        let idx = handle_u64(
             self.id,
             rlp_data.as_ref(),
             &mut rows,
@@ -126,8 +128,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
             self.call_data_gas_cost,
             idx,
         );
-        let idx = handle_u256(
-            randomness,
+        let idx = handle_u64(
             self.id,
             rlp_data.as_ref(),
             &mut rows,
@@ -198,8 +199,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
             RlpTxTag::Prefix as u8,
             0,
         );
-        let idx = handle_u256(
-            randomness,
+        let idx = handle_u64(
             self.tx.id,
             rlp_data.as_ref(),
             &mut rows,
@@ -218,8 +218,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
             self.tx.gas_price,
             idx,
         );
-        let idx = handle_u256(
-            randomness,
+        let idx = handle_u64(
             self.tx.id,
             rlp_data.as_ref(),
             &mut rows,
@@ -260,8 +259,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
             self.tx.call_data_gas_cost,
             idx,
         );
-        let idx = handle_u256(
-            randomness,
+        let idx = handle_u64(
             self.tx.id,
             rlp_data.as_ref(),
             &mut rows,

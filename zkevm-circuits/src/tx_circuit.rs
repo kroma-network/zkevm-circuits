@@ -8,14 +8,14 @@ pub mod sign_verify;
 
 use crate::table::{KeccakTable, LookupTable, RlpTable, TxFieldTag, TxTable};
 use crate::util::{random_linear_combine_word as rlc, Challenges};
-use crate::witness::{signed_tx_from_geth_tx, RlpDataType};
+use crate::witness::{signed_tx_from_geth_tx, RlpDataType, RlpTxTag};
 use bus_mapping::circuit_input_builder::keccak_inputs_tx_circuit;
 use eth_types::{
     sign_types::SignData,
     {geth_types::Transaction, Address, Field, ToLittleEndian, ToScalar},
 };
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
-use gadgets::util::{and, Expr};
+use gadgets::util::{and, not, Expr};
 use halo2_proofs::plonk::Fixed;
 use halo2_proofs::poly::Rotation;
 use halo2_proofs::{
@@ -66,7 +66,7 @@ impl<F: Field> TxCircuitConfig<F> {
         let value = tx_table.value;
         meta.enable_equality(value);
 
-        Self::configure_lookups(meta, q_enable, tag, rlp_table, tx_table);
+        Self::configure_lookups(meta, q_enable, tag, 0.expr(), rlp_table, tx_table);
 
         let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone(), challenges);
 
@@ -136,6 +136,7 @@ impl<F: Field> TxCircuitConfig<F> {
         meta: &mut ConstraintSystem<F>,
         q_enable: Column<Fixed>,
         tag: BinaryNumberConfig<TxFieldTag, 4>,
+        no_call_data: Expression<F>,
         rlp_table: RlpTable,
         tx_table: TxTable,
     ) {
@@ -147,7 +148,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::Nonce.expr(),
+                RlpTxTag::Nonce.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
@@ -166,7 +167,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::Nonce.expr(),
+                RlpTxTag::Nonce.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
@@ -187,7 +188,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::GasPrice.expr(),
+                RlpTxTag::GasPrice.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
@@ -206,7 +207,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::GasPrice.expr(),
+                RlpTxTag::GasPrice.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
@@ -227,7 +228,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::Gas.expr(),
+                RlpTxTag::Gas.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
@@ -246,7 +247,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::Gas.expr(),
+                RlpTxTag::Gas.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
@@ -267,7 +268,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::CalleeAddress.expr(),
+                RlpTxTag::To.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
@@ -286,7 +287,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::CalleeAddress.expr(),
+                RlpTxTag::To.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
@@ -307,7 +308,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::Value.expr(),
+                RlpTxTag::Value.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
@@ -326,7 +327,7 @@ impl<F: Field> TxCircuitConfig<F> {
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::Value.expr(),
+                RlpTxTag::Value.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxHash.expr(),
@@ -339,15 +340,16 @@ impl<F: Field> TxCircuitConfig<F> {
             .collect()
         });
 
-        // lookup tx rlc(calldata).
+        // lookup tx rlc(calldata) if call_data_length > 0.
         meta.lookup_any("tx rlc(calldata) in RLPTable::TxSign", |meta| {
             let enable = and::expr(vec![
                 meta.query_fixed(q_enable, Rotation::cur()),
                 tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                not::expr(no_call_data.clone()),
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::CallDataRlc.expr(),
+                RlpTxTag::Data.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
                 RlpDataType::TxSign.expr(),
@@ -363,12 +365,54 @@ impl<F: Field> TxCircuitConfig<F> {
             let enable = and::expr(vec![
                 meta.query_fixed(q_enable, Rotation::cur()),
                 tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                not::expr(no_call_data.clone()),
             ]);
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                TxFieldTag::CallDataRlc.expr(),
+                RlpTxTag::Data.expr(),
                 1.expr(), // tag_index == 1
                 meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        // lookup tx rlc(calldata) if call_data_length == 0.
+        meta.lookup_any("tx rlc(calldata) in RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                no_call_data.clone(),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::DataPrefix.expr(),
+                1.expr(), // tag_index == 1
+                0.expr(), // value == 0
+                RlpDataType::TxSign.expr(),
+                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("tx rlc(calldata) in RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                no_call_data,
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::DataPrefix.expr(),
+                1.expr(), // tag_index == 1
+                0.expr(), // value == 0
                 RlpDataType::TxHash.expr(),
                 meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
                 meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
@@ -585,7 +629,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
 impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
     for TxCircuit<F, MAX_TXS, MAX_CALLDATA>
 {
-    type Config = (TxCircuitConfig<F>, Challenges);
+    type Config = TxCircuitConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -596,22 +640,16 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         let tx_table = TxTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let rlp_table = RlpTable::construct(meta);
-        let challenges = Challenges::construct(meta);
-
-        let config = {
-            let challenges = challenges.exprs(meta);
-            TxCircuitConfig::new(meta, tx_table, keccak_table, rlp_table, challenges)
-        };
-
-        (config, challenges)
+        let challenges = Challenges::mock(Expression::Constant(Self::get_randomness()));
+        TxCircuitConfig::new(meta, tx_table, keccak_table, rlp_table, challenges)
     }
 
     fn synthesize(
         &self,
-        (config, challenges): Self::Config,
+        config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let challenges = challenges.values(&mut layouter);
+        let challenges = Challenges::mock(Value::known(self.randomness));
 
         config.load(&mut layouter)?;
         self.assign(&config, &mut layouter, &challenges)?;
