@@ -51,6 +51,7 @@ mod tests {
             },
             txs,
             chain_id,
+            randomness: TxCircuit::<Fr, MAX_TXS, MAX_CALLDATA>::get_randomness(),
         };
 
         // Bench setup generation

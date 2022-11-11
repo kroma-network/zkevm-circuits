@@ -657,7 +657,8 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         Ok(())
     }
 
-    fn get_randomness() -> F {
+    /// Dev randomness
+    pub fn get_randomness() -> F {
         F::from(123456789u64)
     }
 }

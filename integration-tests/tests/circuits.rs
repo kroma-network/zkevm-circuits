@@ -95,6 +95,7 @@ async fn test_tx_circuit_block(block_num: u64) {
         },
         txs,
         chain_id: CHAIN_ID,
+        randomness: TxCircuit::<Fr, 4, { 4 * (4 + 32 + 32) }>::get_randomness(),
     };
 
     let prover = MockProver::run(DEGREE, &circuit, vec![vec![]]).unwrap();
