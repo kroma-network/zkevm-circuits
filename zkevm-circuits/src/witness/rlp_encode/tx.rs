@@ -358,8 +358,8 @@ mod tests {
         assert_eq!(witness_rows[1].tag, RlpTxTag::Prefix as u8);
         assert_eq!(witness_rows[1].tag_index, 1);
         assert_eq!(witness_rows[1].tag_length, 2);
-        assert_eq!(witness_rows[1].length_acc, 81);
-        assert_eq!(witness_rows[1].value, 81);
+        assert_eq!(witness_rows[1].length_acc, 84);
+        assert_eq!(witness_rows[1].value, 84);
 
         // nonce verification
         assert_eq!(witness_rows[2].tag, RlpTxTag::Nonce as u8);
@@ -455,8 +455,8 @@ mod tests {
         assert_eq!(witness_rows[2].tag, RlpTxTag::Prefix as u8);
         assert_eq!(witness_rows[2].tag_index, 1);
         assert_eq!(witness_rows[2].tag_length, 3);
-        assert_eq!(witness_rows[2].length_acc, 2088);
-        assert_eq!(witness_rows[2].value, 40);
+        assert_eq!(witness_rows[2].length_acc, 2091);
+        assert_eq!(witness_rows[2].value, 43);
 
         // nonce verification
         let nonce_bytes = nonce
