@@ -45,6 +45,14 @@ lazy_static! {
             .value(word!("0x3e8"))
             .gas_price(word!("0x4d2"))
             .input(Bytes::from(b"hello"))
+            .build(),
+            MockTransaction::default()
+            .from(AddrOrWallet::random(&mut rng))
+            .to(MOCK_ACCOUNTS[3])
+            .nonce(word!("0x106"))
+            .value(word!("0x3e8"))
+            .gas_price(word!("0x4d2"))
+            .input(Bytes::from(b""))
             .build()]
     };
 }

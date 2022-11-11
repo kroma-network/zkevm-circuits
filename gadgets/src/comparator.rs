@@ -4,7 +4,7 @@
 use eth_types::Field;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Chip, Region},
+    circuit::{Chip, Region, Value},
     plonk::{ConstraintSystem, Error, Expression, VirtualCells},
     poly::Rotation,
 };
@@ -86,7 +86,9 @@ impl<F: Field, const N_BYTES: usize> ComparatorInstruction<F> for ComparatorChip
         rhs: F,
     ) -> Result<(), Error> {
         self.config().lt_chip.assign(region, offset, lhs, rhs)?;
-        self.config().eq_chip.assign(region, offset, lhs, rhs)?;
+        self.config()
+            .eq_chip
+            .assign(region, offset, Value::known(lhs), Value::known(rhs))?;
 
         Ok(())
     }

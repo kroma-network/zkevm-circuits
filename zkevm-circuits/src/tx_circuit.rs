@@ -15,6 +15,7 @@ use eth_types::{
     {geth_types::Transaction, Address, Field, ToLittleEndian, ToScalar},
 };
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
+use gadgets::is_equal::{IsEqualChip, IsEqualConfig, IsEqualInstruction};
 use gadgets::util::{and, not, Expr};
 use halo2_proofs::plonk::Fixed;
 use halo2_proofs::poly::Rotation;
@@ -44,6 +45,7 @@ pub struct TxCircuitConfig<F: Field> {
     tag: BinaryNumberConfig<TxFieldTag, 4>,
     index: Column<Advice>,
     value: Column<Advice>,
+    value_is_zero: IsEqualConfig<F>,
     sign_verify: SignVerifyConfig,
     keccak_table: KeccakTable,
     rlp_table: RlpTable,
@@ -66,7 +68,26 @@ impl<F: Field> TxCircuitConfig<F> {
         let value = tx_table.value;
         meta.enable_equality(value);
 
-        Self::configure_lookups(meta, q_enable, tag, 0.expr(), rlp_table, tx_table);
+        let value_is_zero = IsEqualChip::configure(
+            meta,
+            |meta| {
+                and::expr(vec![
+                    meta.query_fixed(q_enable, Rotation::cur()),
+                    tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                ])
+            },
+            |meta| meta.query_advice(value, Rotation::cur()),
+            |_| 0.expr(),
+        );
+
+        Self::configure_lookups(
+            meta,
+            q_enable,
+            tag,
+            value_is_zero.is_equal_expression.clone(),
+            rlp_table,
+            tx_table,
+        );
 
         let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone(), challenges);
 
@@ -76,6 +97,7 @@ impl<F: Field> TxCircuitConfig<F> {
             tag,
             index,
             value,
+            value_is_zero,
             sign_verify,
             keccak_table,
             rlp_table,
@@ -121,6 +143,8 @@ impl<F: Field> TxCircuitConfig<F> {
             offset,
             || Value::known(F::from(index as u64)),
         )?;
+        let is_zero_chip = IsEqualChip::construct(self.value_is_zero.clone());
+        is_zero_chip.assign(region, offset, value, Value::known(F::zero()))?;
         region.assign_advice(|| "value", self.value, offset, || value)
     }
 
@@ -341,87 +365,99 @@ impl<F: Field> TxCircuitConfig<F> {
         });
 
         // lookup tx rlc(calldata) if call_data_length > 0.
-        meta.lookup_any("tx rlc(calldata) in RLPTable::TxSign", |meta| {
-            let enable = and::expr(vec![
-                meta.query_fixed(q_enable, Rotation::cur()),
-                tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
-                not::expr(no_call_data.clone()),
-            ]);
-            vec![
-                meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                RlpTxTag::Data.expr(),
-                1.expr(), // tag_index == 1
-                meta.query_advice(tx_table.value, Rotation::cur()),
-                RlpDataType::TxSign.expr(),
-                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
-                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
-            ]
-            .into_iter()
-            .zip(rlp_table.table_exprs(meta).into_iter())
-            .map(|(arg, table)| (enable.clone() * arg, table))
-            .collect()
-        });
-        meta.lookup_any("tx rlc(calldata) in RLPTable::TxHash", |meta| {
-            let enable = and::expr(vec![
-                meta.query_fixed(q_enable, Rotation::cur()),
-                tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
-                not::expr(no_call_data.clone()),
-            ]);
-            vec![
-                meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                RlpTxTag::Data.expr(),
-                1.expr(), // tag_index == 1
-                meta.query_advice(tx_table.value, Rotation::cur()),
-                RlpDataType::TxHash.expr(),
-                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
-                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
-            ]
-            .into_iter()
-            .zip(rlp_table.table_exprs(meta).into_iter())
-            .map(|(arg, table)| (enable.clone() * arg, table))
-            .collect()
-        });
+        meta.lookup_any(
+            "tx rlc(calldata) in RLPTable::TxSign where len(calldata) > 0",
+            |meta| {
+                let enable = and::expr(vec![
+                    meta.query_fixed(q_enable, Rotation::cur()),
+                    tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                    not::expr(no_call_data.clone()),
+                ]);
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    RlpTxTag::Data.expr(),
+                    1.expr(), // tag_index == 1
+                    meta.query_advice(tx_table.value, Rotation::cur()),
+                    RlpDataType::TxSign.expr(),
+                    meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                    meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
+                ]
+                .into_iter()
+                .zip(rlp_table.table_exprs(meta).into_iter())
+                .map(|(arg, table)| (enable.clone() * arg, table))
+                .collect()
+            },
+        );
+        meta.lookup_any(
+            "tx rlc(calldata) in RLPTable::TxHash where len(calldata) > 0",
+            |meta| {
+                let enable = and::expr(vec![
+                    meta.query_fixed(q_enable, Rotation::cur()),
+                    tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                    not::expr(no_call_data.clone()),
+                ]);
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    RlpTxTag::Data.expr(),
+                    1.expr(), // tag_index == 1
+                    meta.query_advice(tx_table.value, Rotation::cur()),
+                    RlpDataType::TxHash.expr(),
+                    meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                    meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
+                ]
+                .into_iter()
+                .zip(rlp_table.table_exprs(meta).into_iter())
+                .map(|(arg, table)| (enable.clone() * arg, table))
+                .collect()
+            },
+        );
         // lookup tx rlc(calldata) if call_data_length == 0.
-        meta.lookup_any("tx rlc(calldata) in RLPTable::TxSign", |meta| {
-            let enable = and::expr(vec![
-                meta.query_fixed(q_enable, Rotation::cur()),
-                tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
-                no_call_data.clone(),
-            ]);
-            vec![
-                meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                RlpTxTag::DataPrefix.expr(),
-                1.expr(), // tag_index == 1
-                0.expr(), // value == 0
-                RlpDataType::TxSign.expr(),
-                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
-                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
-            ]
-            .into_iter()
-            .zip(rlp_table.table_exprs(meta).into_iter())
-            .map(|(arg, table)| (enable.clone() * arg, table))
-            .collect()
-        });
-        meta.lookup_any("tx rlc(calldata) in RLPTable::TxHash", |meta| {
-            let enable = and::expr(vec![
-                meta.query_fixed(q_enable, Rotation::cur()),
-                tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
-                no_call_data,
-            ]);
-            vec![
-                meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                RlpTxTag::DataPrefix.expr(),
-                1.expr(), // tag_index == 1
-                0.expr(), // value == 0
-                RlpDataType::TxHash.expr(),
-                meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
-                meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
-            ]
-            .into_iter()
-            .zip(rlp_table.table_exprs(meta).into_iter())
-            .map(|(arg, table)| (enable.clone() * arg, table))
-            .collect()
-        });
+        meta.lookup_any(
+            "tx rlc(calldata) in RLPTable::TxSign where len(calldata) == 0",
+            |meta| {
+                let enable = and::expr(vec![
+                    meta.query_fixed(q_enable, Rotation::cur()),
+                    tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                    no_call_data.clone(),
+                ]);
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    RlpTxTag::DataPrefix.expr(),
+                    1.expr(),   // tag_index == 1
+                    128.expr(), // len == 0 => RLP == 128
+                    RlpDataType::TxSign.expr(),
+                    meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                    meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
+                ]
+                .into_iter()
+                .zip(rlp_table.table_exprs(meta).into_iter())
+                .map(|(arg, table)| (enable.clone() * arg, table))
+                .collect()
+            },
+        );
+        meta.lookup_any(
+            "tx rlc(calldata) in RLPTable::TxHash where len(calldata) == 0",
+            |meta| {
+                let enable = and::expr(vec![
+                    meta.query_fixed(q_enable, Rotation::cur()),
+                    tag.value_equals(TxFieldTag::CallDataRlc, Rotation::cur())(meta),
+                    no_call_data,
+                ]);
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    RlpTxTag::DataPrefix.expr(),
+                    1.expr(),   // tag_index == 1
+                    128.expr(), // len == 0 => RLP == 128
+                    RlpDataType::TxHash.expr(),
+                    meta.query_advice(tx_table.value, Rotation(-2)), // call_data_length
+                    meta.query_advice(tx_table.value, Rotation(-1)), // call_data_gas_cost
+                ]
+                .into_iter()
+                .zip(rlp_table.table_exprs(meta).into_iter())
+                .map(|(arg, table)| (enable.clone() * arg, table))
+                .collect()
+            },
+        );
     }
 }
 
@@ -721,10 +757,13 @@ mod tx_circuit_tests {
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(
                 k,
-                mock::CORRECT_MOCK_TXS[..NUM_TXS]
-                    .iter()
-                    .map(|tx| Transaction::from(tx.clone()))
-                    .collect_vec(),
+                [
+                    mock::CORRECT_MOCK_TXS[1].clone(),
+                    mock::CORRECT_MOCK_TXS[3].clone()
+                ]
+                .iter()
+                .map(|tx| Transaction::from(tx.clone()))
+                .collect_vec(),
                 mock::MOCK_CHAIN_ID.as_u64()
             ),
             Ok(())

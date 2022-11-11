@@ -16,8 +16,8 @@ pub trait IsEqualInstruction<F: FieldExt> {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        lhs: F,
-        rhs: F,
+        lhs: Value<F>,
+        rhs: Value<F>,
     ) -> Result<(), Error>;
 }
 
@@ -68,12 +68,10 @@ impl<F: Field> IsEqualInstruction<F> for IsEqualChip<F> {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        lhs: F,
-        rhs: F,
+        lhs: Value<F>,
+        rhs: Value<F>,
     ) -> Result<(), Error> {
-        self.config
-            .is_zero_chip
-            .assign(region, offset, Value::known(lhs - rhs))?;
+        self.config.is_zero_chip.assign(region, offset, lhs - rhs)?;
 
         Ok(())
     }
@@ -189,7 +187,12 @@ mod tests {
                             || Value::known(F::from(check as u64)),
                         )?;
                         config.q_enable.enable(&mut region, idx + 1)?;
-                        chip.assign(&mut region, idx + 1, value.into(), RHS.into())?;
+                        chip.assign(
+                            &mut region,
+                            idx + 1,
+                            Value::known(F::from(value)),
+                            Value::known(F::from(RHS)),
+                        )?;
                     }
 
                     Ok(())
