@@ -8,7 +8,7 @@ use gadgets::{
 };
 use halo2_proofs::{
     circuit::{Layouter, Region, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, VirtualCells},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
 
@@ -26,7 +26,7 @@ use crate::{
 /// Config for the RLP circuit.
 pub struct RlpCircuit<F> {
     /// Denotes whether or not the row is enabled.
-    q_usable: Selector,
+    q_usable: Column<Fixed>,
     /// Denotes whether the row is the first row in the layout.
     is_first: Column<Advice>,
     /// Denotes whether the row is the last byte in the RLP-encoded data.
@@ -85,7 +85,7 @@ pub struct RlpCircuit<F> {
 
 impl<F: Field> RlpCircuit<F> {
     pub(crate) fn configure(meta: &mut ConstraintSystem<F>, r: Expression<F>) -> Self {
-        let q_usable = meta.complex_selector();
+        let q_usable = meta.fixed_column();
         let is_first = meta.advice_column();
         let is_last = meta.advice_column();
         let rlp_table = RlpTable::construct(meta);
@@ -98,7 +98,8 @@ impl<F: Field> RlpCircuit<F> {
         let value_rlc = meta.advice_column();
 
         // Enable the comparator and lt chips if the current row is enabled.
-        let cmp_lt_enabled = |meta: &mut VirtualCells<F>| meta.query_selector(q_usable);
+        let cmp_lt_enabled =
+            |meta: &mut VirtualCells<F>| meta.query_fixed(q_usable, Rotation::cur());
 
         let tag_index_cmp_1 = ComparatorChip::configure(
             meta,
@@ -1004,7 +1005,7 @@ impl<F: Field> RlpCircuit<F> {
                 }
             );
 
-            cb.gate(meta.query_selector(q_usable))
+            cb.gate(meta.query_fixed(q_usable, Rotation::cur()))
         });
 
         meta.create_gate("DataType::TxSign (unsigned transaction)", |meta| {
@@ -1190,7 +1191,7 @@ impl<F: Field> RlpCircuit<F> {
             });
 
             cb.gate(and::expr(vec![
-                meta.query_selector(q_usable),
+                meta.query_fixed(q_usable, Rotation::cur()),
                 not::expr(meta.query_advice(rlp_table.data_type, Rotation::cur())),
             ]))
         });
@@ -1518,7 +1519,7 @@ impl<F: Field> RlpCircuit<F> {
             });
 
             cb.gate(and::expr(vec![
-                meta.query_selector(q_usable),
+                meta.query_fixed(q_usable, Rotation::cur()),
                 meta.query_advice(rlp_table.data_type, Rotation::cur()),
             ]))
         });
@@ -1561,7 +1562,7 @@ impl<F: Field> RlpCircuit<F> {
                 1.expr(),
             );
 
-            cb.gate(meta.query_selector(q_usable))
+            cb.gate(meta.query_fixed(q_usable, Rotation::cur()))
         });
 
         // Constraints for the first row in the layout.
@@ -1580,7 +1581,7 @@ impl<F: Field> RlpCircuit<F> {
             );
 
             cb.gate(and::expr(vec![
-                meta.query_selector(q_usable),
+                meta.query_fixed(q_usable, Rotation::cur()),
                 meta.query_advice(is_first, Rotation::cur()),
             ]))
         });
@@ -1612,7 +1613,7 @@ impl<F: Field> RlpCircuit<F> {
             );
 
             cb.gate(and::expr(vec![
-                meta.query_selector(q_usable),
+                meta.query_fixed(q_usable, Rotation::cur()),
                 not::expr(meta.query_advice(is_first, Rotation::cur())),
                 not::expr(meta.query_advice(is_last, Rotation::cur())),
             ]))
@@ -1633,8 +1634,35 @@ impl<F: Field> RlpCircuit<F> {
                 RlpTxTag::Rlp.expr(),
             );
 
+            // if data_type::cur == TxHash, tx_id does not change.
+            cb.condition(
+                meta.query_advice(rlp_table.data_type, Rotation::cur()),
+                |cb| {
+                    cb.require_equal(
+                        "tx_id does not change",
+                        meta.query_advice(rlp_table.tx_id, Rotation::cur()),
+                        meta.query_advice(rlp_table.tx_id, Rotation::next()),
+                    );
+                },
+            );
+
+            // if data_type::cur == TxSign, tx_id increments.
+            cb.condition(
+                and::expr(vec![
+                    not::expr(meta.query_advice(rlp_table.data_type, Rotation::cur())),
+                    meta.query_fixed(q_usable, Rotation::next()),
+                ]),
+                |cb| {
+                    cb.require_equal(
+                        "tx_id increments",
+                        meta.query_advice(rlp_table.tx_id, Rotation::cur()) + 1.expr(),
+                        meta.query_advice(rlp_table.tx_id, Rotation::next()),
+                    );
+                },
+            );
+
             cb.gate(and::expr(vec![
-                meta.query_selector(q_usable),
+                meta.query_fixed(q_usable, Rotation::cur()),
                 meta.query_advice(is_last, Rotation::cur()),
             ]))
         });
@@ -1721,7 +1749,12 @@ impl<F: Field> RlpCircuit<F> {
                         };
 
                         // q_usable
-                        self.q_usable.enable(&mut region, offset)?;
+                        region.assign_fixed(
+                            || format!("q_usable: {}", offset),
+                            self.q_usable,
+                            offset,
+                            || Value::known(F::one()),
+                        )?;
                         // is_first
                         region.assign_advice(
                             || format!("assign is_first {}", offset),
@@ -1909,7 +1942,12 @@ impl<F: Field> RlpCircuit<F> {
                         };
 
                         // q_usable
-                        self.q_usable.enable(&mut region, offset)?;
+                        region.assign_fixed(
+                            || format!("q_usable: {}", offset),
+                            self.q_usable,
+                            offset,
+                            || Value::known(F::one()),
+                        )?;
                         // is_first
                         region.assign_advice(
                             || format!("assign is_first {}", offset),
