@@ -22,38 +22,44 @@ lazy_static! {
     pub static ref CORRECT_MOCK_TXS: Vec<MockTransaction> = {
         let mut rng = ChaCha20Rng::seed_from_u64(2u64);
 
-        vec![MockTransaction::default()
-            .from(AddrOrWallet::random(&mut rng))
-            .to(MOCK_ACCOUNTS[0])
-            .nonce(word!("0x103"))
-            .value(word!("0x3e8"))
-            .gas_price(word!("0x4d2"))
-            .input(Bytes::from(b"hello"))
-            .build(),
+        vec![
             MockTransaction::default()
-            .from(AddrOrWallet::random(&mut rng))
-            .to(MOCK_ACCOUNTS[1])
-            .nonce(word!("0x104"))
-            .value(word!("0x3e8"))
-            .gas_price(word!("0x4d2"))
-            .input(Bytes::from(b"hello"))
-            .build(),
+                .transaction_idx(1u64)
+                .from(AddrOrWallet::random(&mut rng))
+                .to(MOCK_ACCOUNTS[0])
+                .nonce(word!("0x103"))
+                .value(word!("0x3e8"))
+                .gas_price(word!("0x4d2"))
+                .input(Bytes::from(b"hello"))
+                .build(),
             MockTransaction::default()
-            .from(AddrOrWallet::random(&mut rng))
-            .to(MOCK_ACCOUNTS[2])
-            .nonce(word!("0x105"))
-            .value(word!("0x3e8"))
-            .gas_price(word!("0x4d2"))
-            .input(Bytes::from(b"hello"))
-            .build(),
+                .transaction_idx(2u64)
+                .from(AddrOrWallet::random(&mut rng))
+                .to(MOCK_ACCOUNTS[1])
+                .nonce(word!("0x104"))
+                .value(word!("0x3e8"))
+                .gas_price(word!("0x4d2"))
+                .input(Bytes::from(b"hello"))
+                .build(),
             MockTransaction::default()
-            .from(AddrOrWallet::random(&mut rng))
-            .to(MOCK_ACCOUNTS[3])
-            .nonce(word!("0x106"))
-            .value(word!("0x3e8"))
-            .gas_price(word!("0x4d2"))
-            .input(Bytes::from(b""))
-            .build()]
+                .transaction_idx(3u64)
+                .from(AddrOrWallet::random(&mut rng))
+                .to(MOCK_ACCOUNTS[2])
+                .nonce(word!("0x105"))
+                .value(word!("0x3e8"))
+                .gas_price(word!("0x4d2"))
+                .input(Bytes::from(b"hello"))
+                .build(),
+            MockTransaction::default()
+                .transaction_idx(4u64)
+                .from(AddrOrWallet::random(&mut rng))
+                .to(MOCK_ACCOUNTS[3])
+                .nonce(word!("0x106"))
+                .value(word!("0x3e8"))
+                .gas_price(word!("0x4d2"))
+                .input(Bytes::from(b""))
+                .build(),
+        ]
     };
 }
 

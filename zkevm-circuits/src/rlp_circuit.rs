@@ -19,7 +19,7 @@ use crate::{
     },
     table::RlpTable,
     util::Expr,
-    witness::SignedTransaction,
+    witness::{RlpDataType, SignedTransaction},
 };
 
 #[derive(Clone, Debug)]
@@ -1634,7 +1634,9 @@ impl<F: Field> RlpCircuit<F> {
                 RlpTxTag::Rlp.expr(),
             );
 
-            // if data_type::cur == TxHash, tx_id does not change.
+            // if data_type::cur == TxHash
+            // - tx_id does not change.
+            // - TxSign rows follow.
             cb.condition(
                 meta.query_advice(rlp_table.data_type, Rotation::cur()),
                 |cb| {
@@ -1643,10 +1645,22 @@ impl<F: Field> RlpCircuit<F> {
                         meta.query_advice(rlp_table.tx_id, Rotation::cur()),
                         meta.query_advice(rlp_table.tx_id, Rotation::next()),
                     );
+                    cb.require_equal(
+                        "TxSign rows follow TxHash rows",
+                        meta.query_advice(rlp_table.data_type, Rotation::next()),
+                        RlpDataType::TxSign.expr(),
+                    );
+                    cb.require_equal(
+                        "TxSign rows' first row is Prefix again",
+                        meta.query_advice(rlp_table.tag, Rotation::next()),
+                        RlpTxTag::Prefix.expr(),
+                    );
                 },
             );
 
-            // if data_type::cur == TxSign, tx_id increments.
+            // if data_type::cur == TxSign and it was not the last tx in the layout
+            // - tx_id increments.
+            // - TxHash rows follow.
             cb.condition(
                 and::expr(vec![
                     not::expr(meta.query_advice(rlp_table.data_type, Rotation::cur())),
@@ -1657,6 +1671,16 @@ impl<F: Field> RlpCircuit<F> {
                         "tx_id increments",
                         meta.query_advice(rlp_table.tx_id, Rotation::cur()) + 1.expr(),
                         meta.query_advice(rlp_table.tx_id, Rotation::next()),
+                    );
+                    cb.require_equal(
+                        "TxHash rows follow TxSign rows",
+                        meta.query_advice(rlp_table.data_type, Rotation::next()),
+                        RlpDataType::TxHash.expr(),
+                    );
+                    cb.require_equal(
+                        "TxHash rows' first row is Prefix again",
+                        meta.query_advice(rlp_table.tag, Rotation::next()),
+                        RlpTxTag::Prefix.expr(),
                     );
                 },
             );
