@@ -1,5 +1,7 @@
 //! Circuit implementation for RLP-encoding verification. Please refer: https://hackmd.io/@rohitnarurkar/S1zSz0KM9.
 
+use std::marker::PhantomData;
+
 use eth_types::Field;
 use gadgets::{
     comparator::{ComparatorChip, ComparatorConfig, ComparatorInstruction},
@@ -7,8 +9,8 @@ use gadgets::{
     util::sum,
 };
 use halo2_proofs::{
-    circuit::{Layouter, Region, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
+    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
 
@@ -18,13 +20,13 @@ use crate::{
         witness::{RlpTxTag, RlpWitnessGen, N_TX_TAGS},
     },
     table::RlpTable,
-    util::Expr,
+    util::{power_of_randomness_from_instance, Expr},
     witness::{RlpDataType, SignedTransaction},
 };
 
 #[derive(Clone, Debug)]
 /// Config for the RLP circuit.
-pub struct RlpCircuit<F> {
+pub struct RlpCircuitConfig<F> {
     /// Denotes whether or not the row is enabled.
     q_usable: Column<Fixed>,
     /// Denotes whether the row is the first row in the layout.
@@ -83,7 +85,7 @@ pub struct RlpCircuit<F> {
     length_acc_cmp_0: ComparatorConfig<F, 1>,
 }
 
-impl<F: Field> RlpCircuit<F> {
+impl<F: Field> RlpCircuitConfig<F> {
     pub(crate) fn configure(meta: &mut ConstraintSystem<F>, r: Expression<F>) -> Self {
         let q_usable = meta.fixed_column();
         let is_first = meta.advice_column();
@@ -2237,79 +2239,61 @@ impl<F: Field> RlpCircuit<F> {
     }
 }
 
+struct RlpCircuit<F, RLP> {
+    inputs: Vec<RLP>,
+    randomness: F,
+    _marker: PhantomData<F>,
+}
+
+impl<F: Field, RLP> Default for RlpCircuit<F, RLP> {
+    fn default() -> Self {
+        Self {
+            inputs: vec![],
+            randomness: F::one(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<F: Field, RLP> RlpCircuit<F, RLP> {
+    fn get_randomness() -> F {
+        F::from(194881236412749812)
+    }
+}
+
+impl<F: Field> Circuit<F> for RlpCircuit<F, SignedTransaction> {
+    type Config = RlpCircuitConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    fn without_witnesses(&self) -> Self {
+        Self::default()
+    }
+
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let randomness = power_of_randomness_from_instance::<_, 1>(meta);
+        RlpCircuitConfig::configure(meta, randomness[0].clone())
+    }
+
+    fn synthesize(&self, config: Self::Config, layouter: impl Layouter<F>) -> Result<(), Error> {
+        config.assign(layouter, self.inputs.as_slice(), self.randomness)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::marker::PhantomData;
 
     use eth_types::Field;
-    use halo2_proofs::{
-        circuit::{Layouter, SimpleFloorPlanner},
-        dev::MockProver,
-        halo2curves::bn256::Fr,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
+    use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
     use mock::CORRECT_MOCK_TXS;
 
-    use crate::{evm_circuit::witness::SignedTransaction, util::power_of_randomness_from_instance};
+    use crate::evm_circuit::witness::SignedTransaction;
 
     use super::RlpCircuit;
 
-    #[derive(Clone)]
-    struct MyConfig<F> {
-        rlp_config: RlpCircuit<F>,
-    }
-
-    struct MyCircuit<F, RLP> {
-        inputs: Vec<RLP>,
-        randomness: F,
-        _marker: PhantomData<F>,
-    }
-
-    impl<F: Field, RLP> Default for MyCircuit<F, RLP> {
-        fn default() -> Self {
-            Self {
-                inputs: vec![],
-                randomness: F::one(),
-                _marker: PhantomData,
-            }
-        }
-    }
-
-    impl<F: Field, RLP> MyCircuit<F, RLP> {
-        fn get_randomness() -> F {
-            F::from(194881236412749812)
-        }
-    }
-
-    impl<F: Field> Circuit<F> for MyCircuit<F, SignedTransaction> {
-        type Config = MyConfig<F>;
-        type FloorPlanner = SimpleFloorPlanner;
-
-        fn without_witnesses(&self) -> Self {
-            Self::default()
-        }
-
-        fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            let randomness = power_of_randomness_from_instance::<_, 1>(meta);
-            let rlp_config = RlpCircuit::configure(meta, randomness[0].clone());
-
-            MyConfig { rlp_config }
-        }
-
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            layouter: impl Layouter<F>,
-        ) -> Result<(), Error> {
-            config
-                .rlp_config
-                .assign(layouter, self.inputs.as_slice(), self.randomness)
-        }
-    }
-
     fn verify_txs<F: Field>(k: u32, inputs: Vec<SignedTransaction>, success: bool) {
-        let randomness = MyCircuit::<F, SignedTransaction>::get_randomness();
-        let circuit = MyCircuit::<F, SignedTransaction> {
+        let randomness = RlpCircuit::<F, SignedTransaction>::get_randomness();
+        let circuit = RlpCircuit::<F, SignedTransaction> {
             inputs,
             randomness,
             _marker: PhantomData,

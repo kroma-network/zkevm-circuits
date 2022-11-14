@@ -59,7 +59,7 @@ use crate::evm_circuit::{table::FixedTableTag, EvmCircuit};
 use crate::exp_circuit::ExpCircuit;
 use crate::keccak_circuit::keccak_packed_multi::KeccakPackedConfig as KeccakConfig;
 use crate::pi_circuit::{PiCircuit, PiCircuitConfig, PublicData};
-use crate::rlp_circuit::RlpCircuit;
+use crate::rlp_circuit::RlpCircuitConfig;
 use crate::state_circuit::StateCircuitConfig;
 use crate::table::{
     BlockTable, BytecodeTable, CopyTable, ExpTable, MptTable, RlpTable, RwTable, TxTable,
@@ -117,7 +117,7 @@ pub struct SuperCircuitConfig<
     keccak_circuit: KeccakConfig<F>,
     pi_circuit: PiCircuitConfig<F, MAX_TXS, MAX_CALLDATA>,
     exp_circuit: ExpCircuit<F>,
-    rlp_circuit: RlpCircuit<F>,
+    rlp_circuit: RlpCircuitConfig<F>,
 }
 
 /// The Super Circuit contains all the zkEVM circuits
@@ -244,7 +244,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             keccak_circuit,
             pi_circuit,
             exp_circuit: ExpCircuit::configure(meta, exp_table),
-            rlp_circuit: RlpCircuit::configure(meta, power_of_randomness[0].clone()),
+            rlp_circuit: RlpCircuitConfig::configure(meta, power_of_randomness[0].clone()),
         }
     }
 
