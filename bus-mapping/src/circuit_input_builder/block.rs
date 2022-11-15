@@ -86,12 +86,15 @@ pub struct BlockHead {
     pub difficulty: Word,
     /// base fee
     pub base_fee: Word,
+    /// State root of the previous block
+    pub prev_state_root: Word,
 }
 impl BlockHead {
     /// Create a new block.
     pub fn new<TX>(
         chain_id: Word,
         history_hashes: Vec<Word>,
+        prev_state_root: Word,
         eth_block: &eth_types::Block<TX>,
     ) -> Result<Self, Error> {
         if eth_block.base_fee_per_gas.is_none() {
@@ -116,6 +119,7 @@ impl BlockHead {
             timestamp: eth_block.timestamp,
             difficulty: eth_block.difficulty,
             base_fee: eth_block.base_fee_per_gas.unwrap_or_default(),
+            prev_state_root,
         })
     }
 }

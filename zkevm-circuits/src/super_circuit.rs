@@ -65,10 +65,10 @@ use crate::tx_circuit::{TxCircuit, TxCircuitConfig};
 use crate::util::Challenges;
 use crate::witness::{block_convert, Block, MptUpdates};
 
+use bus_mapping::circuit_input_builder::CircuitInputBuilder;
 use bus_mapping::mock::BlockData;
-use eth_types::geth_types::{self, GethData};
+use eth_types::geth_types::{self, GethData, Transaction};
 use eth_types::Field;
-
 use ethers_core::types::H256;
 use halo2_proofs::arithmetic::CurveAffine;
 use halo2_proofs::halo2curves::{
@@ -182,6 +182,8 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             Expression::Constant(F::from(MOCK_RANDOMNESS).pow(&[1 + i as u64, 0, 0, 0]))
         });
 
+        let challenges = Challenges::mock(power_of_randomness[0].clone());
+
         let keccak_circuit = KeccakConfig::configure(meta, power_of_randomness[0].clone());
         let keccak_table = keccak_circuit.keccak_table.clone();
 
@@ -197,9 +199,8 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             &exp_table,
         );
         let state_circuit =
-            StateCircuitConfig::configure(meta, power_of_randomness.clone(), &rw_table, &mpt_table);
+            StateCircuitConfig::configure(meta, &rw_table, &mpt_table, challenges.clone());
         let pi_circuit = PiCircuitConfig::new(meta, block_table.clone(), tx_table.clone());
-        let challenges = Challenges::mock(power_of_randomness[0].clone());
 
         Self::Config {
             tx_table: tx_table.clone(),
@@ -255,7 +256,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             &mut layouter,
             &rws,
             self.block.circuits_params.max_rws,
-            self.block.randomness,
+            Value::known(self.block.randomness),
         )?;
         config.state_circuit.load(&mut layouter)?;
         config.block_table.load(
@@ -271,13 +272,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
         config.mpt_table.load(
             &mut layouter,
             &MptUpdates::mock_from(&rws),
-            self.block.randomness,
+            Value::known(self.block.randomness),
         )?;
         config.state_circuit.assign(
             &mut layouter,
             &rws,
             self.block.circuits_params.max_rws,
-            self.block.randomness,
+            &challenges,
         )?;
         // --- Tx Circuit ---
         config.tx_circuit.load(&mut layouter)?;
@@ -307,6 +308,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             &mut layouter,
             &self.keccak_inputs,
             self.block.randomness,
+            None,
         )?;
         // --- Copy Circuit ---
         config
@@ -330,19 +332,25 @@ impl<const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: usize>
         geth_data: GethData,
         rng: &mut (impl RngCore + Clone),
     ) -> Result<(u32, Self, Vec<Vec<Fr>>), bus_mapping::Error> {
-        let txs: Vec<_> = geth_data
-            .eth_block
-            .transactions
-            .iter()
-            .map(geth_types::Transaction::from)
-            .collect();
-
         let block_data = BlockData::new_from_geth_data(geth_data.clone());
         let mut builder = block_data.new_circuit_input_builder();
-
         builder
             .handle_block(&geth_data.eth_block, &geth_data.geth_traces)
             .expect("could not handle block tx");
+
+        Self::build_from_circuit_input_builder(builder, geth_data.eth_block, rng)
+    }
+
+    /// From CircuitInputBuilder, generate a SuperCircuit instance with all of
+    /// the sub-circuits filled with their corresponding witnesses.
+    ///
+    /// Also, return with it the minimum required SRS degree for the circuit and
+    /// the Public Inputs needed.
+    pub fn build_from_circuit_input_builder(
+        builder: CircuitInputBuilder,
+        eth_block: eth_types::Block<eth_types::Transaction>,
+        rng: &mut (impl RngCore + Clone),
+    ) -> Result<(u32, Self, Vec<Vec<Fr>>), bus_mapping::Error> {
         let keccak_inputs = builder.keccak_inputs()?;
         let mut block = block_convert(&builder.block, &builder.code_db);
         block.randomness = Fr::from(MOCK_RANDOMNESS);
@@ -370,14 +378,19 @@ impl<const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: usize>
 
         let aux_generator = <Secp256k1Affine as CurveAffine>::CurveExt::random(rng).to_affine();
         let chain_id = block.context.chain_id();
+        let txs: Vec<Transaction> = eth_block
+            .transactions
+            .iter()
+            .map(geth_types::Transaction::from)
+            .collect();
         let tx_circuit = TxCircuit::new(aux_generator, chain_id.as_u64(), txs);
 
         // TODO: fixme
         let context = block.context.ctxs.iter().next().unwrap().1;
         let public_data = PublicData {
-            chain_id: geth_data.chain_id,
-            history_hashes: block_data.history_hashes,
-            eth_block: geth_data.eth_block,
+            chain_id,
+            history_hashes: builder.block.history_hashes,
+            eth_block,
             block_constants: geth_types::BlockConstants {
                 coinbase: context.coinbase,
                 timestamp: context.timestamp,
@@ -415,6 +428,12 @@ impl<const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: usize>
         instance
     }
 }
+
+// TODO: Add tests
+// - multiple txs == MAX_TXS
+// - multiple txs < MAX_TXS
+// - max_rws padding
+// - evm_rows padding
 
 #[cfg(test)]
 mod super_circuit_tests {

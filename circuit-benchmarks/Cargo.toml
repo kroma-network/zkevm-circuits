@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "scroll-dev-0902" }
 ark-std = { version = "0.3", features = ["print-trace"] }
-zkevm-circuits = { path = "../zkevm-circuits" }
+zkevm-circuits = { path = "../zkevm-circuits", features = ["test"]}
 keccak256 = { path = "../keccak256" }
 bus-mapping = { path = "../bus-mapping" }
 rand_xorshift = "0.3"
