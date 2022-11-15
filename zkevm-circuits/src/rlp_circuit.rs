@@ -953,16 +953,6 @@ impl<F: Field> RlpCircuitConfig<F> {
                     meta.query_advice(tag_length, Rotation::next()),
                     meta.query_advice(tag_length, Rotation::cur()),
                 );
-                cb.require_equal(
-                    "call_data_length::next == call_data_length",
-                    meta.query_advice(rlp_table.call_data_length, Rotation::next()),
-                    meta.query_advice(rlp_table.call_data_length, Rotation::cur()),
-                );
-                cb.require_equal(
-                    "call_data_gas_cost::next == call_data_gas_cost",
-                    meta.query_advice(rlp_table.call_data_gas_cost, Rotation::next()),
-                    meta.query_advice(rlp_table.call_data_gas_cost, Rotation::cur()),
-                );
             });
 
             // if tag_index == 1 for TxSign
@@ -1817,18 +1807,6 @@ impl<F: Field> RlpCircuitConfig<F> {
                                 self.rlp_table.data_type,
                                 F::from(row.data_type as u64),
                             ),
-                            (
-                                "rlp_table::call_data_length",
-                                self.rlp_table.call_data_length,
-                                row.call_data_length
-                                    .map_or_else(|| F::zero(), |v| F::from(v)),
-                            ),
-                            (
-                                "rlp_table::call_data_gas_cost",
-                                self.rlp_table.call_data_gas_cost,
-                                row.call_data_gas_cost
-                                    .map_or_else(|| F::zero(), |v| F::from(v)),
-                            ),
                             ("index", self.index, F::from(row.index as u64)),
                             ("rindex", self.rindex, F::from(rindex)),
                             ("value", self.value, F::from(row.value as u64)),
@@ -2010,18 +1988,6 @@ impl<F: Field> RlpCircuitConfig<F> {
                                 self.rlp_table.data_type,
                                 F::from(row.data_type as u64),
                             ),
-                            (
-                                "rlp_table::call_data_length",
-                                self.rlp_table.call_data_length,
-                                row.call_data_length
-                                    .map_or_else(|| F::zero(), |v| F::from(v)),
-                            ),
-                            (
-                                "rlp_table::call_data_gas_cost",
-                                self.rlp_table.call_data_gas_cost,
-                                row.call_data_gas_cost
-                                    .map_or_else(|| F::zero(), |v| F::from(v)),
-                            ),
                             ("index", self.index, F::from(row.index as u64)),
                             ("rindex", self.rindex, F::from(rindex)),
                             ("value", self.value, F::from(row.value as u64)),
@@ -2162,8 +2128,6 @@ impl<F: Field> RlpCircuitConfig<F> {
             self.rlp_table.tag_index,
             self.rlp_table.value_acc,
             self.rlp_table.data_type,
-            self.rlp_table.call_data_length,
-            self.rlp_table.call_data_gas_cost,
             self.index,
             self.tag_length,
             self.length_acc,

@@ -59,7 +59,7 @@ impl<F: Field, C: Into<Column<Any>> + Clone, const W: usize> LookupTable<F> for 
 
 /// Tag used to identify each field in the transaction in a row of the
 /// transaction table.
-#[derive(Clone, Copy, Debug, EnumIter)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter)]
 pub enum TxFieldTag {
     /// Unused tag
     Null = 0,
@@ -1310,14 +1310,6 @@ pub struct RlpTable {
     /// `TxSign` (transaction data that needs to be signed) or `TxHash`
     /// (signed transaction's data).
     pub data_type: Column<Advice>,
-    /// Denotes the calldata's length. This field is assigned a non-zero value
-    /// only for the CallData tag. For all other tags, this column will be
-    /// assigned a zero value.
-    pub call_data_length: Column<Advice>,
-    /// Denotes the gas cost associated with the calldata. This field is
-    /// assigned a non-zero value only for the CallData tag. For all other
-    /// tags, this column will be assigned a zero value.
-    pub call_data_gas_cost: Column<Advice>,
 }
 
 impl DynamicTableColumns for RlpTable {
@@ -1328,8 +1320,6 @@ impl DynamicTableColumns for RlpTable {
             self.tag_index,
             self.value_acc,
             self.data_type,
-            self.call_data_length,
-            self.call_data_gas_cost,
         ]
     }
 }
@@ -1343,13 +1333,11 @@ impl RlpTable {
             tag_index: meta.advice_column(),
             value_acc: meta.advice_column(),
             data_type: meta.advice_column(),
-            call_data_length: meta.advice_column(),
-            call_data_gas_cost: meta.advice_column(),
         }
     }
 
     /// Get assignments to the RLP table. Meant to be used for dev purposes.
-    pub fn dev_assignments<F: Field>(txs: Vec<SignedTransaction>, randomness: F) -> Vec<[F; 7]> {
+    pub fn dev_assignments<F: Field>(txs: Vec<SignedTransaction>, randomness: F) -> Vec<[F; 5]> {
         let mut assignments = vec![];
         for signed_tx in txs {
             for row in signed_tx
@@ -1365,10 +1353,6 @@ impl RlpTable {
                     F::from(row.tag_index as u64),
                     row.value_acc,
                     F::from(row.data_type as u64),
-                    row.call_data_length
-                        .map_or_else(|| F::zero(), |v| F::from(v)),
-                    row.call_data_gas_cost
-                        .map_or_else(|| F::zero(), |v| F::from(v)),
                 ]);
             }
         }
