@@ -38,6 +38,7 @@ lazy_static! {
 const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_rws: 0,
     max_txs: 10,
+    keccak_padding: None,
 };
 
 #[tokio::test]
@@ -238,6 +239,7 @@ pub async fn test_super_circuit_block(block_num: u64) {
         CircuitsParams {
             max_rws: MAX_RWS,
             max_txs: MAX_TXS,
+            keccak_padding: None,
         },
     )
     .await
