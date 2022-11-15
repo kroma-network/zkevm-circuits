@@ -3,7 +3,7 @@ use halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
 use crate::{evm_circuit::witness::Transaction, impl_expr, witness::tx::SignedTransaction};
 
 use super::{
-    common::{handle_address, handle_bytes, handle_prefix, handle_u64, handle_u256},
+    common::{handle_address, handle_bytes, handle_prefix, handle_u256, handle_u64},
     witness_gen::{RlpDataType, RlpWitnessGen, RlpWitnessRow},
 };
 

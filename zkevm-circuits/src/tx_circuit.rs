@@ -792,7 +792,18 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                         ),
                     ] {
                         let tx_id_next = match tag {
-                            TxFieldTag::TxSignHash => i + 2,
+                            TxFieldTag::TxSignHash => {
+                                if i == assigned_sig_verifs.len() - 1 {
+                                    self.txs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_i, tx)| tx.call_data.len() > 0)
+                                        .map(|(i, _tx)| i + 1)
+                                        .unwrap_or_else(|| 0)
+                                } else {
+                                    i + 2
+                                }
+                            }
                             _ => i + 1,
                         };
                         let assigned_cell = config.assign_row(
@@ -837,7 +848,16 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                             if i == self.txs.len() - 1 {
                                 (0, true)
                             } else {
-                                (i + 2, true)
+                                (
+                                    self.txs
+                                        .iter()
+                                        .skip(i + 1)
+                                        .enumerate()
+                                        .find(|(_, tx)| tx.call_data.len() > 0)
+                                        .map(|(j, _)| j + 1)
+                                        .unwrap_or_else(|| 0),
+                                    true,
+                                )
                             }
                         } else {
                             (i + 1, false)
