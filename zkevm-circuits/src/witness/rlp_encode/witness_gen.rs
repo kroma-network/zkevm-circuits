@@ -34,6 +34,8 @@ pub struct RlpWitnessRow<F> {
     pub value: u8,
     /// Accumulator value to represent the full value of the tag.
     pub value_acc: F,
+    /// RLC accumulator value used for call data bytes.
+    pub value_acc_rlc: F,
     /// Denotes the row’s tag, which can be a field from the data type encoded.
     pub tag: u8,
     /// Denotes the current tag's length in bytes.

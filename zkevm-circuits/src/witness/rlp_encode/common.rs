@@ -369,6 +369,7 @@ pub fn handle_bytes<F: FieldExt>(
             data_type,
             value: 128,
             value_acc: F::from(128),
+            value_acc_rlc: F::from(128),
             tag: prefix_tag,
             tag_length: 1,
             tag_index: 1,
@@ -399,7 +400,7 @@ pub fn handle_bytes<F: FieldExt>(
         });
         idx += 1;
 
-        let mut value_acc = F::zero();
+        let mut value_acc_rlc = F::zero();
         for (i, data_byte) in call_data.iter().enumerate() {
             assert!(
                 rlp_data[idx] == *data_byte,
@@ -407,13 +408,14 @@ pub fn handle_bytes<F: FieldExt>(
                 tag,
                 i,
             );
-            value_acc = value_acc * randomness + F::from(*data_byte as u64);
+            value_acc_rlc = value_acc_rlc * randomness + F::from(*data_byte as u64);
             rows.push(RlpWitnessRow {
                 id,
                 index: idx + 1,
                 data_type,
                 value: *data_byte,
-                value_acc,
+                value_acc: F::from(*data_byte as u64),
+                value_acc_rlc,
                 tag,
                 tag_length: length,
                 tag_index: length - i,
@@ -479,7 +481,7 @@ pub fn handle_bytes<F: FieldExt>(
     }
 
     let tag_length = call_data.len();
-    let mut value_acc = F::zero();
+    let mut value_acc_rlc = F::zero();
     for (i, data_byte) in call_data.iter().enumerate() {
         assert!(
             rlp_data[idx] == *data_byte,
@@ -487,13 +489,14 @@ pub fn handle_bytes<F: FieldExt>(
             tag,
             i,
         );
-        value_acc = value_acc * randomness + F::from(*data_byte as u64);
+        value_acc_rlc = value_acc_rlc * randomness + F::from(*data_byte as u64);
         rows.push(RlpWitnessRow {
             id,
             index: idx + 1,
             data_type,
             value: *data_byte,
-            value_acc,
+            value_acc: F::from(*data_byte as u64),
+            value_acc_rlc,
             tag,
             tag_length,
             tag_index: tag_length - i,

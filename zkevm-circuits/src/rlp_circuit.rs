@@ -42,7 +42,9 @@ pub struct RlpCircuitConfig<F> {
     /// `n` is the byte length of the RLP-encoded data and ends at `1`.
     rindex: Column<Advice>,
     /// Denotes the byte value at this row index from the RLP-encoded data.
-    value: Column<Advice>,
+    byte_value: Column<Advice>,
+    /// Denotes the RLC accumulator value used for call data bytes.
+    value_acc_rlc: Column<Advice>,
     /// List of columns that are assigned:
     /// val := (tag - RlpTxTag::{Variant}).inv()
     tx_tags: [Column<Advice>; N_TX_TAGS],
@@ -93,7 +95,8 @@ impl<F: Field> RlpCircuitConfig<F> {
         let rlp_table = RlpTable::construct(meta);
         let index = meta.advice_column();
         let rindex = meta.advice_column();
-        let value = meta.advice_column();
+        let byte_value = meta.advice_column();
+        let value_acc_rlc = meta.advice_column();
         let tx_tags = array_init::array_init(|_| meta.advice_column());
         let tag_length = meta.advice_column();
         let length_acc = meta.advice_column();
@@ -137,54 +140,54 @@ impl<F: Field> RlpCircuitConfig<F> {
             meta,
             cmp_lt_enabled,
             |_meta| 127.expr(),
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
         );
         let value_gt_183 = LtChip::configure(
             meta,
             cmp_lt_enabled,
             |_meta| 183.expr(),
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
         );
         let value_gt_191 = LtChip::configure(
             meta,
             cmp_lt_enabled,
             |_meta| 191.expr(),
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
         );
         let value_gt_247 = LtChip::configure(
             meta,
             cmp_lt_enabled,
             |_meta| 247.expr(),
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
         );
         let value_lt_129 = LtChip::configure(
             meta,
             cmp_lt_enabled,
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
             |_meta| 129.expr(),
         );
         let value_lt_184 = LtChip::configure(
             meta,
             cmp_lt_enabled,
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
             |_meta| 184.expr(),
         );
         let value_lt_192 = LtChip::configure(
             meta,
             cmp_lt_enabled,
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
             |_meta| 192.expr(),
         );
         let value_lt_248 = LtChip::configure(
             meta,
             cmp_lt_enabled,
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
             |_meta| 248.expr(),
         );
         let value_lt_256 = LtChip::configure(
             meta,
             cmp_lt_enabled,
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(byte_value, Rotation::cur()),
             |_meta| 256.expr(),
         );
         let length_acc_cmp_0 = ComparatorChip::configure(
@@ -296,7 +299,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "tag_index::next == value - 0xf7",
                         meta.query_advice(rlp_table.tag_index, Rotation::next()),
-                        meta.query_advice(value, Rotation::cur()) - 247.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 247.expr(),
                     );
                     cb.require_zero(
                         "length_acc == 0",
@@ -314,7 +317,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0xc0 (1)",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 192.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 192.expr(),
                     );
                 },
             );
@@ -327,7 +330,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "length_acc == (length_acc::prev * 256) + value",
                         meta.query_advice(length_acc, Rotation::cur()),
                         meta.query_advice(length_acc, Rotation::prev()) * 256.expr()
-                            + meta.query_advice(value, Rotation::cur()),
+                            + meta.query_advice(byte_value, Rotation::cur()),
                     );
                 },
             );
@@ -357,7 +360,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -372,7 +375,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -382,7 +385,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -395,7 +398,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[nonce] value_acc::next == value_acc::cur * 256 + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * 256.expr() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -458,7 +461,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -473,7 +476,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -483,7 +486,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -496,7 +499,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[gasprice] value_acc::next == value_acc::cur * randomness + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * r.clone() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -559,7 +562,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -574,7 +577,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -592,7 +595,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[gas] value_acc::next == value_acc::cur * 256 + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * 256.expr() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -641,7 +644,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                 );
                 cb.require_equal(
                     "value == 148",
-                    meta.query_advice(value, Rotation::cur()),
+                    meta.query_advice(byte_value, Rotation::cur()),
                     148.expr(),
                 );
                 cb.require_equal(
@@ -662,7 +665,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                 cb.require_equal(
                     "value_acc::next == value::next",
                     meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                    meta.query_advice(value, Rotation::next()),
+                    meta.query_advice(byte_value, Rotation::next()),
                 );
             });
 
@@ -690,7 +693,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     "value_acc::next == value_acc::cur * 256 + value::next",
                     meta.query_advice(rlp_table.value_acc, Rotation::next()),
                     meta.query_advice(rlp_table.value_acc, Rotation::cur()) * 256.expr() +
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                 );
             });
 
@@ -733,7 +736,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -748,7 +751,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -758,7 +761,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -771,7 +774,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[value] value_acc::next == value_acc::cur * randomness + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * r.clone() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -889,7 +892,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "tag_index == (value - 0xb7) + 1",
                         meta.query_advice(rlp_table.tag_index, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 182.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 182.expr(),
                     );
                     cb.require_zero(
                         "length_acc == 0",
@@ -906,7 +909,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "length_acc == (length_acc::prev * 256) + value",
                         meta.query_advice(length_acc, Rotation::cur()),
                         meta.query_advice(length_acc, Rotation::prev()) * 256.expr()
-                            + meta.query_advice(value, Rotation::cur()),
+                            + meta.query_advice(byte_value, Rotation::cur()),
                     );
                 },
             );
@@ -920,7 +923,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                 },
             );
@@ -952,6 +955,17 @@ impl<F: Field> RlpCircuitConfig<F> {
                     "tag_length::next == tag_length",
                     meta.query_advice(tag_length, Rotation::next()),
                     meta.query_advice(tag_length, Rotation::cur()),
+                );
+                cb.require_equal(
+                    "value_acc_rlc::next == value_acc_rlc::cur * randomness + value::next",
+                    meta.query_advice(value_acc_rlc, Rotation::next()),
+                    meta.query_advice(value_acc_rlc, Rotation::cur()) * r.clone()
+                        + meta.query_advice(byte_value, Rotation::next()),
+                );
+                cb.require_equal(
+                    "value::cur == value_acc::cur",
+                    meta.query_advice(byte_value, Rotation::cur()),
+                    meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                 );
             });
 
@@ -1031,7 +1045,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -1046,7 +1060,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -1056,7 +1070,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1069,7 +1083,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[nonce] value_acc::next == value_acc::cur * 256 + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * 256.expr() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1113,7 +1127,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                 );
                 cb.require_equal(
                     "next tag is Zero => value::next == 128",
-                    meta.query_advice(value, Rotation::next()),
+                    meta.query_advice(byte_value, Rotation::next()),
                     128.expr(),
                 );
                 cb.require_equal(
@@ -1140,7 +1154,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                 );
                 cb.require_equal(
                     "next-to-next tag is Zero => value::Rotation(2) == 128",
-                    meta.query_advice(value, Rotation(2)),
+                    meta.query_advice(byte_value, Rotation(2)),
                     128.expr(),
                 );
                 cb.require_equal(
@@ -1219,7 +1233,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -1234,7 +1248,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -1244,7 +1258,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1257,7 +1271,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "value_acc::next == value_acc::cur * 256 + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * 256.expr() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1319,7 +1333,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -1334,7 +1348,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -1344,7 +1358,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1357,7 +1371,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[sig_r] value_acc::next == value_acc::cur * randomness + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * r.clone() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1414,7 +1428,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal("value < 129", value_lt_129.is_lt(meta, None), 1.expr());
                     cb.require_equal(
                         "value == value_acc",
-                        meta.query_advice(value, Rotation::cur()),
+                        meta.query_advice(byte_value, Rotation::cur()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()),
                     );
                 },
@@ -1429,7 +1443,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "length_acc == value - 0x80",
                         meta.query_advice(length_acc, Rotation::cur()),
-                        meta.query_advice(value, Rotation::cur()) - 128.expr(),
+                        meta.query_advice(byte_value, Rotation::cur()) - 128.expr(),
                     );
                     cb.require_equal(
                         "tag_index::next == length_acc",
@@ -1439,7 +1453,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     cb.require_equal(
                         "value_acc::next == value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                        meta.query_advice(value, Rotation::next()),
+                        meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1452,7 +1466,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                         "[sig_s] value_acc::next == value_acc::cur * randomness + value::next",
                         meta.query_advice(rlp_table.value_acc, Rotation::next()),
                         meta.query_advice(rlp_table.value_acc, Rotation::cur()) * r.clone() +
-                            meta.query_advice(value, Rotation::next()),
+                            meta.query_advice(byte_value, Rotation::next()),
                     );
                 },
             );
@@ -1564,7 +1578,7 @@ impl<F: Field> RlpCircuitConfig<F> {
             cb.require_equal(
                 "value_rlc == value",
                 meta.query_advice(value_rlc, Rotation::cur()),
-                meta.query_advice(value, Rotation::cur()),
+                meta.query_advice(byte_value, Rotation::cur()),
             );
             cb.require_equal(
                 "index == 1",
@@ -1601,7 +1615,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                 "value_rlc == (value_rlc_prev * r) + value",
                 meta.query_advice(value_rlc, Rotation::cur()),
                 meta.query_advice(value_rlc, Rotation::prev()) * r
-                    + meta.query_advice(value, Rotation::cur()),
+                    + meta.query_advice(byte_value, Rotation::cur()),
             );
 
             cb.gate(and::expr(vec![
@@ -1690,7 +1704,8 @@ impl<F: Field> RlpCircuitConfig<F> {
             rlp_table,
             index,
             rindex,
-            value,
+            byte_value,
+            value_acc_rlc,
             tx_tags,
             tag_length,
             length_acc,
@@ -1809,7 +1824,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ),
                             ("index", self.index, F::from(row.index as u64)),
                             ("rindex", self.rindex, F::from(rindex)),
-                            ("value", self.value, F::from(row.value as u64)),
+                            ("value", self.byte_value, F::from(row.value as u64)),
+                            ("value_acc_rlc", self.value_acc_rlc, row.value_acc_rlc),
                             (
                                 "tag_length",
                                 self.tag_length,
@@ -1990,7 +2006,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ),
                             ("index", self.index, F::from(row.index as u64)),
                             ("rindex", self.rindex, F::from(rindex)),
-                            ("value", self.value, F::from(row.value as u64)),
+                            ("byte value", self.byte_value, F::from(row.value as u64)),
+                            ("value_acc_rlc", self.value_acc_rlc, row.value_acc_rlc),
                             (
                                 "tag_length",
                                 self.tag_length,
@@ -2132,7 +2149,8 @@ impl<F: Field> RlpCircuitConfig<F> {
             self.tag_length,
             self.length_acc,
             self.rindex,
-            self.value,
+            self.byte_value,
+            self.value_acc_rlc,
             self.value_rlc,
         ]
         .into_iter()
