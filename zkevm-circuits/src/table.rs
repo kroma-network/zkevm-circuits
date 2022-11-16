@@ -101,7 +101,7 @@ impl From<TxFieldTag> for usize {
 pub type TxContextFieldTag = TxFieldTag;
 
 /// Table that contains the fields of all Transactions in a block
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TxTable {
     /// Tx ID
     pub tx_id: Column<Advice>,

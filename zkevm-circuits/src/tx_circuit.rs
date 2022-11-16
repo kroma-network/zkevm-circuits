@@ -44,12 +44,9 @@ pub use halo2_proofs::halo2curves::{
 pub struct TxCircuitConfig<F: Field> {
     q_enable: Column<Fixed>,
     is_usable: Column<Advice>,
-    tx_id: Column<Advice>,
-    tag: BinaryNumberConfig<TxFieldTag, 4>,
-    value: Column<Advice>,
 
-    /// Assigned a non-zero value iff `tag == CallData`.
-    index: Column<Advice>,
+    /// TxFieldTag assigned to the row.
+    tag: BinaryNumberConfig<TxFieldTag, 4>,
     /// Primarily used to verify if the `CallDataLength` is zero or non-zero.
     value_is_zero: IsEqualConfig<F>,
     /// We use an equality gadget to know whether the tx id changes between
@@ -66,6 +63,7 @@ pub struct TxCircuitConfig<F: Field> {
     calldata_gas_cost_acc: Column<Advice>,
 
     sign_verify: SignVerifyConfig,
+    tx_table: TxTable,
     keccak_table: KeccakTable,
     rlp_table: RlpTable,
     _marker: PhantomData<F>,
@@ -82,11 +80,8 @@ impl<F: Field> TxCircuitConfig<F> {
     ) -> Self {
         let q_enable = meta.fixed_column();
         let is_usable = meta.advice_column();
-        let tx_id = tx_table.tx_id;
         let tag = BinaryNumberChip::configure(meta, q_enable, None);
-        let index = tx_table.index;
-        let value = tx_table.value;
-        meta.enable_equality(value);
+        meta.enable_equality(tx_table.value);
 
         let value_is_zero = IsEqualChip::configure(
             meta,
@@ -100,7 +95,7 @@ impl<F: Field> TxCircuitConfig<F> {
                     ]),
                 ])
             },
-            |meta| meta.query_advice(value, Rotation::cur()),
+            |meta| meta.query_advice(tx_table.value, Rotation::cur()),
             |_| 0.expr(),
         );
         let tx_id_unchanged = IsEqualChip::configure(
@@ -111,8 +106,8 @@ impl<F: Field> TxCircuitConfig<F> {
                     meta.query_advice(is_usable, Rotation::cur()),
                 ])
             },
-            |meta| meta.query_advice(tx_id, Rotation::cur()),
-            |meta| meta.query_advice(tx_id, Rotation::next()),
+            |meta| meta.query_advice(tx_table.tx_id, Rotation::cur()),
+            |meta| meta.query_advice(tx_table.tx_id, Rotation::next()),
         );
 
         let is_final = meta.advice_column();
@@ -128,8 +123,8 @@ impl<F: Field> TxCircuitConfig<F> {
             calldata_length,
             calldata_gas_cost_acc,
             &value_is_zero,
-            rlp_table,
             tx_table,
+            rlp_table,
         );
 
         let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone(), challenges);
@@ -144,8 +139,8 @@ impl<F: Field> TxCircuitConfig<F> {
             cb.condition(not::expr(is_final_cur.clone()), |cb| {
                 cb.require_equal(
                     "index::next == index::cur + 1",
-                    meta.query_advice(index, Rotation::next()),
-                    meta.query_advice(index, Rotation::cur()) + 1.expr(),
+                    meta.query_advice(tx_table.index, Rotation::next()),
+                    meta.query_advice(tx_table.index, Rotation::cur()) + 1.expr(),
                 );
                 cb.require_equal(
                     "tx_id::next == tx_id::cur",
@@ -196,7 +191,7 @@ impl<F: Field> TxCircuitConfig<F> {
                 cb.require_equal(
                     "calldata_length == index::cur + 1",
                     meta.query_advice(calldata_length, Rotation::cur()),
-                    meta.query_advice(index, Rotation::cur()) + 1.expr(),
+                    meta.query_advice(tx_table.index, Rotation::cur()) + 1.expr(),
                 );
             });
 
@@ -210,16 +205,14 @@ impl<F: Field> TxCircuitConfig<F> {
         Self {
             q_enable,
             is_usable,
-            tx_id,
             tag,
-            index,
-            value,
             value_is_zero,
             tx_id_unchanged,
             is_final,
             calldata_length,
             calldata_gas_cost_acc,
             sign_verify,
+            tx_table,
             keccak_table,
             rlp_table,
             _marker: PhantomData,
@@ -262,9 +255,15 @@ impl<F: Field> TxCircuitConfig<F> {
         )?;
         region.assign_advice(
             || "tx_id",
-            self.tx_id,
+            self.tx_table.tx_id,
             offset,
             || Value::known(F::from(tx_id as u64)),
+        )?;
+        region.assign_advice(
+            || "tag",
+            self.tx_table.tag,
+            offset,
+            || Value::known(F::from(tag as u64)),
         )?;
 
         let tag_chip = BinaryNumberChip::construct(self.tag);
@@ -272,7 +271,7 @@ impl<F: Field> TxCircuitConfig<F> {
 
         region.assign_advice(
             || "index",
-            self.index,
+            self.tx_table.index,
             offset,
             || Value::known(F::from(index as u64)),
         )?;
@@ -306,7 +305,7 @@ impl<F: Field> TxCircuitConfig<F> {
             offset,
             || Value::known(F::from(calldata_gas_cost_acc.unwrap_or_default())),
         )?;
-        region.assign_advice(|| "value", self.value, offset, || value)
+        region.assign_advice(|| "value", self.tx_table.value, offset, || value)
     }
 
     /// Get number of rows required.
@@ -327,8 +326,8 @@ impl<F: Field> TxCircuitConfig<F> {
         calldata_length: Column<Advice>,
         calldata_gas_cost_acc: Column<Advice>,
         value_is_zero: &IsEqualConfig<F>,
-        rlp_table: RlpTable,
         tx_table: TxTable,
+        rlp_table: RlpTable,
     ) {
         // lookup tx nonce.
         meta.lookup_any("tx nonce in RLPTable::TxSign", |meta| {
