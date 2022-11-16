@@ -66,8 +66,8 @@ pub(crate) struct SqueezeData<F: Field> {
 }
 
 /// KeccakRow
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct KeccakRow<F: Field> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeccakRow<F: Field> {
     q_enable: bool,
     q_round: bool,
     q_absorb: bool,
@@ -2020,7 +2020,8 @@ fn keccak<F: Field>(rows: &mut Vec<KeccakRow<F>>, bytes: &[u8], r: F) {
     debug!("data rlc: {:x?}", data_rlc);
 }
 
-fn multi_keccak<F: Field>(
+/// ...
+pub fn multi_keccak<F: Field>(
     bytes: &[Vec<u8>],
     r: F,
     capacity: Option<usize>,

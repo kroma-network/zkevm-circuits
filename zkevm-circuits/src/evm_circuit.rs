@@ -316,12 +316,8 @@ pub mod test {
                 .bytecode_table
                 .load(&mut layouter, block.bytecodes.values(), &challenges)?;
             config
-                .block_table.load(
-                &mut layouter,
-                &self.block.context,
-                &self.block.txs,
-                self.block.randomness,
-            )?;
+                .block_table
+                .load(&mut layouter, &block.context, &block.txs, block.randomness)?;
             config
                 .copy_table
                 .load(&mut layouter, block, block.randomness)?;

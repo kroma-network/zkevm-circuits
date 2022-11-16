@@ -637,11 +637,11 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         eth_block: &EthBlock,
         geth_traces: &[eth_types::GethExecTrace],
         history_hashes: Vec<Word>,
-        prev_state_root: Word,
+        _prev_state_root: Word,
     ) -> Result<CircuitInputBuilder, Error> {
-        let block = BlockHead::new(self.chain_id, self.history_hashes.clone(), eth_block)?;
+        let block = BlockHead::new(self.chain_id, history_hashes, eth_block)?;
         let mut builder = CircuitInputBuilder::new_from_headers(sdb, code_db, &[block]);
-            
+
         builder.handle_block(eth_block, geth_traces)?;
         Ok(builder)
     }
@@ -657,7 +657,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         let mut builder = CircuitInputBuilder::new_from_headers(sdb, code_db, Default::default());
         for (idx, (eth_block, geth_traces)) in blocks_and_traces.iter().enumerate() {
             let is_last = idx == blocks_and_traces.len() - 1;
-            let header = BlockHead::new(self.chain_id, self.history_hashes.clone(), eth_block)?;
+            let header = BlockHead::new(self.chain_id, Default::default(), eth_block)?;
             builder.block.headers.insert(header.number.as_u64(), header);
             builder.handle_block_inner(eth_block, geth_traces, is_last, is_last)?;
         }
@@ -700,7 +700,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         let mut blocks_and_traces = Vec::new();
         let mut access_set = AccessSet::default();
         for block_num in block_num_begin..block_num_end {
-            let (eth_block, geth_traces) = self.get_block(block_num).await?;
+            let (eth_block, geth_traces, _, _) = self.get_block(block_num).await?;
             let access_list = self.get_state_accesses(&eth_block, &geth_traces)?;
             access_set.add(access_list);
             blocks_and_traces.push((eth_block, geth_traces));
@@ -753,7 +753,14 @@ impl<P: JsonRpcClient> BuilderClient<P> {
             .get_state(tx.block_number.unwrap().as_u64(), access_set)
             .await?;
         let (state_db, code_db) = self.build_state_code_db(proofs, codes);
-        let builder = self.gen_inputs_from_state(state_db, code_db, &eth_block, &geth_traces)?;
+        let builder = self.gen_inputs_from_state(
+            state_db,
+            code_db,
+            &eth_block,
+            &geth_traces,
+            Default::default(),
+            Default::default(),
+        )?;
         Ok(builder)
     }
 }

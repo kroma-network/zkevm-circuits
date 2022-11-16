@@ -10,7 +10,7 @@ mod test;
 use crate::{
     evm_circuit::param::N_BYTES_WORD,
     table::{LookupTable, MptTable, RwTable, RwTableTag},
-    util::{Expr, DEFAULT_RAND},
+    util::{Challenges, Expr},
     witness::{MptUpdates, Rw, RwMap},
 };
 use constraint_builder::{ConstraintBuilder, Queries};
@@ -18,10 +18,7 @@ use eth_types::{Address, Field};
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase,
-        VirtualCells,
-    },
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
 use lexicographic_ordering::Config as LexicographicOrderingConfig;
@@ -79,8 +76,8 @@ impl<F: Field> StateCircuitConfig<F> {
             challenges.evm_word_powers_of_randomness(),
         );
 
-        let initial_value = meta.advice_column_in(SecondPhase);
-        let state_root = meta.advice_column_in(SecondPhase);
+        let initial_value = meta.advice_column();
+        let state_root = meta.advice_column();
 
         let sort_keys = SortKeysConfig {
             tag,
@@ -209,13 +206,11 @@ impl<F: Field> StateCircuitConfig<F> {
                                 assert_eq!(state_root, old_root);
                                 state_root = new_root;
                             }
-                    if matches!(row.tag(), RwTableTag::CallContext)
-                        && !row.is_write()
-                        && row.value_assignment(randomness) != F::zero()
-                    {
-                        log::error!("invalid call context: {:?}", row);
-                                    
-                                
+                            if matches!(row.tag(), RwTableTag::CallContext)
+                                && !row.is_write()
+                                && row.value_assignment(randomness) != F::zero()
+                            {
+                                log::error!("invalid call context: {:?}", row);
                             }
                             state_root
                         });

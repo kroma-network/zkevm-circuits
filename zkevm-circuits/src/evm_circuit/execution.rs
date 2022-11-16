@@ -826,7 +826,7 @@ impl<F: Field> ExecutionConfig<F> {
 
                 let mut no_next_step = false;
                 let mut get_next = |cur_state: ExecutionState, offset: &usize| match steps.next() {
-                    Some((transaction, step)) => Ok(Some((
+                    Some((transaction, _, step)) => Ok(Some((
                         transaction,
                         &transaction.calls[step.call_index],
                         step,
@@ -1271,7 +1271,7 @@ impl<F: Field> ExecutionConfig<F> {
                         "step rw {:?} rlc {:?}",
                         block.rws[*rw_idx],
                         block.rws[*rw_idx]
-                            .table_assignment(block.randomness)
+                            .table_assignment_aux(block.randomness)
                             .rlc(block.randomness)
                     );
                 }

@@ -1,7 +1,6 @@
 use super::{StateCircuit, StateCircuitConfig};
 use crate::{
     table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag, TxReceiptFieldTag},
-    util::DEFAULT_RAND,
     witness::{MptUpdates, Rw, RwMap},
 };
 use bus_mapping::operation::{
@@ -13,7 +12,7 @@ use eth_types::{
     Address, Field, ToAddress, Word, U256,
 };
 use gadgets::binary_number::AsBits;
-use halo2_proofs::arithmetic::FieldExt;
+
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2_proofs::{
     dev::{MockProver, VerifyFailure},

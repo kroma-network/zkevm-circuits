@@ -38,15 +38,6 @@ impl Opcode for Returndatacopy {
             if data_ends <= return_data.len() {
                 memory.extend_at_least(minimal_length);
                 memory[mem_starts..mem_ends].copy_from_slice(&return_data[data_starts..data_ends]);
-
-                // TODO: replace these with a CopyEvent
-                for i in 0..length {
-                    state.memory_write(
-                        &mut exec_step,
-                        (mem_starts + i).into(),
-                        return_data[data_starts + i],
-                    )?;
-                }
             } else {
                 // if overflows this opcode would fails current context, so
                 // there is no more steps.

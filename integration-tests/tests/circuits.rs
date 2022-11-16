@@ -25,7 +25,7 @@ use zkevm_circuits::copy_circuit::dev::test_copy_circuit;
 use zkevm_circuits::evm_circuit::test::TestCircuit;
 use zkevm_circuits::evm_circuit::witness::RwMap;
 use zkevm_circuits::evm_circuit::{test::run_test_circuit, witness::block_convert};
-use zkevm_circuits::keccak_circuit::keccak_bit::multi_keccak;
+use zkevm_circuits::keccak_circuit::keccak_packed_multi::multi_keccak;
 use zkevm_circuits::state_circuit::StateCircuit;
 use zkevm_circuits::super_circuit::SuperCircuit;
 use zkevm_circuits::tx_circuit::{sign_verify::SignVerifyChip, Secp256k1Affine, TxCircuit};
@@ -92,7 +92,7 @@ async fn test_print_circuits_size() {
         let block = block_convert(&builder.block, &builder.code_db);
         let evm_rows = TestCircuit::get_num_rows_required(&block);
         let keccak_inputs = builder.keccak_inputs().unwrap();
-        let keccak_rows = multi_keccak(&keccak_inputs, Fr::from_u128(DEFAULT_RAND)).len();
+        let keccak_rows = multi_keccak(&keccak_inputs, Fr::from_u128(DEFAULT_RAND), None).unwrap().len();
         log::info!(
             "block number: {}, evm row {}, keccak row {}",
             block_num,

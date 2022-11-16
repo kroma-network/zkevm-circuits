@@ -10,8 +10,8 @@ use halo2_proofs::halo2curves::bn256::Fr;
 
 use itertools::Itertools;
 
-use crate::util::DEFAULT_RAND;
 use super::{step::step_convert, tx::tx_convert, Bytecode, ExecStep, RwMap, Transaction};
+use crate::util::DEFAULT_RAND;
 
 /// Block is the struct used by all circuits, which contains all the needed
 /// data for witness generation.

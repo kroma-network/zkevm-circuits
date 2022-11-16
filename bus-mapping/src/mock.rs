@@ -35,7 +35,6 @@ impl BlockData {
         let mut block = Block::from_headers(&[BlockHead::new(
             self.chain_id,
             self.history_hashes.clone(),
-                Word::default(),
             &self.eth_block,
         )
         .unwrap()]);

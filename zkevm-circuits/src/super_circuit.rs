@@ -262,12 +262,9 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             Value::known(block.randomness),
         )?;
         config.state_circuit.load(&mut layouter)?;
-        config.block_table.load(
-            &mut layouter,
-            &block.context,
-            &block.txs,
-            block.randomness,
-        )?;
+        config
+            .block_table
+            .load(&mut layouter, &block.context, &block.txs, block.randomness)?;
         config.evm_circuit.assign_block(&mut layouter, block)?;
         // --- State Circuit ---
         config.mpt_table.load(
@@ -387,7 +384,8 @@ impl<const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: usize>
         let context = block.context.ctxs.iter().next().unwrap().1;
         let public_data = PublicData {
             chain_id,
-            history_hashes: builder.block.history_hashes,
+            // TODO: move history_hashes from BlockHead to Block?
+            history_hashes: context.history_hashes.clone(),
             eth_block,
             block_constants: geth_types::BlockConstants {
                 coinbase: context.coinbase,
