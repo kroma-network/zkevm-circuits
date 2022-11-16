@@ -92,7 +92,9 @@ async fn test_print_circuits_size() {
         let block = block_convert(&builder.block, &builder.code_db);
         let evm_rows = TestCircuit::get_num_rows_required(&block);
         let keccak_inputs = builder.keccak_inputs().unwrap();
-        let keccak_rows = multi_keccak(&keccak_inputs, Fr::from_u128(DEFAULT_RAND), None).unwrap().len();
+        let keccak_rows = multi_keccak(&keccak_inputs, Fr::from_u128(DEFAULT_RAND), None)
+            .unwrap()
+            .len();
         log::info!(
             "block number: {}, evm row {}, keccak row {}",
             block_num,
