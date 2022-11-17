@@ -224,6 +224,7 @@ impl<F: Field> RlpCircuitConfig<F> {
         is_tx_tag!(is_sig_v, SigV);
         is_tx_tag!(is_sig_r, SigR);
         is_tx_tag!(is_sig_s, SigS);
+        is_tx_tag!(is_rlp_length, RlpLength);
         is_tx_tag!(is_rlp_summary, Rlp);
 
         meta.create_gate("Common constraints", |meta| {
@@ -283,10 +284,11 @@ impl<F: Field> RlpCircuitConfig<F> {
                     meta.query_advice(rlp_table.tag_index, Rotation::next()),
                     meta.query_advice(tag_length, Rotation::next()),
                 );
+                // we add +1 to account for the 2 additional rows for RlpLength and Rlp.
                 cb.require_equal(
-                    "rindex::next == length_acc",
+                    "rindex::next == length_acc + 1",
                     meta.query_advice(rindex, Rotation::next()),
-                    meta.query_advice(length_acc, Rotation::cur()),
+                    meta.query_advice(length_acc, Rotation::cur()) + 1.expr(),
                 );
             });
 
@@ -1163,11 +1165,11 @@ impl<F: Field> RlpCircuitConfig<F> {
                     128.expr(),
                 );
 
-                // checks for RlpTxTag::Rlp on the next-to-next-to-next row.
+                // checks for RlpTxTag::RlpLength on the next-to-next-to-next row.
                 cb.require_equal(
-                    "tag::Rotation(3) == RlpTxTag::Rlp",
+                    "tag::Rotation(3) == RlpTxTag::RlpLength",
                     meta.query_advice(rlp_table.tag, Rotation(3)),
-                    RlpTxTag::Rlp.expr(),
+                    RlpTxTag::RlpLength.expr(),
                 );
                 cb.require_equal(
                     "tag_index::Rotation(3) == tag_length::Rotation(3)",
@@ -1180,18 +1182,40 @@ impl<F: Field> RlpCircuitConfig<F> {
                     1.expr(),
                 );
                 cb.require_equal(
-                    "last tag is Rlp => value_acc::Rotation(3) == value_rlc::Rotation(3)",
+                    "value::Rotation(3) == Rlp encoding length == index::Rotation(2)",
                     meta.query_advice(rlp_table.value_acc, Rotation(3)),
-                    meta.query_advice(value_rlc, Rotation(3)),
+                    meta.query_advice(index, Rotation(2)),
+                );
+
+                // checks for RlpTxTag::Rlp on the next-to-next-to-next-to-next row.
+                cb.require_equal(
+                    "tag::Rotation(4) == RlpTxTag::Rlp",
+                    meta.query_advice(rlp_table.tag, Rotation(4)),
+                    RlpTxTag::Rlp.expr(),
                 );
                 cb.require_equal(
-                    "last tag is Rlp => value_rlc::Rotation(3) == value_rlc::Rotation(2)",
-                    meta.query_advice(value_rlc, Rotation(3)),
+                    "tag_index::Rotation(4) == tag_length::Rotation(4)",
+                    meta.query_advice(rlp_table.tag_index, Rotation(4)),
+                    meta.query_advice(tag_length, Rotation(4)),
+                );
+                cb.require_equal(
+                    "tag_index::Rotation(4) == 1",
+                    meta.query_advice(rlp_table.tag_index, Rotation(4)),
+                    1.expr(),
+                );
+                cb.require_equal(
+                    "last tag is Rlp => value_acc::Rotation(4) == value_rlc::Rotation(4)",
+                    meta.query_advice(rlp_table.value_acc, Rotation(4)),
+                    meta.query_advice(value_rlc, Rotation(4)),
+                );
+                cb.require_equal(
+                    "last tag is Rlp => value_rlc::Rotation(4) == value_rlc::Rotation(2)",
+                    meta.query_advice(value_rlc, Rotation(4)),
                     meta.query_advice(value_rlc, Rotation(2)),
                 );
                 cb.require_equal(
-                    "last tag is Rlp => is_last::Rotation(3) == 1",
-                    meta.query_advice(is_last, Rotation(3)),
+                    "last tag is Rlp => is_last::Rotation(4) == 1",
+                    meta.query_advice(is_last, Rotation(4)),
                     1.expr(),
                 );
             });
@@ -1492,15 +1516,11 @@ impl<F: Field> RlpCircuitConfig<F> {
 
             // if tag_index == 1
             cb.condition(is_sig_s(meta) * tindex_eq.clone(), |cb| {
+                // RlpTxTag::RlpLength checks.
                 cb.require_equal(
-                    "tag::next == RlpTxTag::Rlp",
+                    "tag::next == RlpTxTag::RlpLength",
                     meta.query_advice(rlp_table.tag, Rotation::next()),
-                    RlpTxTag::Rlp.expr(),
-                );
-                cb.require_equal(
-                    "is_last::next == 1",
-                    meta.query_advice(is_last, Rotation::next()),
-                    1.expr(),
+                    RlpTxTag::RlpLength.expr(),
                 );
                 cb.require_equal(
                     "tag_index::next == tag_length::next",
@@ -1513,14 +1533,31 @@ impl<F: Field> RlpCircuitConfig<F> {
                     1.expr(),
                 );
                 cb.require_equal(
-                    "last tag is Rlp => value_acc::next == value_rlc::next",
+                    "tag::next == RlpLength => value_acc::next == index::cur",
                     meta.query_advice(rlp_table.value_acc, Rotation::next()),
-                    meta.query_advice(value_rlc, Rotation::next()),
+                    meta.query_advice(index, Rotation::cur()),
+                );
+
+                // RlpTxTag::Rlp checks.
+                cb.require_equal(
+                    "tag::Rotation(2) == RlpTxTag::Rlp",
+                    meta.query_advice(rlp_table.tag, Rotation(2)),
+                    RlpTxTag::Rlp.expr(),
                 );
                 cb.require_equal(
-                    "last tag is Rlp => value_rlc::next == value_rlc::cur",
-                    meta.query_advice(value_rlc, Rotation::next()),
+                    "last tag is Rlp => value_rlc::Rotation(2) == value_rlc::cur",
+                    meta.query_advice(value_rlc, Rotation(2)),
                     meta.query_advice(value_rlc, Rotation::cur()),
+                );
+                cb.require_equal(
+                    "last tag is Rlp => value_acc::Rotation(2) == value_rlc::Rotation(2)",
+                    meta.query_advice(rlp_table.value_acc, Rotation(2)),
+                    meta.query_advice(value_rlc, Rotation(2)),
+                );
+                cb.require_equal(
+                    "is_last::Rotation(2) == 1",
+                    meta.query_advice(is_last, Rotation(2)),
+                    1.expr(),
                 );
             });
 
@@ -1563,6 +1600,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     is_sig_v(meta),
                     is_sig_r(meta),
                     is_sig_s(meta),
+                    is_rlp_length(meta),
                     is_rlp_summary(meta),
                 ]),
                 1.expr(),
@@ -1767,7 +1805,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     let n_rows = tx_hash_rows.len();
                     for (idx, row) in tx_hash_rows
                         .iter()
-                        .chain(std::iter::once(&signed_tx.rlp_row(randomness)))
+                        .chain(signed_tx.rlp_rows(randomness).iter())
                         .enumerate()
                     {
                         offset += 1;
@@ -1794,9 +1832,9 @@ impl<F: Field> RlpCircuitConfig<F> {
                             || Value::known(F::from((idx == 0) as u64)),
                         )?;
                         // advices
-                        let rindex = (n_rows + 1 - row.index) as u64;
+                        let rindex = (n_rows + 2 - row.index) as u64;
                         for (name, column, value) in [
-                            ("is_last", self.is_last, F::from(row.index == n_rows + 1)),
+                            ("is_last", self.is_last, F::from(row.index == n_rows + 2)),
                             (
                                 "rlp_table::tx_id",
                                 self.rlp_table.tx_id,
@@ -1949,7 +1987,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                     let n_rows = tx_sign_rows.len();
                     for (idx, row) in tx_sign_rows
                         .iter()
-                        .chain(std::iter::once(&signed_tx.tx.rlp_row(randomness)))
+                        .chain(signed_tx.tx.rlp_rows(randomness).iter())
                         .enumerate()
                     {
                         offset += 1;
@@ -1976,9 +2014,9 @@ impl<F: Field> RlpCircuitConfig<F> {
                             || Value::known(F::from((idx == 0) as u64)),
                         )?;
                         // advices
-                        let rindex = (n_rows + 1 - row.index) as u64;
+                        let rindex = (n_rows + 2 - row.index) as u64;
                         for (name, column, value) in [
-                            ("is_last", self.is_last, F::from(row.index == n_rows + 1)),
+                            ("is_last", self.is_last, F::from(row.index == n_rows + 2)),
                             (
                                 "rlp_table::tx_id",
                                 self.rlp_table.tx_id,
@@ -2127,7 +2165,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                 }
 
                 // end with dummy rows.
-                for i in 1..=3 {
+                for i in 1..=4 {
                     self.assign_padding_rows(&mut region, offset + i)?;
                 }
 
@@ -2195,7 +2233,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                     ("sig_v", self.tx_tags[11], F::one()),
                     ("sig_r", self.tx_tags[12], F::one()),
                     ("sig_s", self.tx_tags[13], F::one()),
-                    ("rlp", self.tx_tags[14], F::one()),
+                    ("rlp_length", self.tx_tags[14], F::one()),
+                    ("rlp", self.tx_tags[15], F::one()),
                 ]
             },
             |tag| {
@@ -2214,7 +2253,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                     ("sig_v", self.tx_tags[11], tx_tag_inv!(tag, SigV)),
                     ("sig_r", self.tx_tags[12], tx_tag_inv!(tag, SigR)),
                     ("sig_s", self.tx_tags[13], tx_tag_inv!(tag, SigS)),
-                    ("rlp", self.tx_tags[14], tx_tag_inv!(tag, Rlp)),
+                    ("rlp_length", self.tx_tags[14], tx_tag_inv!(tag, RlpLength)),
+                    ("rlp", self.tx_tags[15], tx_tag_inv!(tag, Rlp)),
                 ]
             },
         )

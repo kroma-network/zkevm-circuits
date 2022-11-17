@@ -60,5 +60,5 @@ pub trait RlpWitnessGen<F: FieldExt>: Encodable + std::marker::Sized {
     fn gen_witness(&self, randomness: F) -> Vec<RlpWitnessRow<F>>;
 
     /// Generate the RLP summary row.
-    fn rlp_row(&self, randomness: F) -> RlpWitnessRow<F>;
+    fn rlp_rows(&self, randomness: F) -> [RlpWitnessRow<F>; 2];
 }

@@ -222,6 +222,7 @@ impl Transaction {
         Ok(SignData {
             signature: (sig_r, sig_s),
             pk,
+            msg,
             msg_hash,
         })
     }

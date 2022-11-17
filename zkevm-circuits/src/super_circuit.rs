@@ -193,7 +193,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
         let challenges = Challenges::mock(power_of_randomness[0].clone());
 
         let keccak_circuit = KeccakConfig::configure(meta, power_of_randomness[0].clone());
-        let keccak_table = keccak_circuit.keccak_table.clone();
+        let keccak_table = keccak_circuit.keccak_table;
 
         let evm_circuit = EvmCircuit::configure(
             meta,
@@ -233,7 +233,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             tx_circuit: TxCircuitConfig::new(
                 meta,
                 tx_table,
-                keccak_table.clone(),
+                keccak_table,
                 rlp_table,
                 challenges.clone(),
             ),

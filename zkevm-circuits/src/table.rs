@@ -81,8 +81,12 @@ pub enum TxFieldTag {
     CallDataLength,
     /// Gas cost for transaction call data (4 for byte == 0, 16 otherwise)
     CallDataGasCost,
-    /// RLC-encoded calldata.
-    CallDataRlc,
+    /// Signature field V.
+    SigV,
+    /// Signature field R.
+    SigR,
+    /// Signature field S.
+    SigS,
     /// TxSignHash: Hash of the transaction without the signature, used for
     /// signing.
     TxSignHash,
@@ -715,7 +719,7 @@ impl DynamicTableColumns for BlockTable {
 }
 
 /// Keccak Table, used to verify keccak hashing from RLC'ed input.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct KeccakTable {
     /// True when the row is enabled
     pub is_enabled: Column<Advice>,
@@ -1343,9 +1347,9 @@ impl RlpTable {
             for row in signed_tx
                 .gen_witness(randomness)
                 .iter()
-                .chain(std::iter::once(&signed_tx.rlp_row(randomness)))
+                .chain(signed_tx.rlp_rows(randomness).iter())
                 .chain(signed_tx.tx.gen_witness(randomness).iter())
-                .chain(std::iter::once(&signed_tx.tx.rlp_row(randomness)))
+                .chain(signed_tx.tx.rlp_rows(randomness).iter())
             {
                 assignments.push([
                     F::from(row.id as u64),

@@ -61,6 +61,13 @@ pub struct TxCircuitConfig<F: Field> {
     /// An accumulator value used to correctly calculate the calldata gas cost
     /// for a tx.
     calldata_gas_cost_acc: Column<Advice>,
+    /// Chain ID.
+    chain_id: Column<Advice>,
+
+    /// Length of the RLP-encoded unsigned tx.
+    tx_sign_data_len: Column<Advice>,
+    /// RLC-encoded RLP-encoding of unsigned tx.
+    tx_sign_data_rlc: Column<Advice>,
 
     sign_verify: SignVerifyConfig,
     tx_table: TxTable,
@@ -90,6 +97,7 @@ impl<F: Field> TxCircuitConfig<F> {
                     meta.query_fixed(q_enable, Rotation::cur()),
                     meta.query_advice(is_usable, Rotation::cur()),
                     or::expr(vec![
+                        tag.value_equals(TxFieldTag::CalleeAddress, Rotation::cur())(meta),
                         tag.value_equals(TxFieldTag::CallDataLength, Rotation::cur())(meta),
                         tag.value_equals(TxFieldTag::CallData, Rotation::cur())(meta),
                     ]),
@@ -113,6 +121,10 @@ impl<F: Field> TxCircuitConfig<F> {
         let is_final = meta.advice_column();
         let calldata_length = meta.advice_column();
         let calldata_gas_cost_acc = meta.advice_column();
+        let chain_id = meta.advice_column();
+
+        let tx_sign_data_len = meta.advice_column();
+        let tx_sign_data_rlc = meta.advice_column();
 
         Self::configure_lookups(
             meta,
@@ -122,12 +134,16 @@ impl<F: Field> TxCircuitConfig<F> {
             is_final,
             calldata_length,
             calldata_gas_cost_acc,
+            chain_id,
+            tx_sign_data_len,
+            tx_sign_data_rlc,
             &value_is_zero,
             tx_table,
+            keccak_table,
             rlp_table,
         );
 
-        let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone(), challenges);
+        let sign_verify = SignVerifyConfig::new(meta, keccak_table, challenges);
 
         meta.create_gate("tx call data bytes", |meta| {
             let mut cb = BaseConstraintBuilder::default();
@@ -202,6 +218,47 @@ impl<F: Field> TxCircuitConfig<F> {
             ]))
         });
 
+        meta.create_gate("tx is_create", |meta| {
+            let mut cb = BaseConstraintBuilder::default();
+
+            cb.condition(value_is_zero.is_equal_expression.clone(), |cb| {
+                cb.require_equal(
+                    "if callee_address == 0 then is_create == 1",
+                    meta.query_advice(tx_table.value, Rotation::next()),
+                    1.expr(),
+                );
+            });
+            cb.condition(not::expr(value_is_zero.is_equal_expression.clone()), |cb| {
+                cb.require_zero(
+                    "if callee_address != 0 then is_create == 0",
+                    meta.query_advice(tx_table.value, Rotation::next()),
+                );
+            });
+
+            cb.gate(and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::CalleeAddress, Rotation::cur())(meta),
+            ]))
+        });
+
+        meta.create_gate("tx signature v", |meta| {
+            let mut cb = BaseConstraintBuilder::default();
+
+            let chain_id_expr = meta.query_advice(chain_id, Rotation::cur());
+            cb.require_boolean(
+                "V - (chain_id * 2 + 35) Є {0, 1}",
+                meta.query_advice(tx_table.value, Rotation::cur())
+                    - (chain_id_expr.clone() + chain_id_expr + 35.expr()),
+            );
+
+            cb.gate(and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::SigV, Rotation::cur())(meta),
+            ]))
+        });
+
         Self {
             q_enable,
             is_usable,
@@ -211,6 +268,9 @@ impl<F: Field> TxCircuitConfig<F> {
             is_final,
             calldata_length,
             calldata_gas_cost_acc,
+            chain_id,
+            tx_sign_data_len,
+            tx_sign_data_rlc,
             sign_verify,
             tx_table,
             keccak_table,
@@ -305,6 +365,25 @@ impl<F: Field> TxCircuitConfig<F> {
             offset,
             || Value::known(F::from(calldata_gas_cost_acc.unwrap_or_default())),
         )?;
+        region.assign_advice(
+            || "tx_sign_data_len",
+            self.tx_sign_data_len,
+            offset,
+            || Value::known(F::zero()),
+        )?;
+        region.assign_advice(
+            || "tx_sign_data_rlc",
+            self.tx_sign_data_rlc,
+            offset,
+            || Value::known(F::zero()),
+        )?;
+        region.assign_advice(
+            || "chain_id",
+            self.chain_id,
+            offset,
+            || Value::known(F::zero()),
+        )?;
+
         region.assign_advice(|| "value", self.tx_table.value, offset, || value)
     }
 
@@ -325,8 +404,12 @@ impl<F: Field> TxCircuitConfig<F> {
         is_final: Column<Advice>,
         calldata_length: Column<Advice>,
         calldata_gas_cost_acc: Column<Advice>,
+        chain_id: Column<Advice>,
+        tx_sign_data_len: Column<Advice>,
+        tx_sign_data_rlc: Column<Advice>,
         value_is_zero: &IsEqualConfig<F>,
         tx_table: TxTable,
+        keccak_table: KeccakTable,
         rlp_table: RlpTable,
     ) {
         // lookup tx nonce.
@@ -549,6 +632,82 @@ impl<F: Field> TxCircuitConfig<F> {
             .collect()
         });
 
+        // lookup RLP table to check SigV and Chain ID.
+        meta.lookup_any("rlp table Chain ID", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::SigV, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::ChainId.expr(), // tag
+                1.expr(),                 // tag_index == 1
+                meta.query_advice(chain_id, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("rlp table SigV", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::SigV, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::SigV.expr(), // tag
+                1.expr(),              // tag_index == 1
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup RLP table for SigR and SigS.
+        meta.lookup_any("rlp table SigR", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::SigR, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::SigR.expr(),
+                1.expr(),
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        meta.lookup_any("rlp table SigS", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::SigS, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::SigS.expr(),
+                1.expr(),
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
         // lookup tx calldata byte at index if call_data_length > 0.
         meta.lookup_any(
             "tx calldata::index in RLPTable::TxSign where len(calldata) > 0",
@@ -640,6 +799,66 @@ impl<F: Field> TxCircuitConfig<F> {
                 .collect()
             },
         );
+
+        // lookup RLP table for length of RLP-encoding of unsigned tx.
+        meta.lookup_any("Length of RLP-encoding for RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::TxSignHash, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::RlpLength.expr(),
+                1.expr(), // tag_index
+                meta.query_advice(tx_sign_data_len, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup RLP table for RLC of RLP-encoding of unsigned tx.
+        meta.lookup_any("RLC of RLP-encoding for RLPTable::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::TxSignHash, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::Rlp.expr(),
+                1.expr(), // tag_index
+                meta.query_advice(tx_sign_data_rlc, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup Keccak table for tx sign data hash, i.e. the sighash that has to be
+        // signed.
+        meta.lookup_any("Keccak table lookup for TxSignHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::TxSignHash, Rotation::cur())(meta),
+            ]);
+            vec![
+                1.expr(),                                             // is_enabled
+                meta.query_advice(tx_sign_data_rlc, Rotation::cur()), // input_rlc
+                meta.query_advice(tx_sign_data_len, Rotation::cur()), // input_len
+                meta.query_advice(tx_table.value, Rotation::cur()),   // output_rlc
+            ]
+            .into_iter()
+            .zip(keccak_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
     }
 }
 
@@ -777,13 +996,18 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                                     .fold(0, |acc, byte| acc + if *byte == 0 { 4 } else { 16 }),
                             )),
                         ),
+                        (TxFieldTag::SigV, Value::known(F::from(tx.v))),
                         (
-                            TxFieldTag::CallDataRlc,
-                            challenges.evm_word().map(|challenge| {
-                                tx.call_data.iter().fold(F::zero(), |acc, byte| {
-                                    acc * challenge + F::from(*byte as u64)
-                                })
-                            }),
+                            TxFieldTag::SigR,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.r.to_le_bytes(), challenge)),
+                        ),
+                        (
+                            TxFieldTag::SigS,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.s.to_le_bytes(), challenge)),
                         ),
                         (
                             TxFieldTag::TxSignHash,
@@ -818,8 +1042,6 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                             None,
                             None,
                         )?;
-                        offset += 1;
-
                         // Ref. spec 0. Copy constraints using fixed offsets between the tx rows and
                         // the SignVerifyChip
                         match tag {
@@ -827,12 +1049,36 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                                 assigned_cell.cell(),
                                 assigned_sig_verif.address.cell(),
                             )?,
-                            TxFieldTag::TxSignHash => region.constrain_equal(
-                                assigned_cell.cell(),
-                                assigned_sig_verif.msg_hash_rlc.cell(),
-                            )?,
+                            TxFieldTag::TxSignHash => {
+                                region.constrain_equal(
+                                    assigned_cell.cell(),
+                                    assigned_sig_verif.msg_hash_rlc.cell(),
+                                )?;
+                                region.assign_advice(
+                                    || "tx_sign_data_len",
+                                    config.tx_sign_data_len,
+                                    offset,
+                                    || Value::known(F::from(assigned_sig_verif.msg_len as u64)),
+                                )?;
+                                region.assign_advice(
+                                    || "tx_sign_data_rlc",
+                                    config.tx_sign_data_rlc,
+                                    offset,
+                                    || assigned_sig_verif.msg_rlc,
+                                )?;
+                            }
+                            TxFieldTag::SigV => {
+                                region.assign_advice(
+                                    || "chain id",
+                                    config.chain_id,
+                                    offset,
+                                    || Value::known(F::from(self.chain_id)),
+                                )?;
+                            }
                             _ => (),
                         }
+
+                        offset += 1;
                     }
                 }
 

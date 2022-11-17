@@ -302,6 +302,7 @@ pub fn keccak_inputs_sign_verify(sigs: &[SignData]) -> Vec<Vec<u8>> {
         let pk_le = pk_bytes_le(&sig.pk);
         let pk_be = pk_bytes_swap_endianness(&pk_le);
         inputs.push(pk_be.to_vec());
+        inputs.push(sig.msg.to_vec());
     }
     // Padding signature
     let pk_le = pk_bytes_le(&SignData::default().pk);

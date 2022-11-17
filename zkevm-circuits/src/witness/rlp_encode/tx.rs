@@ -40,6 +40,8 @@ pub enum RlpTxTag {
     SigR,
     /// ECDSA signature's Y-coordinate.
     SigS,
+    /// The RlpLength tag is reserved to hold RLP-encoding's length.
+    RlpLength,
     /// The RLP tag is reserved to hold the RLP-encoding's random linear
     /// combination in its accumulator value. Its used to support a lookup
     /// for rlc(rlp(tx)).
@@ -49,7 +51,7 @@ pub enum RlpTxTag {
 impl_expr!(RlpTxTag);
 
 /// Denotes the number of tag values in a transaction's RLP trace.
-pub const N_TX_TAGS: usize = 15;
+pub const N_TX_TAGS: usize = 16;
 
 impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
     fn gen_witness(&self, randomness: F) -> Vec<RlpWitnessRow<F>> {
@@ -161,24 +163,36 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
         rows
     }
 
-    fn rlp_row(&self, randomness: F) -> RlpWitnessRow<F> {
+    fn rlp_rows(&self, randomness: F) -> [RlpWitnessRow<F>; 2] {
         let rlp_out = rlp::encode(self);
         let rlc_rlp_out = rlp_out.as_ref().iter().fold(F::zero(), |acc, value| {
             acc * randomness + F::from(*value as u64)
         });
 
-        RlpWitnessRow {
-            id: self.id,
-            index: rlp_out.len() + 1,
-            data_type: RlpDataType::TxSign,
-            value: 0,
-            value_acc: rlc_rlp_out,
-            tag: RlpTxTag::Rlp as u8,
-            tag_length: 1,
-            tag_index: 1,
-            length_acc: 0,
-            ..Default::default()
-        }
+        [
+            RlpWitnessRow {
+                id: self.id,
+                index: rlp_out.len() + 1,
+                data_type: RlpDataType::TxSign,
+                value: 0,
+                value_acc: F::from(rlp_out.len() as u64),
+                tag: RlpTxTag::RlpLength as u8,
+                tag_length: 1,
+                tag_index: 1,
+                ..Default::default()
+            },
+            RlpWitnessRow {
+                id: self.id,
+                index: rlp_out.len() + 2,
+                data_type: RlpDataType::TxSign,
+                value: 0,
+                value_acc: rlc_rlp_out,
+                tag: RlpTxTag::Rlp as u8,
+                tag_length: 1,
+                tag_index: 1,
+                ..Default::default()
+            },
+        ]
     }
 }
 
@@ -292,24 +306,34 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
         rows
     }
 
-    fn rlp_row(&self, randomness: F) -> RlpWitnessRow<F> {
+    fn rlp_rows(&self, randomness: F) -> [RlpWitnessRow<F>; 2] {
         let rlp_out = rlp::encode(self);
         let rlc_rlp_out = rlp_out.as_ref().iter().fold(F::zero(), |acc, value| {
             acc * randomness + F::from(*value as u64)
         });
 
-        RlpWitnessRow {
-            id: self.tx.id,
-            index: rlp_out.len() + 1,
-            data_type: RlpDataType::TxHash,
-            value: 0,
-            value_acc: rlc_rlp_out,
-            tag: RlpTxTag::Rlp as u8,
-            tag_length: 1,
-            tag_index: 1,
-            length_acc: 0,
-            ..Default::default()
-        }
+        [
+            RlpWitnessRow {
+                id: self.tx.id,
+                index: rlp_out.len() + 1,
+                data_type: RlpDataType::TxHash,
+                value_acc: F::from(rlp_out.len() as u64),
+                tag: RlpTxTag::RlpLength as u8,
+                tag_length: 1,
+                tag_index: 1,
+                ..Default::default()
+            },
+            RlpWitnessRow {
+                id: self.tx.id,
+                index: rlp_out.len() + 2,
+                data_type: RlpDataType::TxHash,
+                value_acc: rlc_rlp_out,
+                tag: RlpTxTag::Rlp as u8,
+                tag_length: 1,
+                tag_index: 1,
+                ..Default::default()
+            },
+        ]
     }
 }
 
