@@ -218,6 +218,22 @@ impl<F: Field> TxCircuitConfig<F> {
             ]))
         });
 
+        meta.create_gate("tx id change at nonce row", |meta| {
+            let mut cb = BaseConstraintBuilder::default();
+
+            cb.require_equal(
+                "tx_id::cur == tx_id::prev + 1",
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                meta.query_advice(tx_table.tx_id, Rotation::prev()) + 1.expr(),
+            );
+
+            cb.gate(and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::Nonce, Rotation::cur())(meta),
+            ]))
+        });
+
         meta.create_gate("tx is_create", |meta| {
             let mut cb = BaseConstraintBuilder::default();
 
