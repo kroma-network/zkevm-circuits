@@ -57,6 +57,7 @@ use crate::bytecode_circuit::bytecode_unroller::{
 
 use crate::evm_circuit::{table::FixedTableTag, EvmCircuit};
 use crate::table::{BlockTable, BytecodeTable, CopyTable, MptTable, RwTable, TxTable};
+use crate::table::PoseidonHashTable;
 use crate::util::power_of_randomness_from_instance;
 use crate::witness::Block;
 use eth_types::Field;
@@ -153,6 +154,9 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         let keccak_circuit = KeccakBitCircuit::configure(meta);
         let keccak_table = keccak_circuit.keccak_table.clone();
 
+        // TODO: should init from hash circuit
+        let hash_table = PoseidonHashTable::construct(meta);
+
         let power_of_randomness = power_of_randomness_from_instance(meta);
         let evm_circuit = EvmCircuit::configure(
             meta,
@@ -199,7 +203,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                 meta,
                 power_of_randomness[0].clone(),
                 bytecode_table,
-                keccak_table,
+                hash_table,
             ),
             keccak_circuit,
         }

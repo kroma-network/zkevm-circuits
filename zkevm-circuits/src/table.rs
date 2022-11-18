@@ -821,6 +821,140 @@ impl DynamicTableColumns for KeccakTable {
     }
 }
 
+
+/// Poseidon hash Table, used to verify poseidon hashing from input fields.
+#[derive(Clone, Debug)]
+pub struct PoseidonTable<const WIDTH: usize> {
+    /// Field inputs, equal to the permuting width in poseidon
+    pub inputs: [Column<Advice>; WIDTH],
+    /// Byte array input length
+    pub input_len: Column<Advice>,
+    /// the hash result
+    pub output: Column<Advice>,
+}
+
+/// Define poseidon hash table with current hash width
+pub type PoseidonHashTable = PoseidonTable<2>;
+
+impl<const WIDTH: usize> PoseidonTable<WIDTH> {
+
+    /// export WIDTH
+    pub const WIDTH: usize = WIDTH;
+
+    /// Construct a new table
+    pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
+        Self {
+            inputs: [0; WIDTH].map(|_|meta.advice_column()),
+            input_len: meta.advice_column(),
+            output: meta.advice_column(),
+        }
+    }
+
+    /// Obtain the index of each col in table, organized as ([inputs], [len, output])
+    /// for connecting with hahs circuit
+    pub fn commitment_index(&self) -> ([usize; WIDTH], [usize; 2]) {
+
+        let input_indexs : Vec<_> = (0..WIDTH).map(|i|self.inputs[i].index()).collect();
+        (
+            input_indexs.as_slice().try_into().expect("same length"),
+            [self.input_len.index(), self.output.index()]
+        )
+    }
+
+    /// Assign a table row for poseidon table, in the form of ([input], [len, hash])
+    pub fn assign_row<F: Field>(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        values: ([F; WIDTH], [F; 2])
+    ) -> Result<(), Error> {
+        for (column, value) in self.columns().iter().zip(values.0.into_iter().chain(values.1)) {
+            region.assign_advice(
+                || format!("poseidon table row {}", offset),
+                *column,
+                offset,
+                || Value::known(value),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// turn BYTE_IN_FIELD * WIDTH bytes to WIDTH fields
+    fn build_input<F: Field>(bytecode: &[u8], bytes_in_field: usize) -> [F; WIDTH]{
+        assert_eq!(bytecode.len(), bytes_in_field * WIDTH);
+        let out: Vec<_> = (0..WIDTH)
+        .map(|i|i*bytes_in_field)
+        .map(|start_pos|{
+            let mut buf: [u8; 64] = [0; 64];
+            U256::from_big_endian(&bytecode[start_pos..start_pos + bytes_in_field]).to_little_endian(&mut buf);
+            F::from_bytes_wide(&buf)
+        }).collect();
+    
+        out.try_into().unwrap()
+    }
+
+    /// Provide this function for the case that we want to consume a poseidon
+    /// table with only bytecode hash data being filled from CoodeDB
+    pub fn dev_load_bytecode<'a, F: Field, const BYTE_IN_FIELD: usize>(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        inputs: impl IntoIterator<Item = (F, &'a Vec<u8>)> + Clone,
+        randomness: F,
+    ) -> Result<(), Error> {
+        let step_size = BYTE_IN_FIELD * WIDTH;
+
+        layouter.assign_region(
+            || "poseidon bytecode table",
+            |mut region| {
+                let mut offset = 0;
+                for column in self.columns() {
+                    region.assign_advice(
+                        || "poseidon table all-zero row",
+                        column,
+                        offset,
+                        || Value::known(F::zero()),
+                    )?;
+                }
+                offset += 1;
+
+                let table_columns = self.columns();
+                for (hash, bytecode) in inputs.clone() {
+                    for step in 0..(bytecode.len() / step_size) {
+
+                        let start_pos = step * step_size;
+                        let inputs = Self::build_input::<F>(&bytecode[start_pos..start_pos + step_size], BYTE_IN_FIELD);
+                        self.assign_row(&mut region, offset, 
+                            (inputs, [F::from_u128((bytecode.len()-start_pos) as u128), hash]))?;
+                        offset += 1;
+                    }
+
+                    let tail_start = (bytecode.len() / step_size) * step_size;
+                    if tail_start < bytecode.len() {
+                        let tail_byte : Vec<_> = bytecode[tail_start..]
+                            .iter().copied().chain(std::iter::repeat(0))
+                            .take(step_size).collect();
+                        let inputs = Self::build_input::<F>(&tail_byte, BYTE_IN_FIELD);
+                        self.assign_row(&mut region, offset, 
+                            (inputs, [F::from_u128((bytecode.len()-tail_start) as u128), hash]))?;                         
+                        offset += 1;
+                    }
+                }
+
+                Ok(())
+            },
+        )
+    }
+
+}
+
+impl<const WIDTH: usize> DynamicTableColumns for PoseidonTable<WIDTH> {
+    fn columns(&self) -> Vec<Column<Advice>> {
+        self.inputs.into_iter()
+            .chain([self.input_len, self.output])
+            .collect()
+    }
+}
+
 /// Copy Table, used to verify copies of byte chunks between Memory, Bytecode,
 /// TxLogs and TxCallData.
 #[derive(Clone, Copy, Debug)]

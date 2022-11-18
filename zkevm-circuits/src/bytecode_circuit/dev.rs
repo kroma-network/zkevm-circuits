@@ -1,5 +1,7 @@
 use super::bytecode_unroller::{unroll, Config, UnrolledBytecode};
-use crate::table::{BytecodeTable, KeccakTable};
+// use crate::table::{BytecodeTable, KeccakTable};
+use super::bytecode_unroller::HASHBLOCK_BYTES_IN_FIELD;
+use crate::table::{BytecodeTable, PoseidonHashTable};
 use crate::util::DEFAULT_RAND;
 use eth_types::Field;
 use halo2_proofs::{
@@ -42,9 +44,14 @@ impl<F: Field> Circuit<F> for BytecodeCircuitTester<F> {
             .try_into()
             .unwrap();
 
-        let keccak_table = KeccakTable::construct(meta);
+//        let keccak_table = PoseidonHashTable::construct(meta);
 
-        Config::configure(meta, randomness[0].clone(), bytecode_table, keccak_table)
+//        Config::configure(meta, randomness[0].clone(), bytecode_table, keccak_table)
+
+        let hash_table = PoseidonHashTable::construct(meta);
+
+        Config::configure(meta, randomness[0].clone(), bytecode_table, hash_table)
+
     }
 
     fn synthesize(
@@ -53,16 +60,22 @@ impl<F: Field> Circuit<F> for BytecodeCircuitTester<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         config.load(&mut layouter)?;
-        config.keccak_table.dev_load(
+        /*config.keccak_table.dev_load(
             &mut layouter,
             self.bytecodes.iter().map(|b| &b.bytes),
+            self.randomness,
+        )?;*/
+
+        config.hash_table.dev_load_bytecode::<_, HASHBLOCK_BYTES_IN_FIELD>(
+            &mut layouter,
+            self.bytecodes.iter().map(|b| (F::zero(), &b.bytes)),
             self.randomness,
         )?;
         config.assign_internal(
             &mut layouter,
             self.size,
             &self.bytecodes,
-            self.randomness,
+            //self.randomness,
             false,
         )?;
         Ok(())
