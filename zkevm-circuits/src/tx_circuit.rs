@@ -738,7 +738,7 @@ impl<F: Field> TxCircuitConfig<F> {
             .collect()
         });
 
-        // lookup tx calldata byte at index if call_data_length > 0.
+        // lookup tx calldata bytes in RLP table.
         meta.lookup_any(
             "tx calldata::index in RLPTable::TxSign where len(calldata) > 0",
             |meta| {
@@ -829,6 +829,35 @@ impl<F: Field> TxCircuitConfig<F> {
                 .collect()
             },
         );
+
+        // lookup tx table to ensure call data bytes are populated if call_data_length >
+        // 0.
+        meta.lookup_any("is_final call data byte should be present", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::CallDataLength, Rotation::cur())(meta),
+                not::expr(value_is_zero.is_equal_expression.clone()),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                TxFieldTag::CallData.expr(),
+                meta.query_advice(tx_table.value, Rotation::cur()) - 1.expr(), // index
+                1.expr(),                                                      // is_final
+            ]
+            .into_iter()
+            .zip(
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    meta.query_fixed(tx_table.tag, Rotation::cur()),
+                    meta.query_advice(tx_table.index, Rotation::cur()),
+                    meta.query_advice(is_final, Rotation::cur()),
+                ]
+                .into_iter(),
+            )
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
 
         // lookup RLP table for length of RLP-encoding of unsigned tx.
         meta.lookup_any("Length of RLP-encoding for RLPTable::TxSign", |meta| {
