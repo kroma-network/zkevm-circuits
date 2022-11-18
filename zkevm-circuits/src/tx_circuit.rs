@@ -275,6 +275,21 @@ impl<F: Field> TxCircuitConfig<F> {
             ]))
         });
 
+        meta.create_gate("tag equality", |meta| {
+            let mut cb = BaseConstraintBuilder::default();
+
+            cb.require_equal(
+                "tag equality (fixed tag == binary number config's tag",
+                meta.query_advice(tx_table.tag, Rotation::cur()),
+                tag.value(Rotation::cur())(meta),
+            );
+
+            cb.gate(and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+            ]))
+        });
+
         Self {
             q_enable,
             is_usable,
