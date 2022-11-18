@@ -18,7 +18,6 @@ use eth_types::{
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
 use gadgets::is_equal::{IsEqualChip, IsEqualConfig, IsEqualInstruction};
 use gadgets::util::{and, not, or, Expr};
-use halo2_proofs::plonk::Fixed;
 use halo2_proofs::poly::Rotation;
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
@@ -280,7 +279,7 @@ impl<F: Field> TxCircuitConfig<F> {
 
             cb.require_equal(
                 "tag equality (fixed tag == binary number config's tag",
-                meta.query_advice(tx_table.tag, Rotation::cur()),
+                meta.query_fixed(tx_table.tag, Rotation::cur()),
                 tag.value(Rotation::cur())(meta),
             );
 
