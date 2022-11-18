@@ -22,7 +22,7 @@ use halo2_proofs::plonk::Fixed;
 use halo2_proofs::poly::Rotation;
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 use itertools::Itertools;
 use log::error;
@@ -350,7 +350,7 @@ impl<F: Field> TxCircuitConfig<F> {
             offset,
             || Value::known(F::from(tx_id as u64)),
         )?;
-        region.assign_advice(
+        region.assign_fixed(
             || "tag",
             self.tx_table.tag,
             offset,
