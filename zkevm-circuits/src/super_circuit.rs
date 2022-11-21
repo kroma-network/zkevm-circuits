@@ -208,7 +208,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
         );
         let state_circuit =
             StateCircuitConfig::configure(meta, &rw_table, &mpt_table, challenges.clone());
-        let pi_circuit = PiCircuitConfig::new(meta, block_table.clone(), tx_table);
+        let pi_circuit = PiCircuitConfig::new(
+            meta,
+            block_table.clone(),
+            tx_table,
+            rlp_table,
+            keccak_table.clone(),
+        );
 
         Self::Config {
             tx_table,

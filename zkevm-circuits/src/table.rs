@@ -90,6 +90,8 @@ pub enum TxFieldTag {
     /// TxSignHash: Hash of the transaction without the signature, used for
     /// signing.
     TxSignHash,
+    /// TxHash: Hash of the transaction with the signature
+    TxHash,
     /// CallData
     CallData,
 }
