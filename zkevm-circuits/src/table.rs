@@ -564,7 +564,7 @@ pub enum BytecodeFieldTag {
 impl_expr!(BytecodeFieldTag);
 
 /// Table with Bytecode indexed by its Code Hash
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct BytecodeTable {
     /// Code Hash
     pub code_hash: Column<Advice>,
@@ -671,7 +671,7 @@ pub enum BlockContextFieldTag {
 impl_expr!(BlockContextFieldTag);
 
 /// Table with Block header fields
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct BlockTable {
     /// Tag
     pub tag: Column<Advice>,

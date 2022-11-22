@@ -207,19 +207,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
         );
         let state_circuit =
             StateCircuitConfig::configure(meta, &rw_table, &mpt_table, challenges.clone());
-        let pi_circuit = PiCircuitConfig::new(
-            meta,
-            block_table.clone(),
-            tx_table,
-            rlp_table,
-            keccak_table.clone(),
-        );
+        let pi_circuit = PiCircuitConfig::new(meta, block_table, tx_table, rlp_table, keccak_table);
 
         Self::Config {
             tx_table,
             rw_table,
             mpt_table,
-            bytecode_table: bytecode_table.clone(),
+            bytecode_table,
             block_table,
             copy_table,
             exp_table,
@@ -324,6 +318,23 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             .copy_circuit
             .assign_block(&mut layouter, block, block.randomness)?;
         // --- Public Input Circuit ---
+        layouter.assign_region(
+            || "PI Circuit RLC",
+            |mut region| {
+                config.pi_circuit.assign_rlc_pi(
+                    &mut region,
+                    self.pi_circuit.public_data.get_block_table_values(),
+                    self.pi_circuit.rand_rpi,
+                    self.pi_circuit
+                        .public_data
+                        .get_tx_table_values()
+                        .iter()
+                        .map(|tx| tx.tx_hash)
+                        .collect(),
+                )?;
+                Ok(())
+            },
+        )?;
         self.pi_circuit.synthesize(config.pi_circuit, layouter)?;
         Ok(())
     }

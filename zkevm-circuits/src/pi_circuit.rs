@@ -20,7 +20,6 @@ use crate::table::TxFieldTag;
 use crate::table::TxTable;
 use crate::table::{BlockTable, KeccakTable, RlpTable};
 use crate::util::{random_linear_combine_word as rlc, U256};
-use crate::witness::signed_tx_from_geth_tx;
 use gadgets::util::Expr;
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
@@ -63,7 +62,9 @@ pub struct TxValues {
     r: Word,
     s: Word,
     tx_sign_hash: [u8; 32],
-    tx_hash: H256,
+
+    /// Transaction hash.
+    pub tx_hash: H256,
 }
 
 /// Extra values (not contained in block or tx tables)
@@ -338,6 +339,148 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         }
     }
 
+    /// Assign `rpi_rlc_acc` and `rand_rpi` columns
+    #[allow(clippy::type_complexity)]
+    pub fn assign_rlc_pi(
+        &self,
+        region: &mut Region<'_, F>,
+        block_values: BlockValues,
+        rand_rpi: F,
+        tx_hashes: Vec<H256>,
+    ) -> Result<(AssignedCell<F, F>, AssignedCell<F, F>), Error> {
+        let mut offset = 0;
+        let mut rpi_rlc_acc = F::zero();
+        let dummy_tx_hash = get_dummy_tx_hash(block_values.chain_id);
+
+        self.q_start.enable(region, offset)?;
+        // Assign fields in block table
+        // coinbase
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            block_values.coinbase.to_scalar().unwrap(),
+            &block_values.coinbase.to_fixed_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        // gas_limit
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            F::from(block_values.gas_limit),
+            &block_values.gas_limit.to_be_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        // number
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            F::from(block_values.number),
+            &block_values.number.to_be_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        // timestamp
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            F::from(block_values.timestamp),
+            &block_values.timestamp.to_be_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        // difficulty
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            rlc(block_values.difficulty.to_le_bytes(), rand_rpi),
+            &block_values.difficulty.to_be_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        // base_fee
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            rlc(block_values.base_fee.to_le_bytes(), rand_rpi),
+            &block_values.base_fee.to_be_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        // chain_id
+        self.assign_field_in_pi(
+            region,
+            &mut offset,
+            F::from(block_values.chain_id),
+            &block_values.chain_id.to_be_bytes(),
+            rand_rpi,
+            &mut rpi_rlc_acc,
+            false,
+        )?;
+        debug_assert_eq!(offset, 116);
+
+        // assign history block hashes
+        for prev_hash in block_values.history_hashes {
+            let mut prev_hash_le_bytes = prev_hash.to_fixed_bytes();
+            prev_hash_le_bytes.reverse();
+            self.assign_field_in_pi(
+                region,
+                &mut offset,
+                rlc(prev_hash_le_bytes, rand_rpi),
+                &prev_hash.to_fixed_bytes(),
+                rand_rpi,
+                &mut rpi_rlc_acc,
+                false,
+            )?;
+        }
+
+        // assign tx hashes
+        let num_txs = tx_hashes.len();
+        let mut cells = None;
+        for (i, tx_hash) in tx_hashes
+            .into_iter()
+            .chain((0..MAX_TXS - num_txs).into_iter().map(|_| dummy_tx_hash))
+            .enumerate()
+        {
+            let mut tx_hash_le_bytes = tx_hash.to_fixed_bytes();
+            tx_hash_le_bytes.reverse();
+            cells = Some(self.assign_field_in_pi(
+                region,
+                &mut offset,
+                rlc(tx_hash_le_bytes, rand_rpi),
+                &tx_hash.to_fixed_bytes(),
+                rand_rpi,
+                &mut rpi_rlc_acc,
+                i == MAX_TXS - 1,
+            )?);
+        }
+
+        // assign rpi_acc, keccak_rpi
+        let (rand_cell, rpi_rlc_cell) = cells.unwrap();
+        let keccak_input_cell = rpi_rlc_cell.copy_advice(
+            || "keccak(rpi)_input",
+            region,
+            self.raw_public_inputs,
+            offset,
+        )?;
+        // let keccak_output = region.assign_advice(
+        //     || "keccak(rpi)_output",
+        //     self.rpi_rlc_acc,
+        //     offset,
+        //     || Value::known(F::zero())
+        // )?;
+
+        Ok((rand_cell, keccak_input_cell))
+    }
+
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     fn assign_field_in_pi(
         &self,
         region: &mut Region<'_, F>,
@@ -357,7 +500,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         let mut value_bytes_acc = F::zero();
         let mut rand_cell = None;
         let mut rpi_rlc_cell = None;
-        for (i, byte) in value_bytes.into_iter().enumerate() {
+        for (i, byte) in value_bytes.iter().enumerate() {
             let row_offset = *offset + i;
             value_bytes_acc = value_bytes_acc * t + F::from(*byte as u64);
             *rpi_rlc_acc = *rpi_rlc_acc * rand + F::from(*byte as u64);
@@ -607,147 +750,6 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         )?;
         Ok([state_root_cell, prev_state_root_cell])
     }
-
-    /// Assign `rpi_rlc_acc` and `rand_rpi` columns
-    #[allow(clippy::type_complexity)]
-    fn assign_rlc_pi(
-        &self,
-        region: &mut Region<'_, F>,
-        block_values: BlockValues,
-        rand_rpi: F,
-        tx_hashes: Vec<H256>,
-    ) -> Result<(AssignedCell<F, F>, AssignedCell<F, F>), Error> {
-        let mut offset = 0;
-        let mut rpi_rlc_acc = F::zero();
-        let dummy_tx_hash = get_dummy_tx_hash(block_values.chain_id);
-
-        self.q_start.enable(region, offset)?;
-        // Assign fields in block table
-        // coinbase
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            block_values.coinbase.to_scalar().unwrap(),
-            &block_values.coinbase.to_fixed_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        // gas_limit
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            F::from(block_values.gas_limit),
-            &block_values.gas_limit.to_be_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        // number
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            F::from(block_values.number),
-            &block_values.number.to_be_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        // timestamp
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            F::from(block_values.timestamp),
-            &block_values.timestamp.to_be_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        // difficulty
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            rlc(block_values.difficulty.to_le_bytes(), rand_rpi),
-            &block_values.difficulty.to_be_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        // base_fee
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            rlc(block_values.base_fee.to_le_bytes(), rand_rpi),
-            &block_values.base_fee.to_be_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        // chain_id
-        self.assign_field_in_pi(
-            region,
-            &mut offset,
-            F::from(block_values.chain_id),
-            &block_values.chain_id.to_be_bytes(),
-            rand_rpi,
-            &mut rpi_rlc_acc,
-            false,
-        )?;
-        debug_assert_eq!(offset, 116);
-
-        // assign history block hashes
-        for prev_hash in block_values.history_hashes {
-            let mut prev_hash_le_bytes = prev_hash.to_fixed_bytes();
-            prev_hash_le_bytes.reverse();
-            self.assign_field_in_pi(
-                region,
-                &mut offset,
-                rlc(prev_hash_le_bytes, rand_rpi),
-                &prev_hash.to_fixed_bytes(),
-                rand_rpi,
-                &mut rpi_rlc_acc,
-                false,
-            )?;
-        }
-
-        // assign tx hashes
-        let num_txs = tx_hashes.len();
-        let mut cells = None;
-        for (i, tx_hash) in tx_hashes
-            .into_iter()
-            .chain((0..MAX_TXS - num_txs).into_iter().map(|_| dummy_tx_hash))
-            .enumerate()
-        {
-            let mut tx_hash_le_bytes = tx_hash.to_fixed_bytes();
-            tx_hash_le_bytes.reverse();
-            cells = Some(self.assign_field_in_pi(
-                region,
-                &mut offset,
-                rlc(tx_hash_le_bytes, rand_rpi),
-                &tx_hash.to_fixed_bytes(),
-                rand_rpi,
-                &mut rpi_rlc_acc,
-                i == MAX_TXS - 1,
-            )?);
-        }
-
-        // assign rpi_acc, keccak_rpi
-        let (rand_cell, rpi_rlc_cell) = cells.unwrap();
-        let keccak_input_cell = rpi_rlc_cell.copy_advice(
-            || "keccak(rpi)_input",
-            region,
-            self.raw_public_inputs,
-            offset,
-        )?;
-        // let keccak_output = region.assign_advice(
-        //     || "keccak(rpi)_output",
-        //     self.rpi_rlc_acc,
-        //     offset,
-        //     || Value::known(F::zero())
-        // )?;
-
-        Ok((rand_cell, keccak_input_cell))
-    }
 }
 
 /// Public Inputs Circuit
@@ -901,7 +903,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                     self.public_data
                         .get_tx_table_values()
                         .iter()
-                        .map(|tx| tx.tx_hash.clone())
+                        .map(|tx| tx.tx_hash)
                         .collect(),
                 )?;
 
