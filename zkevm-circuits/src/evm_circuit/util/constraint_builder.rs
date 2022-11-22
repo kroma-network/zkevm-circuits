@@ -624,6 +624,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         index: Option<Expression<F>>,
         value: Expression<F>,
     ) {
+        /* 
         self.add_lookup(
             "Tx lookup",
             Lookup::Tx {
@@ -633,6 +634,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 value,
             },
         );
+        */
     }
 
     // block
