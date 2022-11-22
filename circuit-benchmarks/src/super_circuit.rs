@@ -7,6 +7,7 @@ mod tests {
     use eth_types::{address, bytecode, Word};
     use ethers_signers::LocalWallet;
     use ethers_signers::Signer;
+    use halo2_proofs::dev::MockProver;
     use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof};
     use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG, ParamsVerifierKZG};
     use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
@@ -18,7 +19,6 @@ mod tests {
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
     };
-    use halo2_proofs::dev::MockProver;
     use mock::{TestContext, MOCK_CHAIN_ID};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
@@ -75,16 +75,16 @@ mod tests {
 
         let (k, circuit, instance) =
             SuperCircuit::<_, 1, 32, 512>::build(block, &mut ChaChaRng::seed_from_u64(2)).unwrap();
-            {
-                let prover = MockProver::run(k, &circuit, instance.clone()).unwrap();
-                let res = prover.verify_par();
-                if let Err(err) = res {
-                    eprintln!("Verification failures:");
-                    eprintln!("{:#?}", err);
-                    panic!("Failed verification");
-                }
-                println!("mock prove done");
+        {
+            let prover = MockProver::run(k, &circuit, instance.clone()).unwrap();
+            let res = prover.verify_par();
+            if let Err(err) = res {
+                eprintln!("Verification failures:");
+                eprintln!("{:#?}", err);
+                panic!("Failed verification");
             }
+            println!("mock prove done");
+        }
         let instance_refs: Vec<&[Fr]> = instance.iter().map(|v| &v[..]).collect();
 
         // Bench setup generation
@@ -122,7 +122,6 @@ mod tests {
         let proof = transcript.finalize();
         end_timer!(start2);
 
-
         // Bench verification time
         let start3 = start_timer!(|| "SuperCircuit Proof verification");
         let mut verifier_transcript = Blake2bRead::<_, G1Affine, Challenge255<_>>::init(&proof[..]);
@@ -143,6 +142,5 @@ mod tests {
         )
         .expect("failed to verify bench circuit");
         end_timer!(start3);
-
     }
 }

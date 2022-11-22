@@ -214,14 +214,10 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             meta,
             tx_table.clone(),
             keccak_table.clone(),
-                challenges.clone(),
+            challenges.clone(),
         );
-        let bytecode_circuit = BytecodeConfig::configure(
-            meta,
-            bytecode_table.clone(),
-            keccak_table,
-                challenges,
-        );
+        let bytecode_circuit =
+            BytecodeConfig::configure(meta, bytecode_table.clone(), keccak_table, challenges);
         let exp_circuit = ExpCircuit::configure(meta, exp_table);
         Self::Config {
             tx_table,
@@ -260,6 +256,12 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             &mut layouter,
             &rws,
             self.block.circuits_params.max_rws,
+            self.block.randomness,
+        )?;
+        config.tx_table.load(
+            &mut layouter,
+            &self.block.txs,
+            self.block.circuits_params.max_txs,
             self.block.randomness,
         )?;
 
