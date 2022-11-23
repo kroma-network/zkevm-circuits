@@ -331,6 +331,7 @@ dependencies = [
  "eth-types",
  "ethers-core",
  "ethers-providers",
+ "ethers-signers",
  "gadgets",
  "halo2_proofs 0.2.0",
  "hex",

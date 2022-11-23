@@ -918,6 +918,64 @@ impl<F: Field> TxCircuitConfig<F> {
             .map(|(arg, table)| (enable.clone() * arg, table))
             .collect()
         });
+
+        // lookup RLP table for length of RLP-encoding of signed tx.
+        meta.lookup_any("Length of RLP-encoding for RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::TxHash, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::RlpLength.expr(),
+                1.expr(), // tag_index
+                meta.query_advice(tx_sign_data_len, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        // lookup RLP table for RLC of RLP-encoding of signed tx.
+        meta.lookup_any("RLC of RLP-encoding for RLPTable::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::TxHash, Rotation::cur())(meta),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::Rlp.expr(),
+                1.expr(), // tag_index
+                meta.query_advice(tx_sign_data_rlc, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup Keccak table for tx hash
+        meta.lookup_any("Keccak table lookup for TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(is_usable, Rotation::cur()),
+                tag.value_equals(TxFieldTag::TxHash, Rotation::cur())(meta),
+            ]);
+            vec![
+                1.expr(),                                             // is_enabled
+                meta.query_advice(tx_sign_data_rlc, Rotation::cur()), // input_rlc
+                meta.query_advice(tx_sign_data_len, Rotation::cur()), // input_len
+                meta.query_advice(tx_table.value, Rotation::cur()),   // output_rlc
+            ]
+            .into_iter()
+            .zip(keccak_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
     }
 }
 
@@ -1006,6 +1064,8 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                     } else {
                         &tx_default
                     };
+                    let signed_tx: ethers_core::types::Transaction = tx.into();
+                    let rlp_signed_tx_be_bytes = signed_tx.rlp().to_vec();
 
                     for (tag, value) in [
                         (TxFieldTag::Nonce, Value::known(F::from(tx.nonce.as_u64()))),
@@ -1072,9 +1132,20 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                             TxFieldTag::TxSignHash,
                             assigned_sig_verif.msg_hash_rlc.value().copied(),
                         ),
+                        (
+                            TxFieldTag::TxHash,
+                            challenges.evm_word().map(|challenge| {
+                                tx.hash
+                                    .to_fixed_bytes()
+                                    .into_iter()
+                                    .fold(F::zero(), |acc, byte| {
+                                        acc * challenge + F::from(byte as u64)
+                                    })
+                            }),
+                        ),
                     ] {
                         let tx_id_next = match tag {
-                            TxFieldTag::TxSignHash => {
+                            TxFieldTag::TxHash => {
                                 if i == assigned_sig_verifs.len() - 1 {
                                     self.txs
                                         .iter()
@@ -1124,6 +1195,28 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                                     config.tx_sign_data_rlc,
                                     offset,
                                     || assigned_sig_verif.msg_rlc,
+                                )?;
+                            }
+                            TxFieldTag::TxHash => {
+                                region.assign_advice(
+                                    || "tx_hash_data_len",
+                                    config.tx_sign_data_len,
+                                    offset,
+                                    || Value::known(F::from(rlp_signed_tx_be_bytes.len() as u64)),
+                                )?;
+                                region.assign_advice(
+                                    || "tx_hash_data_rlc",
+                                    config.tx_sign_data_rlc,
+                                    offset,
+                                    || {
+                                        challenges.keccak_input().map(|challenge| {
+                                            rlp_signed_tx_be_bytes
+                                                .iter()
+                                                .fold(F::zero(), |acc, byte| {
+                                                    acc * challenge + F::from(*byte as u64)
+                                                })
+                                        })
+                                    },
                                 )?;
                             }
                             TxFieldTag::SigV => {

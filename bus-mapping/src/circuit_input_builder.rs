@@ -21,8 +21,11 @@ pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
-use eth_types::ToWord;
 use eth_types::{self, geth_types, Address, GethExecStep, GethExecTrace, Word};
+use eth_types::{ToWord, U256};
+use ethers_core::k256::ecdsa::SigningKey;
+use ethers_core::types::transaction::eip2718::TypedTransaction;
+use ethers_core::types::{Bytes, Signature, TransactionRequest};
 use ethers_providers::JsonRpcClient;
 pub use execution::{
     CopyDataType, CopyEvent, CopyStep, ExecState, ExecStep, ExpEvent, ExpStep, NumberOrHash,
@@ -311,12 +314,57 @@ pub fn keccak_inputs_sign_verify(sigs: &[SignData]) -> Vec<Vec<u8>> {
     inputs
 }
 
+/// Generate a dummy tx in which
+/// (nonce=0, gas=0, gas_price=0, to=0, value=0, data="", chain_id)
+/// using the dummy private key = 1
+pub fn get_dummy_tx(chain_id: u64) -> (TypedTransaction, Signature) {
+    let mut sk_be_scalar = [0u8; 32];
+    sk_be_scalar[31] = 1_u8;
+
+    let sk = SigningKey::from_bytes(&sk_be_scalar).expect("sign key = 1");
+    let wallet = ethers_signers::Wallet::from(sk);
+
+    let tx_req = TransactionRequest::new()
+        .nonce(0)
+        .gas(0)
+        .gas_price(U256::zero())
+        .to(Address::zero())
+        .value(U256::zero())
+        .data(Bytes::default())
+        .chain_id(chain_id);
+
+    let tx = tx_req.into();
+    let sig = wallet.sign_transaction_sync(&tx);
+
+    (tx, sig)
+}
+
 /// Generate the keccak inputs required by the Tx Circuit from the transactions.
 pub fn keccak_inputs_tx_circuit(
     txs: &[geth_types::Transaction],
     chain_id: u64,
 ) -> Result<Vec<Vec<u8>>, Error> {
     let mut inputs = Vec::new();
+
+    let hash_datas = txs
+        .iter()
+        .map(|tx| {
+            let sig = Signature {
+                r: tx.r,
+                s: tx.s,
+                v: tx.v,
+            };
+            let tx: TransactionRequest = tx.into();
+            tx.rlp_signed(&sig).to_vec()
+        })
+        .collect::<Vec<Vec<u8>>>();
+    let dummy_hash_data = {
+        let (dummy_tx, dummy_sig) = get_dummy_tx(chain_id);
+        dummy_tx.rlp_signed(&dummy_sig).to_vec()
+    };
+    inputs.extend_from_slice(&hash_datas);
+    inputs.push(dummy_hash_data);
+
     let sign_datas: Vec<SignData> = txs.iter().map(|tx| tx.sign_data(chain_id)).try_collect()?;
     // Keccak inputs from SignVerify Chip
     let sign_verify_inputs = keccak_inputs_sign_verify(&sign_datas);

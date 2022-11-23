@@ -1,26 +1,23 @@
 //! Public Input Circuit implementation
 
-use ethers_core::k256::ecdsa::SigningKey;
 use std::iter;
 use std::marker::PhantomData;
 
+use crate::table::TxFieldTag;
+use crate::table::TxTable;
+use crate::table::{BlockTable, KeccakTable, RlpTable};
+use crate::util::{random_linear_combine_word as rlc, U256};
+use bus_mapping::circuit_input_builder::get_dummy_tx;
 use eth_types::geth_types::BlockConstants;
 use eth_types::sign_types::SignData;
 use eth_types::H256;
 use eth_types::{
     geth_types::Transaction, Address, Field, ToBigEndian, ToLittleEndian, ToScalar, Word,
 };
-use ethers_core::types::transaction::eip2718::TypedTransaction;
-use ethers_core::types::{Block, Bytes, TransactionRequest};
+use ethers_core::types::Block;
 use ethers_core::utils::keccak256;
-use ethers_signers::{Signer, Wallet};
-use halo2_proofs::plonk::{Fixed, Instance};
-
-use crate::table::TxFieldTag;
-use crate::table::TxTable;
-use crate::table::{BlockTable, KeccakTable, RlpTable};
-use crate::util::{random_linear_combine_word as rlc, U256};
 use gadgets::util::Expr;
+use halo2_proofs::plonk::{Fixed, Instance};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Selector},
@@ -966,31 +963,10 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
 /// Get the tx hash of the dummy tx (nonce=0, gas=0, gas_price=0, to=0, value=0,
 /// data="") for any chain_id
 fn get_dummy_tx_hash(chain_id: u64) -> H256 {
-    let mut sk_be_scalar = [0u8; 32];
-    sk_be_scalar[31] = 1_u8;
-
-    let sk = SigningKey::from_bytes(&sk_be_scalar).expect("sign key = 1");
-    let wallet = Wallet::from(sk);
-
-    let tx_req = TransactionRequest::new()
-        .nonce(0)
-        .gas(0)
-        .gas_price(U256::zero())
-        .to(Address::zero())
-        .value(U256::zero())
-        .data(Bytes::default())
-        .chain_id(chain_id);
-
-    let tx = TypedTransaction::Legacy(tx_req);
-    let sig = wallet.sign_transaction_sync(&tx);
+    let (tx, sig) = get_dummy_tx(chain_id);
 
     let tx_hash = keccak256(tx.rlp_signed(&sig));
-
-    log::debug!(
-        "tx hash: {} from {:?}",
-        hex::encode(tx_hash),
-        wallet.address()
-    );
+    log::debug!("tx hash: {}", hex::encode(tx_hash));
 
     H256(tx_hash)
 }
