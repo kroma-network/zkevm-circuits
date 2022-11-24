@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use crate::table::TxFieldTag;
 use crate::table::TxTable;
 use crate::table::{BlockTable, KeccakTable, RlpTable};
-use crate::util::{random_linear_combine_word as rlc, U256};
+use crate::util::random_linear_combine_word as rlc;
 use bus_mapping::circuit_input_builder::get_dummy_tx;
 use eth_types::geth_types::BlockConstants;
 use eth_types::sign_types::SignData;
@@ -1022,6 +1022,7 @@ mod pi_circuit_test {
     use super::*;
 
     use crate::test_util::rand_tx;
+    use eth_types::U256;
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
