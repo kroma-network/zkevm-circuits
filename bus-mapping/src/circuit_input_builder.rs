@@ -276,8 +276,6 @@ impl<'a> CircuitInputBuilder {
     /// block.
     pub fn keccak_inputs(&self) -> Result<Vec<Vec<u8>>, Error> {
         let mut keccak_inputs = Vec::new();
-        // EVM Circuit
-        keccak_inputs.extend_from_slice(&self.block.sha3_inputs);
         // Tx Circuit
         let txs: Vec<geth_types::Transaction> = self.block.txs.iter().map(|tx| tx.into()).collect();
         keccak_inputs.extend_from_slice(&keccak_inputs_tx_circuit(
@@ -288,6 +286,8 @@ impl<'a> CircuitInputBuilder {
         for bytecode in self.code_db.0.values() {
             keccak_inputs.push(bytecode.clone());
         }
+        // EVM Circuit
+        keccak_inputs.extend_from_slice(&self.block.sha3_inputs);
         // MPT Circuit
         // TODO https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/696
         Ok(keccak_inputs)

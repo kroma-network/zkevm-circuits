@@ -52,7 +52,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             cb.copy_table_lookup(
                 cb.curr.state.call_id.expr(),
                 CopyDataType::Memory.expr(),
-                cb.curr.state.hash_id.expr() + 1.expr(),
+                sha3_rlc.expr(),
                 CopyDataType::SHA3.expr(),
                 memory_address.offset(),
                 memory_address.address(),
@@ -67,7 +67,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             cb.require_zero("rlc_acc == 0 for size = 0", rlc_acc.expr());
         });
         cb.keccak_table_lookup(
-            cb.curr.state.hash_id.expr() + 1.expr(),
+            sha3_rlc.expr(),
             sha3_rlc.expr(),
         );
 
@@ -86,7 +86,6 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             gas_left: Transition::Delta(
                 -(OpcodeId::SHA3.constant_gas_cost().expr() + memory_copier_gas.gas_cost()),
             ),
-            hash_id: Transition::Delta(1.expr()),
             ..Default::default()
         };
         let same_context = SameContextGadget::construct(cb, opcode, step_state_transition);

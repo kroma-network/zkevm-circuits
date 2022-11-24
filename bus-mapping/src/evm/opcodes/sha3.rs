@@ -69,13 +69,12 @@ impl Opcode for Sha3 {
             src_id: NumberOrHash::Number(call_id),
             dst_addr: 0,
             dst_type: CopyDataType::SHA3,
-            dst_id: NumberOrHash::Number(state.block_ctx.hash_id + 1),
+            dst_id: NumberOrHash::Hash(sha3.into()),
             log_id: None,
             rw_counter_start,
             bytes: steps,
         });
 
-        state.block_ctx.hash_id += 1;
         Ok(vec![exec_step])
     }
 }
@@ -142,9 +141,6 @@ pub mod sha3_tests {
         }
         // append SHA3 related opcodes at the tail end.
         let code_tail = bytecode! {
-            PUSH32(size)
-            PUSH32(offset)
-            SHA3
             PUSH32(size)
             PUSH32(offset)
             SHA3
