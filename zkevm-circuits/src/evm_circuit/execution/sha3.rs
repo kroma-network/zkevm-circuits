@@ -71,11 +71,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             sha3_rlc.expr(),
         );
 
-        let memory_expansion = MemoryExpansionGadget::construct(
-            cb,
-            cb.curr.state.memory_word_size.expr(),
-            [memory_address.address()],
-        );
+        let memory_expansion = MemoryExpansionGadget::construct(cb, [memory_address.address()]);
         let memory_copier_gas = MemoryCopierGasGadget::construct(
             cb,
             memory_address.length(),

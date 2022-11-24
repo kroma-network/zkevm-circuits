@@ -1,6 +1,7 @@
 //! Definition of each opcode of the EVM.
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    error::ExecError,
     evm::OpcodeId,
     operation::{
         AccountField, CallContextField, TxAccessListAccountOp, TxReceiptField, TxRefundOp, RW,
@@ -52,6 +53,8 @@ mod stackonlyop;
 mod stop;
 mod swap;
 
+mod error_invalid_jump;
+
 #[cfg(test)]
 mod memory_expansion_test;
 
@@ -68,6 +71,7 @@ use codecopy::Codecopy;
 use codesize::Codesize;
 use create::DummyCreate;
 use dup::Dup;
+use error_invalid_jump::ErrorInvalidJump;
 use exp::Exponentiation;
 use extcodecopy::Extcodecopy;
 use extcodehash::Extcodehash;
@@ -254,6 +258,16 @@ fn fn_gen_associated_ops(opcode_id: &OpcodeId) -> FnGenAssociatedOps {
     }
 }
 
+fn fn_gen_error_state_associated_ops(error: &ExecError) -> FnGenAssociatedOps {
+    match error {
+        ExecError::InvalidJump => ErrorInvalidJump::gen_associated_ops,
+        // more future errors place here
+        _ => {
+            warn!("Using dummy gen_associated_ops for error state {:?}", error);
+            Dummy::gen_associated_ops
+        }
+    }
+}
 #[allow(clippy::collapsible_else_if)]
 /// Generate the associated operations according to the particular
 /// [`OpcodeId`].
@@ -289,16 +303,20 @@ pub fn gen_associated_ops(
             geth_step.op
         );
 
-        exec_step.error = Some(exec_error);
-        if exec_step.oog_or_stack_error() {
-            state.gen_restore_context_ops(&mut exec_step, geth_steps)?;
-        }
+        exec_step.error = Some(exec_error.clone());
         // for `oog_or_stack_error` error message will be returned by geth_step error
         // field, when this kind of error happens, no more proceeding
-        if geth_step.op.is_call_or_create() && !exec_step.oog_or_stack_error() {
-            let call = state.parse_call(geth_step)?;
-            // Switch to callee's call context
-            state.push_call(call);
+        if exec_step.oog_or_stack_error() {
+            state.gen_restore_context_ops(&mut exec_step, geth_steps)?;
+        } else {
+            if geth_step.op.is_call_or_create() {
+                let call = state.parse_call(geth_step)?;
+                // Switch to callee's call context
+                state.push_call(call);
+            } else {
+                let fn_gen_error_associated_ops = fn_gen_error_state_associated_ops(&exec_error);
+                return fn_gen_error_associated_ops(state, geth_steps);
+            }
         }
 
         state.handle_return(geth_step)?;
@@ -435,7 +453,6 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
 
             // 3. Call to account with empty code.
             if is_empty_code_hash {
-                warn!("Call to account with empty code is left unimplemented");
                 return Ok(exec_step);
             }
 
@@ -571,7 +588,7 @@ pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
     )?;
 
     if !state.tx_ctx.is_last_tx() {
-        state.call_context_read(
+        state.call_context_write(
             &mut exec_step,
             state.block_ctx.rwc.0 + 1,
             CallContextField::TxId,

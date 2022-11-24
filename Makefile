@@ -28,6 +28,9 @@ test_benches: ## Compiles the benchmarks
 
 test-all: fmt doc clippy test_doc test_benches test ## Run all the CI checks locally (in your actual toolchain)
 
+super_bench: ## Run Super Circuit benchmarks
+	@cargo test --profile bench bench_super_circuit_prover -p circuit-benchmarks --features benches  -- --nocapture
+
 evm_bench: ## Run Evm Circuit benchmarks
 	@cargo test --profile bench bench_evm_circuit_prover -p circuit-benchmarks --features benches  -- --nocapture
 
@@ -45,6 +48,9 @@ packed_multi_keccak_bench: ## Run Packed Multi Keccak Circuit benchmarks
 
 bytecode_bench: ## Run Bytecode Circuit benchmarks
 	@cargo test --profile bench bench_bytecode_circuit_prover -p circuit-benchmarks --features benches  -- --nocapture
+
+pi_bench: ## Run Public Input Circuit benchmarks
+	@cargo test --profile bench bench_pi_circuit_prover -p circuit-benchmarks --features benches  -- --nocapture
 
 circuit_benches: evm_bench state_bench ## Run All Circuit benchmarks
 

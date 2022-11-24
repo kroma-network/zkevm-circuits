@@ -24,7 +24,7 @@ use ethers_core::utils::keccak256;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
-pub(crate) struct ReturnGadget<F> {
+pub(crate) struct ReturnRevertGadget<F> {
     opcode: Cell<F>,
 
     range: MemoryAddressGadget<F>,
@@ -44,10 +44,10 @@ pub(crate) struct ReturnGadget<F> {
 }
 
 // TODO: rename this is reflect the fact that is handles REVERT as well.
-impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
-    const NAME: &'static str = "RETURN";
+impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
+    const NAME: &'static str = "RETURN_REVERT";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::RETURN;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::RETURN_REVERT;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let opcode = cb.query_cell();
@@ -79,11 +79,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
         let copy_rw_increase = cb.query_cell();
         let copy_rw_increase_is_zero = IsZeroGadget::construct(cb, copy_rw_increase.expr());
 
-        let memory_expansion = MemoryExpansionGadget::construct(
-            cb,
-            cb.curr.state.memory_word_size.expr(),
-            [range.address()],
-        );
+        let memory_expansion = MemoryExpansionGadget::construct(cb, [range.address()]);
 
         // Case A in the specs.
         cb.condition(is_create.clone() * is_success.expr(), |cb| {
@@ -146,7 +142,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
             RestoreContextGadget::construct(
                 cb,
                 is_success.expr(),
-                not::expr(is_create.clone()) * (2.expr() + copy_rw_increase.expr()),
+                not::expr(is_create.clone()) * (5.expr() + copy_rw_increase.expr()),
                 range.offset(),
                 range.length(),
                 memory_expansion.gas_cost(),
