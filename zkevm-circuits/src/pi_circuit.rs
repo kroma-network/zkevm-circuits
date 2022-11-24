@@ -255,6 +255,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
 
             vec![q_field_end * (rpi - rpi_field_bytes_acc)]
         });
+        meta.create_gate("rpi_next = rpi", |meta| {
+            let q_field_step = meta.query_selector(q_field_step);
+            let rpi_next = meta.query_advice(rpi, Rotation::next());
+            let rpi = meta.query_advice(rpi, Rotation::cur());
+
+            vec![q_field_step * (rpi_next - rpi)]
+        });
         meta.create_gate("rpi_field_bytes_acc = rpi_field_bytes", |meta| {
             let q_field_start = meta.query_selector(q_field_start);
             let rpi_field_bytes_acc = meta.query_advice(rpi_bytes_acc, Rotation::cur());
@@ -346,121 +353,149 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         tx_hashes: Vec<H256>,
     ) -> Result<(AssignedCell<F, F>, AssignedCell<F, F>), Error> {
         let mut offset = 0;
+        let mut block_copy_cells = vec![];
+        let mut tx_copy_cells = vec![];
         let mut rpi_rlc_acc = F::zero();
         let dummy_tx_hash = get_dummy_tx_hash(block_values.chain_id);
 
         self.q_start.enable(region, offset)?;
         // Assign fields in block table
         // coinbase
-        self.assign_field_in_pi(
+        let mut cells = self.assign_field_in_pi(
             region,
             &mut offset,
             block_values.coinbase.to_scalar().unwrap(),
             &block_values.coinbase.to_fixed_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
         // gas_limit
-        self.assign_field_in_pi(
+        cells = self.assign_field_in_pi(
             region,
             &mut offset,
             F::from(block_values.gas_limit),
             &block_values.gas_limit.to_be_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
+
         // number
-        self.assign_field_in_pi(
+        cells = self.assign_field_in_pi(
             region,
             &mut offset,
             F::from(block_values.number),
             &block_values.number.to_be_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
         // timestamp
-        self.assign_field_in_pi(
+        cells = self.assign_field_in_pi(
             region,
             &mut offset,
             F::from(block_values.timestamp),
             &block_values.timestamp.to_be_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
         // difficulty
-        self.assign_field_in_pi(
+        cells = self.assign_field_in_pi(
             region,
             &mut offset,
             rlc(block_values.difficulty.to_le_bytes(), rand_rpi),
             &block_values.difficulty.to_be_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
         // base_fee
-        self.assign_field_in_pi(
+        cells = self.assign_field_in_pi(
             region,
             &mut offset,
             rlc(block_values.base_fee.to_le_bytes(), rand_rpi),
             &block_values.base_fee.to_be_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
         // chain_id
-        self.assign_field_in_pi(
+        cells = self.assign_field_in_pi(
             region,
             &mut offset,
             F::from(block_values.chain_id),
             &block_values.chain_id.to_be_bytes(),
             rand_rpi,
             &mut rpi_rlc_acc,
-            false,
         )?;
+        block_copy_cells.push(cells[2].clone());
         debug_assert_eq!(offset, 116);
 
         // assign history block hashes
-        for prev_hash in block_values.history_hashes {
+        for prev_hash in block_values.history_hashes.iter() {
             let mut prev_hash_le_bytes = prev_hash.to_fixed_bytes();
             prev_hash_le_bytes.reverse();
-            self.assign_field_in_pi(
+            let cells = self.assign_field_in_pi(
                 region,
                 &mut offset,
                 rlc(prev_hash_le_bytes, rand_rpi),
                 &prev_hash.to_fixed_bytes(),
                 rand_rpi,
                 &mut rpi_rlc_acc,
-                false,
             )?;
+            block_copy_cells.push(cells[2].clone());
         }
 
         // assign tx hashes
         let num_txs = tx_hashes.len();
         let mut cells = None;
-        for (i, tx_hash) in tx_hashes
+        for tx_hash in tx_hashes
             .into_iter()
             .chain((0..MAX_TXS - num_txs).into_iter().map(|_| dummy_tx_hash))
-            .enumerate()
         {
             let mut tx_hash_le_bytes = tx_hash.to_fixed_bytes();
             tx_hash_le_bytes.reverse();
-            cells = Some(self.assign_field_in_pi(
+            let _cells = self.assign_field_in_pi(
                 region,
                 &mut offset,
                 rlc(tx_hash_le_bytes, rand_rpi),
                 &tx_hash.to_fixed_bytes(),
                 rand_rpi,
                 &mut rpi_rlc_acc,
-                i == MAX_TXS - 1,
-            )?);
+            )?;
+            tx_copy_cells.push(_cells[2].clone());
+            cells = Some(_cells);
         }
 
+        debug_assert_eq!(
+            offset,
+            20 + 96 + MAX_TXS * 32 + block_values.history_hashes.len() * 32
+        );
+        for i in 0..(offset - 1) {
+            self.q_not_end.enable(region, i)?;
+        }
+
+        for (i, block_cell) in block_copy_cells.into_iter().enumerate() {
+            block_cell.copy_advice(
+                || "copy to block table",
+                region,
+                self.block_table.value,
+                i + 1, // starts from 1
+            )?;
+        }
+        for (i, tx_hash_cell) in tx_copy_cells.into_iter().enumerate() {
+            tx_hash_cell.copy_advice(
+                || "copy to tx table",
+                region,
+                self.tx_table.value,
+                1 + i * 14,
+            )?;
+        }
         // assign rpi_acc, keccak_rpi
-        let (rand_cell, rpi_rlc_cell) = cells.unwrap();
+        let cells = cells.unwrap();
+        let (rand_cell, rpi_rlc_cell) = (cells[0].clone(), cells[1].clone());
         let keccak_input_cell = rpi_rlc_cell.copy_advice(
             || "keccak(rpi)_input",
             region,
@@ -477,7 +512,6 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         Ok((rand_cell, keccak_input_cell))
     }
 
-    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     fn assign_field_in_pi(
         &self,
         region: &mut Region<'_, F>,
@@ -486,8 +520,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         value_bytes: &[u8],
         rand: F,
         rpi_rlc_acc: &mut F,
-        is_last: bool,
-    ) -> Result<(AssignedCell<F, F>, AssignedCell<F, F>), Error> {
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         let len = value_bytes.len();
         let (use_rlc, t) = if value_bytes.len() * 8 > F::CAPACITY as usize {
             (F::one(), rand)
@@ -497,6 +530,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         let mut value_bytes_acc = F::zero();
         let mut rand_cell = None;
         let mut rpi_rlc_cell = None;
+        let mut rpi_cell = None;
         for (i, byte) in value_bytes.iter().enumerate() {
             let row_offset = *offset + i;
             value_bytes_acc = value_bytes_acc * t + F::from(*byte as u64);
@@ -508,9 +542,6 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                 self.q_field_end.enable(region, row_offset)?;
             } else {
                 self.q_field_step.enable(region, row_offset)?;
-            }
-            if !is_last || i < (len - 1) {
-                self.q_not_end.enable(region, row_offset)?;
             }
             region.assign_fixed(
                 || "is_field_rlc",
@@ -530,7 +561,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                 row_offset,
                 || Value::known(value_bytes_acc),
             )?;
-            region.assign_advice(
+            let _rpi_cell = region.assign_advice(
                 || "field value",
                 self.raw_public_inputs,
                 row_offset,
@@ -550,6 +581,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             )?;
             if i == len - 1 {
                 rpi_rlc_cell = Some(_rpi_rlc_cell);
+                rpi_cell = Some(_rpi_cell);
             }
             if i == 0 {
                 rand_cell = Some(_rand_cell);
@@ -557,7 +589,11 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         }
         *offset += len;
 
-        Ok((rand_cell.unwrap(), rpi_rlc_cell.unwrap()))
+        Ok(vec![
+            rand_cell.unwrap(),
+            rpi_rlc_cell.unwrap(),
+            rpi_cell.unwrap(),
+        ])
     }
 
     /// Assigns a tx_table row and stores the values in a vec for the
