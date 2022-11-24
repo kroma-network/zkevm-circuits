@@ -29,7 +29,7 @@ const RHO_PI_LOOKUP_RANGE: usize = 4;
 const CHI_BASE_LOOKUP_RANGE: usize = 5;
 
 fn get_num_rows_per_round() -> usize {
-    8
+    10
     /*
     var("ROWS")
         .unwrap_or_else(|_| "5".to_string())
@@ -85,7 +85,7 @@ pub(crate) struct KeccakRow<F: Field> {
     data_rlc: F,
     hash_rlc: F,
     bytes_left: F,   // from len to 1
-    hash_counter: F, // 0 when first row, then 1,2,3,..
+    hash_id: F, // 0 when first row, then 1,2,3,..
     value: F,        // byte
 }
 
@@ -1389,19 +1389,19 @@ impl<F: Field> KeccakPackedConfig<F> {
 
             cb.condition(q_r(q_first, meta), |cb| {
                 cb.require_zero(
-                    "hash_counter needs to be zero on the first row",
-                    meta.query_advice(keccak_table.hash_counter, Rotation::cur()),
+                    "hash_id needs to be zero on the first row",
+                    meta.query_advice(keccak_table.hash_id, Rotation::cur()),
                 );
             });
             cb.condition(
                 (q(q_enable, meta) - q(q_first, meta))
                     * meta.query_advice(is_final, Rotation(-(get_num_rows_per_round() as i32))),
                 |cb| {
-                    let counter = meta.query_advice(keccak_table.hash_counter, Rotation::cur());
+                    let counter = meta.query_advice(keccak_table.hash_id, Rotation::cur());
                     let counter_prev =
-                        meta.query_advice(keccak_table.hash_counter, Rotation::prev());
+                        meta.query_advice(keccak_table.hash_id, Rotation::prev());
                     cb.require_equal(
-                        "hash_counter increases by 1 after each hash input",
+                        "hash_id increases by 1 after each hash input",
                         counter_prev + 1.expr(),
                         counter,
                     );
@@ -1412,11 +1412,11 @@ impl<F: Field> KeccakPackedConfig<F> {
                     - q_r(q_first, meta)
                     - q(q_enable, meta) * q_prev_r(q_absorb, meta),
                 |cb| {
-                    let counter = meta.query_advice(keccak_table.hash_counter, Rotation::cur());
+                    let counter = meta.query_advice(keccak_table.hash_id, Rotation::cur());
                     let counter_prev =
-                        meta.query_advice(keccak_table.hash_counter, Rotation::prev());
+                        meta.query_advice(keccak_table.hash_id, Rotation::prev());
                     cb.require_equal(
-                        "hash_counter keeps same when no new hash input",
+                        "hash_id keeps same when no new hash input",
                         counter_prev,
                         counter,
                     );
@@ -1470,7 +1470,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                     //cb.require_equal("bytes_left decreases by 1 for each
                     // row", bytes_left_next + 1.expr(), bytes_left);
                     //    let counter_prev =
-                    // meta.query_advice(keccak_table.hash_counter,
+                    // meta.query_advice(keccak_table.hash_id,
                     // Rotation::prev());
                 },
             );
@@ -1824,7 +1824,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 //row.data_rlc,
                 //F::from(row.length as u64),
                 row.hash_rlc,
-                row.hash_counter,
+                row.hash_id,
                 //F::from(row.value),
                 //F::from(row.bytes_left),
             ],
@@ -2247,7 +2247,7 @@ fn keccak<F: Field>(counter: usize, rows: &mut Vec<KeccakRow<F>>, bytes: &[u8], 
                     value: F::from_u128(byte as u128),
                     // from len to 1
                     bytes_left: F::from_u128(bytes_left as u128), // + 1?
-                    hash_counter: F::from_u128(counter as u128),
+                    hash_id: F::from_u128(counter as u128),
                 });
                 {
                     let mut r = rows.last().unwrap().clone();
@@ -2295,7 +2295,7 @@ fn multi_keccak<F: Field>(bytes: &[Vec<u8>], r: F) -> Vec<KeccakRow<F>> {
             data_rlc: F::zero(),
             hash_rlc: F::zero(),
             cell_values: Vec::new(),
-            hash_counter: F::zero(),
+            hash_id: F::zero(),
             value: F::zero(),
             bytes_left: F::zero(),
         });

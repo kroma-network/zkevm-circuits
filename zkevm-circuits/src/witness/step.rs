@@ -41,7 +41,7 @@ pub struct ExecStep {
     /// The opcode corresponds to the step
     pub opcode: Option<OpcodeId>,
     /// ..
-    pub hash_counter: usize,
+    pub hash_id: usize,
 }
 
 impl ExecStep {
@@ -239,6 +239,6 @@ pub(super) fn step_convert(step: &circuit_input_builder::ExecStep) -> ExecStep {
         memory_size: step.memory_size as u64,
         reversible_write_counter: step.reversible_write_counter,
         log_id: step.log_id,
-        hash_counter: step.hash_counter,
+        hash_id: step.hash_id,
     }
 }

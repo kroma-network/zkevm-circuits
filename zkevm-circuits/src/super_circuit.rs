@@ -222,7 +222,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_RWS: u
             vec![
                 (
                     enabled.clone() * meta.query_advice(copy_table.id, Rotation::cur()),
-                    meta.query_advice(keccak_table.hash_counter, Rotation::cur()),
+                    meta.query_advice(keccak_table.hash_id, Rotation::cur()),
                 ),
                 (
                     enabled.clone() * meta.query_advice(copy_table.bytes_left, Rotation::cur()),

@@ -726,7 +726,7 @@ pub struct KeccakTable {
     /// RLC of the hash result
     pub output_rlc: Column<Advice>, // RLC of hash of input bytes
     /// ..
-    pub hash_counter: Column<Advice>,
+    pub hash_id: Column<Advice>,
     /// ..
     pub byte_value: Column<Advice>,
     /// ..
@@ -741,7 +741,7 @@ impl KeccakTable {
             input_rlc: meta.advice_column_in(SecondPhase),
             input_len: meta.advice_column(),
             output_rlc: meta.advice_column_in(SecondPhase),
-            hash_counter: meta.advice_column(),
+            hash_id: meta.advice_column(),
             byte_value: meta.advice_column(),
             bytes_left: meta.advice_column(),
         }
@@ -862,7 +862,7 @@ impl DynamicTableColumns for KeccakTable {
             //self.input_rlc,
             //self.input_len,
             self.output_rlc,
-            self.hash_counter,
+            self.hash_id,
             //self.byte_value,
             //self.bytes_left,
         ]

@@ -69,13 +69,13 @@ impl Opcode for Sha3 {
             src_id: NumberOrHash::Number(call_id),
             dst_addr: 0,
             dst_type: CopyDataType::SHA3,
-            dst_id: NumberOrHash::Number(state.block_ctx.hash_counter + 1),
+            dst_id: NumberOrHash::Number(state.block_ctx.hash_id + 1),
             log_id: None,
             rw_counter_start,
             bytes: steps,
         });
 
-        state.block_ctx.hash_counter += 1;
+        state.block_ctx.hash_id += 1;
         Ok(vec![exec_step])
     }
 }

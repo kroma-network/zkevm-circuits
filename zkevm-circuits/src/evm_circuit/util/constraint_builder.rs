@@ -55,7 +55,7 @@ pub(crate) struct StepStateTransition<F: Field> {
     pub(crate) memory_word_size: Transition<Expression<F>>,
     pub(crate) reversible_write_counter: Transition<Expression<F>>,
     pub(crate) log_id: Transition<Expression<F>>,
-    pub(crate) hash_counter: Transition<Expression<F>>,
+    pub(crate) hash_id: Transition<Expression<F>>,
 }
 
 impl<F: Field> StepStateTransition<F> {
@@ -81,7 +81,7 @@ impl<F: Field> StepStateTransition<F> {
             memory_word_size: Transition::Any,
             reversible_write_counter: Transition::Any,
             log_id: Transition::Any,
-            hash_counter: Transition::Any,
+            hash_id: Transition::Any,
         }
     }
 }
@@ -493,7 +493,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         constrain!(memory_word_size);
         constrain!(reversible_write_counter);
         constrain!(log_id);
-        constrain!(hash_counter);
+        constrain!(hash_id);
     }
 
     // Fixed
@@ -1217,13 +1217,13 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
 
     pub(crate) fn keccak_table_lookup(
         &mut self,
-        hash_counter: Expression<F>,
+        hash_id: Expression<F>,
         output_rlc: Expression<F>,
     ) {
         self.add_lookup(
             "keccak lookup",
             Lookup::KeccakTable {
-                hash_counter,
+                hash_id,
                 output_rlc,
             },
         );

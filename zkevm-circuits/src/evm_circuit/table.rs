@@ -260,7 +260,7 @@ pub(crate) enum Lookup<F> {
     /// Lookup to keccak table.
     KeccakTable {
         /// Accumulator to the input.
-        hash_counter: Expression<F>,
+        hash_id: Expression<F>,
         /// Length of input that is being hashed.
         //input_len: Expression<F>,
         /// Output (hash) until this state. This is the RLC representation of
@@ -381,14 +381,14 @@ impl<F: Field> Lookup<F> {
                 rwc_inc.clone(),
             ],
             Self::KeccakTable {
-                hash_counter,
+                hash_id,
                 output_rlc,
             } => vec![
                 1.expr(), // is_enabled
                 //input_rlc.clone(),
                 //input_len.clone(),
                 output_rlc.clone(),
-                hash_counter.clone(),
+                hash_id.clone(),
                 //0.expr(), // byte_value
                 //0.expr(), // bytes_left
             ],
