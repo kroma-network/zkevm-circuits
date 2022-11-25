@@ -1006,7 +1006,7 @@ dependencies = [
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=scroll-dev-0902#46658f34ec33dbdc913667d5c1a8af617d543257"
+source = "git+https://github.com/light-scale/halo2wrong?branch=ls-dev-0902#ae417956077010edf42ac169f131d6dbb97ca4dd"
 dependencies = [
  "group",
  "integer",
@@ -1020,7 +1020,7 @@ dependencies = [
 [[package]]
 name = "ecdsa"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=scroll-dev-0902#46658f34ec33dbdc913667d5c1a8af617d543257"
+source = "git+https://github.com/light-scale/halo2wrong?branch=ls-dev-0902#ae417956077010edf42ac169f131d6dbb97ca4dd"
 dependencies = [
  "ecc",
  "group",
@@ -1800,13 +1800,14 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/scroll-tech/halo2.git?branch=scroll-dev-0902#8c6b1666140c92e09849fd332fc201b34e8422a5"
+source = "git+https://github.com/light-scale/halo2.git?branch=ls-dev-0902#6f18f38e82d302cd8b6ce8809b59c32350b019a3"
 dependencies = [
  "blake2b_simd",
  "cfg-if 0.1.10",
  "ff",
  "group",
  "halo2curves 0.2.1",
+ "log",
  "num-bigint",
  "num-integer",
  "plotters",
@@ -1855,7 +1856,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=scroll-dev-0902#46658f34ec33dbdc913667d5c1a8af617d543257"
+source = "git+https://github.com/light-scale/halo2wrong?branch=ls-dev-0902#ae417956077010edf42ac169f131d6dbb97ca4dd"
 dependencies = [
  "group",
  "halo2_proofs",
@@ -2124,7 +2125,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=scroll-dev-0902#46658f34ec33dbdc913667d5c1a8af617d543257"
+source = "git+https://github.com/light-scale/halo2wrong?branch=ls-dev-0902#ae417956077010edf42ac169f131d6dbb97ca4dd"
 dependencies = [
  "group",
  "maingate",
@@ -2358,7 +2359,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=scroll-dev-0902#46658f34ec33dbdc913667d5c1a8af617d543257"
+source = "git+https://github.com/light-scale/halo2wrong?branch=ls-dev-0902#ae417956077010edf42ac169f131d6dbb97ca4dd"
 dependencies = [
  "group",
  "halo2wrong",
