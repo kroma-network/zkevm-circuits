@@ -73,7 +73,8 @@ use halo2_proofs::{circuit::SimpleFloorPlanner, plonk::Circuit};
 #[cfg(feature = "kroma")]
 // This contains followings:
 // - transaction type
-const ADDITIONAL_KROMA_TX_LEN: usize = 1;
+// - mint
+const ADDITIONAL_KROMA_TX_LEN: usize = 2;
 #[cfg(not(feature = "kroma"))]
 const ADDITIONAL_KROMA_TX_LEN: usize = 0;
 
@@ -1470,7 +1471,6 @@ impl<F: Field> TxCircuit<F> {
                             Value::known(F::from(tx.transaction_type)),
                         ),
                         (Nonce, RlpTxTag::Nonce, Value::known(F::from(tx.nonce))),
-                        (Gas, RlpTxTag::Gas, Value::known(F::from(tx.gas))),
                         (
                             GasPrice,
                             RlpTxTag::GasPrice,
@@ -1478,6 +1478,7 @@ impl<F: Field> TxCircuit<F> {
                                 .evm_word()
                                 .map(|challenge| rlc(tx.gas_price.to_le_bytes(), challenge)),
                         ),
+                        (Gas, RlpTxTag::Gas, Value::known(F::from(tx.gas))),
                         (
                             CallerAddress,
                             RlpTxTag::Padding, // no corresponding rlp tag
@@ -1580,9 +1581,32 @@ impl<F: Field> TxCircuit<F> {
                             RlpTxTag::Padding, // no corresponding rlp tag
                             Value::known(F::from(tx.block_number)),
                         ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            TxFieldTag::Mint,
+                            RlpTxTag::Rlp,
+                            // rlc(tx.mint.to_le_bytes(), self.randomness),
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
+                        ),
                     ] {
                         let tx_id_next = match tag {
+                            #[cfg(not(feature = "kroma"))]
                             TxFieldTag::BlockNumber => {
+                                if i == sigs.len() - 1 {
+                                    self.txs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_i, tx)| !tx.call_data.is_empty())
+                                        .map(|(i, _tx)| i + 1)
+                                        .unwrap_or_else(|| 0)
+                                } else {
+                                    i + 2
+                                }
+                            }
+                            #[cfg(feature = "kroma")]
+                            TxFieldTag::Mint => {
                                 if i == sigs.len() - 1 {
                                     self.txs
                                         .iter()

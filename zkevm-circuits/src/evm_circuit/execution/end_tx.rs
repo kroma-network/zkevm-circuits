@@ -82,6 +82,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             tx_caller_address.expr(),
             vec![mul_gas_price_by_refund.product().clone()],
             None,
+            None,
         );
 
         // Add gas_used * effective_tip to coinbase's balance
@@ -104,8 +105,13 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
 
         let effective_fee = cb.query_word_rlc();
 
-        let coinbase_reward =
-            UpdateBalanceGadget::construct(cb, coinbase.expr(), vec![effective_fee.clone()], None);
+        let coinbase_reward = UpdateBalanceGadget::construct(
+            cb,
+            coinbase.expr(),
+            vec![effective_fee.clone()],
+            None,
+            None,
+        );
 
         // constrain tx receipt fields
         cb.tx_receipt_lookup(

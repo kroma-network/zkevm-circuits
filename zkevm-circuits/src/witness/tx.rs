@@ -78,6 +78,11 @@ pub struct Transaction {
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
     pub steps: Vec<ExecStep>,
+
+    /// Kroma deposit tx
+    #[cfg(feature = "kroma")]
+    /// The mint
+    pub mint: Word,
 }
 
 impl Transaction {
@@ -184,17 +189,17 @@ impl Transaction {
             ],
             [
                 Value::known(F::from(self.id as u64)),
-                Value::known(F::from(TxContextFieldTag::Gas as u64)),
-                Value::known(F::zero()),
-                Value::known(F::from(self.gas)),
-            ],
-            [
-                Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::GasPrice as u64)),
                 Value::known(F::zero()),
                 challenges
                     .evm_word()
                     .map(|challenge| rlc::value(&self.gas_price.to_le_bytes(), challenge)),
+            ],
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Gas as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.gas)),
             ],
             [
                 Value::known(F::from(self.id as u64)),
@@ -298,6 +303,15 @@ impl Transaction {
                 Value::known(F::from(TxContextFieldTag::BlockNumber as u64)),
                 Value::known(F::zero()),
                 Value::known(F::from(self.block_number)),
+            ],
+            #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Mint as u64)),
+                Value::known(F::zero()),
+                challenges
+                    .evm_word()
+                    .map(|challenge| rlc::value(&self.mint.to_le_bytes(), challenge)),
             ],
         ];
 
@@ -424,6 +438,8 @@ impl From<MockTransaction> for Transaction {
             calls: vec![],
             steps: vec![],
             transaction_type: mock_tx.transaction_type.as_u64(),
+            #[cfg(feature = "kroma")]
+            mint: mock_tx.mint,
         }
     }
 }
@@ -482,6 +498,8 @@ pub(super) fn tx_convert(
         value: tx.value,
         call_data: tx.input.clone(),
         call_data_length: tx.input.len(),
+        #[cfg(feature = "kroma")]
+        mint: tx.mint,
         call_data_gas_cost: tx
             .input
             .iter()

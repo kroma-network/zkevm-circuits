@@ -149,6 +149,9 @@ pub enum TxFieldTag {
     CallData,
     /// The block number in which this tx is included.
     BlockNumber,
+    #[cfg(feature = "kroma")]
+    /// Mint
+    Mint,
 }
 impl_expr!(TxFieldTag);
 

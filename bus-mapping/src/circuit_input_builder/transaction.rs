@@ -211,6 +211,11 @@ pub struct Transaction {
     pub(crate) calls: Vec<Call>,
     /// Execution steps
     steps: Vec<ExecStep>,
+
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
+    /// Mint
+    pub mint: Word,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
@@ -232,6 +237,8 @@ impl From<&Transaction> for geth_types::Transaction {
             r: tx.signature.r,
             s: tx.signature.s,
             hash: tx.hash,
+            #[cfg(feature = "kroma")]
+            mint: tx.mint,
             ..Default::default()
         }
     }
@@ -259,6 +266,8 @@ impl Transaction {
             steps: Vec::new(),
             block_num: Default::default(),
             hash: Default::default(),
+            #[cfg(feature = "kroma")]
+            mint: Word::zero(),
         }
     }
 
@@ -348,6 +357,8 @@ impl Transaction {
                 r: eth_tx.r,
                 s: eth_tx.s,
             },
+            #[cfg(feature = "kroma")]
+            mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
         })
     }
 

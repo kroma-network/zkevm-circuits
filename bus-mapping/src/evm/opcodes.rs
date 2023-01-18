@@ -459,8 +459,13 @@ pub fn gen_begin_tx_ops(
         state.call_context_write(&mut exec_step, call.call_id, field, value);
     }
 
-    // Increase caller's nonce
+    // Add mint to caller's balance
     let caller_address = call.caller_address;
+    #[cfg(feature = "kanvas")]
+    if state.tx.is_deposit() {
+        state.mint(&mut exec_step, caller_address, state.tx.mint)?;
+    }
+
     let mut nonce_prev = state.sdb.get_account(&caller_address).1.nonce;
     debug_assert!(nonce_prev <= state.tx.nonce.into());
     while nonce_prev < state.tx.nonce.into() {
