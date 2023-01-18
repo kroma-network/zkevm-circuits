@@ -273,7 +273,11 @@ impl<F: Field, const N_ADDENDS: usize, const INCREASE: bool>
         address: Expression<F>,
         updates: Vec<Word<F>>,
         reversion_info: Option<&mut ReversionInfo<F>>,
+        condition: Option<Expression<F>>,
     ) -> Self {
+        // NOTE(chokobole): if |reversion_info.is_some()| and |condition.is_some()|,
+        // this causes a 'Nested condition is not supported' assertion.
+        debug_assert!(reversion_info.is_none() || condition.is_none());
         debug_assert!(updates.len() == N_ADDENDS - 1);
 
         let balance_addend = cb.query_word_rlc();
@@ -295,13 +299,25 @@ impl<F: Field, const N_ADDENDS: usize, const INCREASE: bool>
             balance_sum,
         );
 
-        cb.account_write(
-            address,
-            AccountFieldTag::Balance,
-            value,
-            value_prev,
-            reversion_info,
-        );
+        if let Some(condition) = condition {
+            cb.condition(condition, |cb| {
+                cb.account_write(
+                    address,
+                    AccountFieldTag::Balance,
+                    value,
+                    value_prev,
+                    reversion_info,
+                );
+            });
+        } else {
+            cb.account_write(
+                address,
+                AccountFieldTag::Balance,
+                value,
+                value_prev,
+                reversion_info,
+            );
+        }
 
         Self { add_words }
     }
@@ -364,9 +380,15 @@ impl<F: Field> TransferWithGasFeeGadget<F> {
             sender_address,
             vec![value.clone(), gas_fee],
             Some(reversion_info),
+            None,
         );
-        let receiver =
-            UpdateBalanceGadget::construct(cb, receiver_address, vec![value], Some(reversion_info));
+        let receiver = UpdateBalanceGadget::construct(
+            cb,
+            receiver_address,
+            vec![value],
+            Some(reversion_info),
+            None,
+        );
 
         Self { sender, receiver }
     }
@@ -417,9 +439,15 @@ impl<F: Field> TransferGadget<F> {
             sender_address,
             vec![value.clone()],
             Some(reversion_info),
+            None,
         );
-        let receiver =
-            UpdateBalanceGadget::construct(cb, receiver_address, vec![value], Some(reversion_info));
+        let receiver = UpdateBalanceGadget::construct(
+            cb,
+            receiver_address,
+            vec![value],
+            Some(reversion_info),
+            None,
+        );
 
         Self { sender, receiver }
     }

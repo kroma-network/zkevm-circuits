@@ -41,8 +41,8 @@ use std::marker::PhantomData;
 
 use crate::table::TxFieldTag::{
     CallData, CallDataGasCost, CallDataLength, CalleeAddress, CallerAddress, Gas, GasPrice,
-    IsCreate, Nonce, SigR, SigS, SigV, TransactionType, TxHashLength, TxHashRLC, TxSignHash,
-    TxSignLength, TxSignRLC,
+    IsCreate, Nonce, SigR, SigS, SigV, TxHashLength, TxHashRLC, TxSignHash, TxSignLength,
+    TxSignRLC, Type,
 };
 use gadgets::is_zero::{IsZeroChip, IsZeroConfig, IsZeroInstruction};
 pub use halo2_proofs::halo2curves::{
@@ -63,7 +63,8 @@ use halo2_proofs::plonk::SecondPhase;
 #[cfg(feature = "kanvas")]
 // This contains followings:
 // - transaction type
-const ADDITIONAL_KANVAS_TX_LEN: usize = 1;
+// - mint
+const ADDITIONAL_KANVAS_TX_LEN: usize = 2;
 #[cfg(not(feature = "kanvas"))]
 const ADDITIONAL_KANVAS_TX_LEN: usize = 0;
 
@@ -1346,7 +1347,7 @@ impl<F: Field> TxCircuit<F> {
                     for (tag, rlp_tag, value) in [
                         // need to be in same order as that tx table load function uses
                         (
-                            TransactionType,
+                            Type,
                             RlpTxTag::TransactionType,
                             Value::known(F::from(tx.transaction_type)),
                         ),
@@ -1455,6 +1456,15 @@ impl<F: Field> TxCircuit<F> {
                             TxFieldTag::BlockNumber,
                             RlpTxTag::Padding,       // FIXME
                             Value::known(F::zero()), // FIXME
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            TxFieldTag::Mint,
+                            RlpTxTag::Rlp,
+                            //rlc(tx.mint.to_le_bytes(), self.randomness),
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
                         ),
                     ] {
                         let tx_id_next = match tag {

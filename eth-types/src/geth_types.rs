@@ -148,6 +148,10 @@ pub struct Transaction {
 
     /// Transaction hash
     pub hash: H256,
+    /// Kanvas Deposit tx
+    #[cfg(feature = "kanvas")]
+    /// Mint
+    pub mint: Word,
 }
 
 impl From<&Transaction> for crate::Transaction {
@@ -191,6 +195,8 @@ impl From<&crate::Transaction> for Transaction {
             r: tx.r,
             s: tx.s,
             hash: tx.hash,
+            #[cfg(feature = "kanvas")]
+            mint: Transaction::get_mint(tx).unwrap_or_default(),
         }
     }
 }
@@ -211,6 +217,15 @@ impl From<&Transaction> for TransactionRequest {
 }
 
 impl Transaction {
+    /// Retrieve mint from `tx.other`.
+    pub fn get_mint(_tx: &crate::Transaction) -> Option<Word> {
+        #[cfg(feature = "kanvas")]
+        if let Some(v) = _tx.other.get("mint") {
+            return Some(Word::from_dec_str(v.as_str().unwrap()).unwrap());
+        }
+        None
+    }
+
     /// Whether this Transaction is a deposit transaction.
     pub fn is_deposit(&self) -> bool {
         #[cfg(feature = "kanvas")]

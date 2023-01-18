@@ -19,7 +19,9 @@ use halo2_proofs::plonk::SecondPhase;
 use crate::evm_circuit::util::constraint_builder::BaseConstraintBuilder;
 use crate::state_circuit::StateCircuitExports;
 #[cfg(feature = "non-legacy-tx")]
-use crate::tx_circuit::{TX_HASH_OFFSET, TX_LEN};
+use crate::tx_circuit::TX_HASH_OFFSET;
+#[cfg(any(feature = "non-legacy-tx", feature = "kanvas"))]
+use crate::tx_circuit::TX_LEN;
 use crate::util::{Challenges, SubCircuit, SubCircuitConfig};
 use crate::witness::{self, Block, BlockContext, BlockContexts, Transaction};
 use gadgets::util::{not, select, Expr};

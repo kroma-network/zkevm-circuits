@@ -118,8 +118,9 @@ pub enum TxFieldTag {
     CallData,
     /// The block number in which this tx is included.
     BlockNumber,
-    /// The type of transaction (if it's a deposit tx, value is 126)
-    TransactionType,
+    #[cfg(feature = "kanvas")]
+    /// Mint
+    Mint,
 }
 impl_expr!(TxFieldTag);
 

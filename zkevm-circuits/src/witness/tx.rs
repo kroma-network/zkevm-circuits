@@ -72,6 +72,10 @@ pub struct Transaction {
 
     /// The type of the transaction
     pub transaction_type: u64,
+    /// Kanvas deposit tx
+    #[cfg(feature = "kanvas")]
+    /// The mint
+    pub mint: Word,
 }
 
 impl Transaction {
@@ -176,12 +180,6 @@ impl Transaction {
             ],
             [
                 Value::known(F::from(self.id as u64)),
-                Value::known(F::from(TxContextFieldTag::Gas as u64)),
-                Value::known(F::zero()),
-                Value::known(F::from(self.gas)),
-            ],
-            [
-                Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::GasPrice as u64)),
                 Value::known(F::zero()),
                 challenges.evm_word().map(|evm_word| {
@@ -190,6 +188,12 @@ impl Transaction {
                         evm_word,
                     )
                 }),
+            ],
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Gas as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.gas)),
             ],
             [
                 Value::known(F::from(self.id as u64)),
@@ -291,6 +295,18 @@ impl Transaction {
                 Value::known(F::from(TxContextFieldTag::BlockNumber as u64)),
                 Value::known(F::zero()),
                 Value::known(F::from(self.block_number)),
+            ],
+            #[cfg(feature = "kanvas")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Mint as u64)),
+                Value::known(F::zero()),
+                challenges.evm_word().map(|evm_word| {
+                    RandomLinearCombination::random_linear_combine(
+                        self.mint.to_le_bytes(),
+                        evm_word,
+                    )
+                }),
             ],
         ];
 
@@ -419,6 +435,8 @@ impl From<MockTransaction> for Transaction {
             calls: vec![],
             steps: vec![],
             transaction_type: mock_tx.transaction_type.as_u64(),
+            #[cfg(feature = "kanvas")]
+            mint: mock_tx.mint,
         }
     }
 }
@@ -473,6 +491,8 @@ pub(super) fn tx_convert(
         value: tx.value,
         call_data: tx.input.clone(),
         call_data_length: tx.input.len(),
+        #[cfg(feature = "kanvas")]
+        mint: tx.mint,
         call_data_gas_cost: tx
             .input
             .iter()

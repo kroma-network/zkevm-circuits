@@ -81,6 +81,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             tx_caller_address.expr(),
             vec![mul_gas_price_by_refund.product().clone()],
             None,
+            None,
         );
 
         // Add gas_used * effective_tip to coinbase's balance
@@ -101,6 +102,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             cb,
             coinbase.expr(),
             vec![mul_effective_tip_by_gas_used.product().clone()],
+            None,
             None,
         );
 

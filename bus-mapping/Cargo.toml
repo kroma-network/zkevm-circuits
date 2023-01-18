@@ -47,5 +47,5 @@ rand = "0.8"
 
 [features]
 default = []
-kanvas = ["eth-types/kanvas"]
+kanvas = ["eth-types/kanvas", "mock/kanvas"]
 test = ["mock", "rand"]
