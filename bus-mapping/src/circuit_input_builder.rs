@@ -25,6 +25,8 @@ pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
 use eth_types::evm_types::GasCost;
 use eth_types::geth_types;
+#[cfg(feature = "kanvas")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
 use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
 use ethers_providers::JsonRpcClient;
@@ -182,6 +184,12 @@ impl<'a> CircuitInputBuilder {
                 let (_, to_acc) = self.sdb.get_account_mut(&tx.to.unwrap());
                 to_acc.balance += tx.value;
                 let (_, from_acc) = self.sdb.get_account_mut(&tx.from);
+                if let Some(mint) = eth_types::geth_types::Transaction::get_mint(tx) {
+                    #[cfg(feature = "kanvas")]
+                    debug_assert_eq!(tx.transaction_type.unwrap().as_u64(), DEPOSIT_TX_TYPE);
+                    from_acc.balance += mint;
+                    log::trace!("mint to {} value {}", tx.from, mint);
+                }
                 from_acc.balance -= tx.value;
                 let gas_cost = U256::from(geth_trace.gas.0) * tx.gas_price.unwrap();
                 debug_assert!(

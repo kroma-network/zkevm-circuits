@@ -229,6 +229,11 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                             ),
                         ),
                         (TxFieldTag::TxSignHash, msg_hash_rlc_value),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            TxFieldTag::Mint,
+                            rlc(tx.mint.to_le_bytes(), self.randomness),
+                        ),
                     ] {
                         let assigned_cell =
                             config.assign_row(&mut region, offset, i + 1, *tag, 0, *value)?;

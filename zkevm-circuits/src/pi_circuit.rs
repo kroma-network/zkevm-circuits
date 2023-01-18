@@ -26,7 +26,8 @@ use halo2_proofs::{
 #[cfg(feature = "kanvas")]
 // This contains followings:
 // - transaction type
-const ADDITIONAL_KANVAS_TX_LEN: usize = 1;
+// - mint
+const ADDITIONAL_KANVAS_TX_LEN: usize = 2;
 #[cfg(not(feature = "kanvas"))]
 const ADDITIONAL_KANVAS_TX_LEN: usize = 0;
 
@@ -61,6 +62,8 @@ pub struct TxValues {
     value: Word,
     call_data_len: u64,
     tx_sign_hash: [u8; 32],
+    #[cfg(feature = "kanvas")]
+    mint: Word,
 }
 
 /// Extra values (not contained in block or tx tables)
@@ -150,6 +153,8 @@ impl PublicData {
                 value: tx.value,
                 call_data_len: tx.call_data.0.len() as u64,
                 tx_sign_hash: msg_hash_le,
+                #[cfg(feature = "kanvas")]
+                mint: tx.mint,
             });
         }
         tx_vals
@@ -786,6 +791,11 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                             TxFieldTag::TxSignHash,
                             rlc(tx.tx_sign_hash, self.randomness),
                         ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            TxFieldTag::Mint,
+                            rlc(tx.mint.to_le_bytes(), self.randomness),
+                        ),
                     ] {
                         config.assign_tx_row(
                             &mut region,
@@ -951,6 +961,8 @@ mod pi_circuit_test {
                 rlc(tx.value.to_le_bytes(), randomness),
                 F::from(tx.call_data_len),
                 rlc(tx.tx_sign_hash, randomness),
+                #[cfg(feature = "kanvas")]
+                rlc(tx.mint.to_le_bytes(), randomness),
             ] {
                 result[id_offset + offset] = F::from((i + 1) as u64);
                 result[index_offset + offset] = F::zero();

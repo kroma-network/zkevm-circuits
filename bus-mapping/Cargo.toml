@@ -34,5 +34,5 @@ env_logger = "0.9.0"
 
 [features]
 default = []
-kanvas = ["eth-types/kanvas"]
+kanvas = ["eth-types/kanvas", "mock/kanvas"]
 test = ["mock", "rand"]

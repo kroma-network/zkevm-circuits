@@ -8,6 +8,10 @@ use crate::geth_types::DEPOSIT_TX_TYPE;
 pub const STOP_TX_ID_RWC_OFFSET: usize = 1;
 
 #[cfg(feature = "kanvas")]
+/// Mint RWC offset in BeginTx.
+pub const BEGIN_TX_MINT_RWC_OFFSET: usize = 4;
+
+#[cfg(feature = "kanvas")]
 /// RWC offset to be subtracted in EndTx on handling Kanvas deposit tx.
 /// This contains followings:
 ///   - Read TxRefund
@@ -26,6 +30,20 @@ pub fn stop_rwc_offset(rwc: usize) -> usize {
         }
     }
     #[cfg(not(feature = "kanvas"))]
+    rwc
+}
+
+/// See comment in begin_tx.rs for what are contained in BeginTx.
+/// This adds 1 to offset if the rwc is done after mint.
+pub fn begin_tx_rwc_offset(_transaction_type: u64, rwc: usize) -> usize {
+    #[cfg(feature = "kanvas")]
+    if _transaction_type == DEPOSIT_TX_TYPE {
+        if rwc < BEGIN_TX_MINT_RWC_OFFSET {
+            return rwc;
+        } else {
+            return rwc + 1;
+        }
+    }
     rwc
 }
 

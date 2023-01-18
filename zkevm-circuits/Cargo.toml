@@ -47,5 +47,5 @@ rand_chacha = "0.3"
 
 [features]
 default = []
-kanvas = ["bus-mapping/kanvas", "eth-types/kanvas"]
+kanvas = ["bus-mapping/kanvas", "eth-types/kanvas", "mock/kanvas"]
 test = []

@@ -44,6 +44,11 @@ pub struct Transaction {
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
     pub steps: Vec<ExecStep>,
+
+    /// Kanvas deposit tx
+    #[cfg(feature = "kanvas")]
+    /// The mint
+    pub mint: Word,
 }
 
 impl Transaction {
@@ -146,6 +151,16 @@ impl Transaction {
                     F::zero(),
                     F::from(self.block_number),
                 ],
+                #[cfg(feature = "kanvas")]
+                [
+                    F::from(self.id as u64),
+                    F::from(TxContextFieldTag::Mint as u64),
+                    F::zero(),
+                    RandomLinearCombination::random_linear_combine(
+                        self.mint.to_le_bytes(),
+                        randomness,
+                    ),
+                ],
             ],
             self.call_data
                 .iter()
@@ -183,6 +198,8 @@ pub(super) fn tx_convert(
         value: tx.value,
         call_data: tx.input.clone(),
         call_data_length: tx.input.len(),
+        #[cfg(feature = "kanvas")]
+        mint: tx.mint,
         call_data_gas_cost: tx
             .input
             .iter()

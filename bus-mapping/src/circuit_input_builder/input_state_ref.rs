@@ -412,6 +412,26 @@ impl<'a> CircuitInputStateRef<'a> {
         Ok(())
     }
 
+    #[cfg(feature = "kanvas")]
+    /// Push 1 [`AccountOp`] to update `sender` balance by `mint`.
+    pub fn mint(&mut self, step: &mut ExecStep, addr: Address, mint: Word) -> Result<(), Error> {
+        let (found, sender_account) = self.sdb.get_account(&addr);
+        if !found {
+            return Err(Error::AccountNotFound(addr));
+        }
+        let sender_balance_prev = sender_account.balance;
+        let sender_balance = sender_account.balance + mint;
+        self.account_write(
+            step,
+            addr,
+            AccountField::Balance,
+            sender_balance,
+            sender_balance_prev,
+        )?;
+
+        Ok(())
+    }
+
     /// Push 2 reversible [`AccountOp`] to update `sender` and `receiver`'s
     /// balance by `value`, with `sender` being extraly charged with `fee`.
     pub fn transfer_with_fee(

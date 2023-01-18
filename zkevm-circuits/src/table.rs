@@ -83,6 +83,11 @@ pub enum TxFieldTag {
     CallData,
     /// The block number in which this tx is included.
     BlockNumber,
+
+    /// Kanvas Deposit Tx
+    #[cfg(feature = "kanvas")]
+    /// Mint
+    Mint,
 }
 impl_expr!(TxFieldTag);
 

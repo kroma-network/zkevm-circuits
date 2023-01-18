@@ -209,6 +209,11 @@ pub struct Transaction {
     calls: Vec<Call>,
     /// Execution steps
     steps: Vec<ExecStep>,
+
+    /// Kanvas deposit tx.
+    #[cfg(feature = "kanvas")]
+    /// Mint
+    pub mint: Word,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
@@ -229,6 +234,8 @@ impl From<&Transaction> for geth_types::Transaction {
             v: tx.signature.v,
             r: tx.signature.r,
             s: tx.signature.s,
+            #[cfg(feature = "kanvas")]
+            mint: tx.mint,
             ..Default::default()
         }
     }
@@ -310,6 +317,8 @@ impl Transaction {
                 r: eth_tx.r,
                 s: eth_tx.s,
             },
+            #[cfg(feature = "kanvas")]
+            mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
         })
     }
 
