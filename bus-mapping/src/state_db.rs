@@ -7,6 +7,18 @@ use ethers_core::utils::keccak256;
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 
+#[cfg(feature = "kanvas")]
+use crate::{
+    circuit_input_builder::{Block, Transaction},
+    Error,
+};
+#[cfg(feature = "kanvas")]
+use eth_types::kanvas_params::{
+    BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
+};
+#[cfg(all(feature = "test", feature = "kanvas"))]
+use eth_types::kanvas_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
+
 lazy_static! {
     static ref ACCOUNT_ZERO: Account = Account::zero();
     static ref VALUE_ZERO: Word = Word::zero();
@@ -144,14 +156,37 @@ pub struct StateDB {
 impl StateDB {
     /// Create an empty Self
     pub fn new() -> Self {
-        Self {
+        let mut _db = Self {
             state: HashMap::new(),
             access_list_account: HashSet::new(),
             access_list_account_storage: HashSet::new(),
             dirty_storage: HashMap::new(),
             destructed_account: HashSet::new(),
             refund: 0,
-        }
+        };
+        #[cfg(all(feature = "test", feature = "kanvas"))]
+        _db.add_recipients_for_testing();
+        _db
+    }
+
+    #[cfg(all(feature = "test", feature = "kanvas"))]
+    fn add_recipients_for_testing(&mut self) {
+        self.set_account(&BASE_FEE_RECIPIENT, Account::zero());
+        self.set_account(&L1_FEE_RECIPIENT, Account::zero());
+
+        let mut storage: HashMap<Word, Word> = HashMap::new();
+        storage.insert(*BASE_FEE_KEY, Word::from(8));
+        storage.insert(*L1_FEE_OVERHEAD_KEY, Word::from(2100));
+        storage.insert(*L1_FEE_SCALAR_KEY, Word::from(1000000));
+        self.set_account(
+            &L1_BLOCK,
+            Account {
+                nonce: Word::zero(),
+                balance: Word::zero(),
+                storage,
+                code_hash: Hash::random(),
+            },
+        );
     }
 
     /// Set an [`Account`] at `addr` in the StateDB.
@@ -293,6 +328,44 @@ impl StateDB {
     /// Set refund
     pub fn set_refund(&mut self, value: u64) {
         self.refund = value;
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kanvas-geth
+    /// for details.
+    pub fn compute_l1_fee(&self, block: &mut Block, tx: &Transaction) -> Result<Word, Error> {
+        self.do_compute_l1_fee(block, tx.rollup_data_gas)
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kanvas-geth
+    /// for details.
+    pub fn do_compute_l1_fee(
+        &self,
+        block: &mut Block,
+        rollup_data_gas: u64,
+    ) -> Result<Word, Error> {
+        let (found, l1_base_fee) = self.get_storage(&L1_BLOCK, &BASE_FEE_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(*L1_BLOCK, *BASE_FEE_KEY));
+        }
+        let (found, l1_fee_overhead) = self.get_storage(&L1_BLOCK, &L1_FEE_OVERHEAD_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_OVERHEAD_KEY));
+        }
+        let (found, l1_fee_scalar) = self.get_storage(&L1_BLOCK, &L1_FEE_SCALAR_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_SCALAR_KEY));
+        }
+
+        block.l1_base_fee = l1_base_fee.clone();
+        block.l1_fee_overhead = l1_fee_overhead.clone();
+        block.l1_fee_scalar = l1_fee_scalar.clone();
+
+        Ok(
+            (Word::from(rollup_data_gas) + l1_fee_overhead) * l1_base_fee * l1_fee_scalar
+                / *L1_COST_DENOMINATOR,
+        )
     }
 
     /// Clear access list and refund, and commit dirty storage.

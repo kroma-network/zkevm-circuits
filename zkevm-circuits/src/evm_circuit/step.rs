@@ -29,6 +29,10 @@ pub enum ExecutionState {
     EndDepositTx,
     EndInnerBlock,
     EndBlock,
+    #[cfg(feature = "kanvas")]
+    BaseFeeHook,
+    #[cfg(feature = "kanvas")]
+    RollupFeeHook,
     // Opcode successful cases
     STOP,
     ADD_SUB,     // ADD, SUB
@@ -60,7 +64,6 @@ pub enum ExecutionState {
     GASPRICE,
     EXTCODESIZE,
     EXTCODECOPY,
-    RETURN,
     RETURNDATASIZE,
     RETURNDATACOPY,
     EXTCODEHASH,
@@ -142,7 +145,7 @@ impl ExecutionState {
     }
 
     pub(crate) fn halts_in_success(&self) -> bool {
-        matches!(self, Self::STOP | Self::RETURN | Self::SELFDESTRUCT)
+        matches!(self, Self::STOP | Self::SELFDESTRUCT)
     }
 
     pub(crate) fn halts_in_exception(&self) -> bool {

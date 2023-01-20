@@ -62,6 +62,17 @@ pub struct Block<F> {
     pub keccak_inputs: Vec<Vec<u8>>,
     /// Mpt updates
     pub mpt_updates: MptUpdates,
+
+    /// Kanvas
+    #[cfg(feature = "kanvas")]
+    /// L1 base fee
+    pub l1_base_fee: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee overhead
+    pub l1_fee_overhead: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee scalar
+    pub l1_fee_scalar: Word,
 }
 
 /// ...
@@ -322,6 +333,13 @@ pub fn block_convert<F: Field>(
             block.prev_state_root,
             block.end_state_root(),
         ),
+        #[cfg(feature = "kanvas")]
+        l1_base_fee: block.l1_base_fee,
+        #[cfg(feature = "kanvas")]
+        l1_fee_overhead: block.l1_fee_overhead,
+        #[cfg(feature = "kanvas")]
+        l1_fee_scalar: block.l1_fee_scalar,
+        ..Default::default()
     })
 }
 

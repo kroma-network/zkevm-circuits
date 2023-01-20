@@ -155,6 +155,16 @@ pub struct Block {
     pub exp_events: Vec<ExpEvent>,
     /// Circuits Setup Paramteres
     pub circuits_params: CircuitsParams,
+
+    #[cfg(feature = "kanvas")]
+    /// L1 base fee
+    pub l1_base_fee: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee overhead
+    pub l1_fee_overhead: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee scalar
+    pub l1_fee_scalar: Word,
 }
 
 impl Block {

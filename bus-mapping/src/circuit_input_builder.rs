@@ -13,9 +13,9 @@ mod transaction;
 use self::access::gen_state_access_trace;
 pub use self::block::BlockHead;
 use crate::error::Error;
-#[cfg(feature = "kanvas")]
-use crate::evm::opcodes::gen_end_deposit_tx_ops;
 use crate::evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops};
+#[cfg(feature = "kanvas")]
+use crate::evm::opcodes::{gen_end_deposit_tx_ops, gen_fee_hook_ops};
 use crate::operation::{CallContextField, Operation, RWCounter, StartOp, RW};
 use crate::rpc::GethClient;
 use crate::state_db::{self, CodeDB, StateDB};
@@ -26,6 +26,8 @@ use core::fmt::Debug;
 use eth_types::evm_types::{GasCost, OpcodeId};
 #[cfg(feature = "kanvas")]
 use eth_types::geth_types::DEPOSIT_TX_TYPE;
+#[cfg(feature = "kanvas")]
+use eth_types::kanvas_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
 use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
 use eth_types::{geth_types, ToBigEndian};
@@ -434,6 +436,11 @@ impl<'a> CircuitInputBuilder {
             #[cfg(feature = "kanvas")]
             tx.steps_mut().push(end_deposit_tx_step);
         } else {
+            #[cfg(feature = "kanvas")]
+            let fee_hook_steps = gen_fee_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            #[cfg(feature = "kanvas")]
+            tx.steps_mut().extend(fee_hook_steps);
+
             let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             tx.steps_mut().push(end_tx_step);
         }
