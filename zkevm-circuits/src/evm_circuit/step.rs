@@ -28,6 +28,10 @@ pub enum ExecutionState {
     EndDepositTx,
     EndInnerBlock,
     EndBlock,
+    #[cfg(feature = "kroma")]
+    BaseFeeHook,
+    #[cfg(feature = "kroma")]
+    RollupFeeHook,
     // Opcode successful cases
     STOP,
     ADD_SUB,     // ADD, SUB

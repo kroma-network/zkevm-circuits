@@ -157,6 +157,16 @@ pub struct Block {
     pub circuits_params: CircuitsParams,
     /// chain id
     pub chain_id: Word,
+
+    #[cfg(feature = "kroma")]
+    /// L1 base fee
+    pub l1_base_fee: Word,
+    #[cfg(feature = "kroma")]
+    /// L1 fee overhead
+    pub l1_fee_overhead: Word,
+    #[cfg(feature = "kroma")]
+    /// L1 fee scalar
+    pub l1_fee_scalar: Word,
 }
 
 impl Block {

@@ -216,6 +216,11 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// Mint
     pub mint: Word,
+
+    /// Kanvas non-deposit tx.
+    #[cfg(feature = "kanvas")]
+    /// Rollup data gas
+    pub rollup_data_gas: u64,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
@@ -239,6 +244,8 @@ impl From<&Transaction> for geth_types::Transaction {
             hash: tx.hash,
             #[cfg(feature = "kroma")]
             mint: tx.mint,
+            #[cfg(feature = "kanvas")]
+            rollup_data_gas: tx.rollup_data_gas,
             ..Default::default()
         }
     }
@@ -268,6 +275,8 @@ impl Transaction {
             hash: Default::default(),
             #[cfg(feature = "kroma")]
             mint: Word::zero(),
+            #[cfg(feature = "kanvas")]
+            rollup_data_gas: Default::default(),
         }
     }
 
@@ -359,6 +368,8 @@ impl Transaction {
             },
             #[cfg(feature = "kroma")]
             mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
+            #[cfg(feature = "kanvas")]
+            rollup_data_gas: eth_types::geth_types::Transaction::compute_rollup_data_gas(eth_tx),
         })
     }
 

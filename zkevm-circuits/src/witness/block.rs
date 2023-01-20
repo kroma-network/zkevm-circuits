@@ -69,6 +69,17 @@ pub struct Block<F> {
     pub mpt_updates: MptUpdates,
     /// Chain ID
     pub chain_id: Word,
+
+    /// Kroma
+    #[cfg(feature = "kroma")]
+    /// L1 base fee
+    pub l1_base_fee: Word,
+    #[cfg(feature = "kroma")]
+    /// L1 fee overhead
+    pub l1_fee_overhead: Word,
+    #[cfg(feature = "kroma")]
+    /// L1 fee scalar
+    pub l1_fee_scalar: Word,
 }
 
 /// ...
@@ -400,6 +411,13 @@ pub fn block_convert<F: Field>(
             block.end_state_root(),
         ),
         chain_id,
+        #[cfg(feature = "kroma")]
+        l1_base_fee: block.l1_base_fee,
+        #[cfg(feature = "kroma")]
+        l1_fee_overhead: block.l1_fee_overhead,
+        #[cfg(feature = "kroma")]
+        l1_fee_scalar: block.l1_fee_scalar,
+        ..Default::default()
     })
 }
 

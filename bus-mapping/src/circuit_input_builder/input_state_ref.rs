@@ -116,6 +116,44 @@ impl<'a> CircuitInputStateRef<'a> {
         exec_step
     }
 
+    #[cfg(feature = "kanvas")]
+    /// Create a new BaseFeeHook step
+    pub fn new_base_fee_fee_hook_step(&self) -> ExecStep {
+        let prev_step = self
+            .tx
+            .steps()
+            .last()
+            .expect("steps should have at least one BeginTx step");
+        ExecStep {
+            exec_state: ExecState::BaseFeeHook,
+            // Dispatch to EndTx step
+            error: prev_step.error.clone(),
+            gas_left: prev_step.gas_left,
+            gas_cost: prev_step.gas_cost,
+            rwc: self.block_ctx.rwc,
+            ..Default::default()
+        }
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Create a new RollupFeeHook step
+    pub fn new_rollup_fee_hook_step(&self) -> ExecStep {
+        let prev_step = self
+            .tx
+            .steps()
+            .last()
+            .expect("steps should have at least one BeginTx step");
+        ExecStep {
+            exec_state: ExecState::RollupFeeHook,
+            // Dispatch to EndTx step
+            error: prev_step.error.clone(),
+            gas_left: prev_step.gas_left,
+            gas_cost: prev_step.gas_cost,
+            rwc: self.block_ctx.rwc,
+            ..Default::default()
+        }
+    }
+
     /// Push an [`Operation`](crate::operation::Operation) into the
     /// [`OperationContainer`](crate::operation::OperationContainer) with the
     /// next [`RWCounter`](crate::operation::RWCounter) and then adds a

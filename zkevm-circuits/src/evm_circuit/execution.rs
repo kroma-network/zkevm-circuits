@@ -57,6 +57,8 @@ mod add_sub;
 mod addmod;
 mod address;
 mod balance;
+#[cfg(feature = "kroma")]
+mod base_fee_hook;
 mod begin_tx;
 mod bitwise;
 mod block_ctx;
@@ -122,6 +124,8 @@ mod push;
 mod return_revert;
 mod returndatacopy;
 mod returndatasize;
+#[cfg(feature = "kroma")]
+mod rollup_fee_hook;
 mod sar;
 mod sdiv_smod;
 mod selfbalance;
@@ -139,6 +143,8 @@ use add_sub::AddSubGadget;
 use addmod::AddModGadget;
 use address::AddressGadget;
 use balance::BalanceGadget;
+#[cfg(feature = "kroma")]
+use base_fee_hook::BaseFeeHookGadget;
 use begin_tx::BeginTxGadget;
 use bitwise::BitwiseGadget;
 use block_ctx::{BlockCtxU160Gadget, BlockCtxU256Gadget, BlockCtxU64Gadget};
@@ -203,6 +209,8 @@ use push::PushGadget;
 use return_revert::ReturnRevertGadget;
 use returndatacopy::ReturnDataCopyGadget;
 use returndatasize::ReturnDataSizeGadget;
+#[cfg(feature = "kroma")]
+use rollup_fee_hook::RollupFeeHookGadget;
 use sar::SarGadget;
 use sdiv_smod::SignedDivModGadget;
 use selfbalance::SelfbalanceGadget;
@@ -255,12 +263,16 @@ pub(crate) struct ExecutionConfig<F> {
     stored_expressions_map: HashMap<ExecutionState, Vec<StoredExpression<F>>>,
     instrument: Instrument,
     // internal state gadgets
-    begin_tx_gadget: Box<BeginTxGadget<F>>,
-    end_block_gadget: Box<EndBlockGadget<F>>,
-    end_inner_block_gadget: Box<EndInnerBlockGadget<F>>,
-    end_tx_gadget: Box<EndTxGadget<F>>,
+    begin_tx_gadget: BeginTxGadget<F>,
+    end_block_gadget: EndBlockGadget<F>,
+    end_inner_block_gadget: EndInnerBlockGadget<F>,
+    end_tx_gadget: EndTxGadget<F>,
     #[cfg(feature = "kroma")]
-    end_deposit_tx_gadget: Box<EndDepositTxGadget<F>>,
+    end_deposit_tx_gadget: EndDepositTxGadget<F>,
+    #[cfg(feature = "kroma")]
+    base_fee_hook: BaseFeeHookGadget<F>,
+    #[cfg(feature = "kroma")]
+    rollup_fee_hook: RollupFeeHookGadget<F>,
     // opcode gadgets
     add_sub_gadget: Box<AddSubGadget<F>>,
     addmod_gadget: Box<AddModGadget<F>>,
@@ -532,6 +544,10 @@ impl<F: Field> ExecutionConfig<F> {
             end_tx_gadget: configure_gadget!(),
             #[cfg(feature = "kroma")]
             end_deposit_tx_gadget: configure_gadget!(),
+            #[cfg(feature = "kroma")]
+            base_fee_hook: configure_gadget!(),
+            #[cfg(feature = "kroma")]
+            rollup_fee_hook: configure_gadget!(),
             // opcode gadgets
             add_sub_gadget: configure_gadget!(),
             addmod_gadget: configure_gadget!(),
@@ -808,6 +824,18 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::EndBlock,
                             vec![ExecutionState::EndBlock],
                         ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "BaseFeeHook can only transit to RollupFeeHook",
+                            ExecutionState::BaseFeeHook,
+                            vec![ExecutionState::RollupFeeHook],
+                        ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "RollupFeeHook can only transit to EndTx",
+                            ExecutionState::RollupFeeHook,
+                            vec![ExecutionState::EndTx],
+                        ),
                     ])
                     .filter(move |(_, from, _)| *from == execution_state)
                     .map(|(_, _, to)| 1.expr() - step_next.execution_state_selector(to)),
@@ -835,9 +863,19 @@ impl<F: Field> ExecutionConfig<F> {
                                 .chain(iter::once(ExecutionState::BeginTx))
                                 .collect(),
                         ),
+                        #[cfg(not(feature = "kroma"))]
                         (
                             "Only ExecutionState which halts or BeginTx can transit to EndTx",
                             ExecutionState::EndTx,
+                            ExecutionState::iter()
+                                .filter(ExecutionState::halts)
+                                .chain(iter::once(ExecutionState::BeginTx))
+                                .collect(),
+                        ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "Only ExecutionState which halts or BeginTx can transit to BaseFeeHook",
+                            ExecutionState::BaseFeeHook,
                             ExecutionState::iter()
                                 .filter(ExecutionState::halts)
                                 .chain(iter::once(ExecutionState::BeginTx))
@@ -1364,6 +1402,10 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::EndDepositTx => assign_exec_step!(self.end_deposit_tx_gadget),
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
+            #[cfg(feature = "kroma")]
+            ExecutionState::BaseFeeHook => assign_exec_step!(self.base_fee_hook),
+            #[cfg(feature = "kroma")]
+            ExecutionState::RollupFeeHook => assign_exec_step!(self.rollup_fee_hook),
             // opcode
             ExecutionState::ADD_SUB => assign_exec_step!(self.add_sub_gadget),
             ExecutionState::ADDMOD => assign_exec_step!(self.addmod_gadget),

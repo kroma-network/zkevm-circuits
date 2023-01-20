@@ -14,6 +14,8 @@ use self::access::gen_state_access_trace;
 pub use self::block::BlockHead;
 #[cfg(feature = "kroma")]
 use crate::evm::opcodes::gen_end_deposit_tx_ops;
+#[cfg(feature = "kroma")]
+use crate::evm::opcodes::gen_fee_hook_ops;
 use crate::{
     error::Error,
     evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
@@ -21,6 +23,7 @@ use crate::{
     rpc::GethClient,
     state_db::{self, CodeDB, StateDB},
 };
+
 pub use access::{Access, AccessSet, AccessValue, CodeSource};
 pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
@@ -38,11 +41,6 @@ use ethers_core::{
     k256::ecdsa::SigningKey,
     types::{Bytes, NameOrAddress, Signature, TransactionRequest},
 };
-// use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
-// use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
-// use eth_types::{geth_types, ToBigEndian};
-// use ethers_core::k256::ecdsa::SigningKey;
-// use ethers_core::types::{Bytes, NameOrAddress, Signature, TransactionRequest};
 use ethers_providers::JsonRpcClient;
 pub use execution::{
     CopyDataType, CopyEvent, CopyStep, ExecState, ExecStep, ExpEvent, ExpStep, NumberOrHash,
@@ -464,6 +462,11 @@ impl<'a> CircuitInputBuilder {
             #[cfg(feature = "kroma")]
             tx.steps_mut().push(end_deposit_tx_step);
         } else {
+            #[cfg(feature = "kroma")]
+            let fee_hook_steps = gen_fee_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            #[cfg(feature = "kroma")]
+            tx.steps_mut().extend(fee_hook_steps);
+
             let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             tx.steps_mut().push(end_tx_step);
         }
