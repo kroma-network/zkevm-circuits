@@ -36,6 +36,17 @@ pub struct Block<F> {
     pub state_circuit_pad_to: usize,
     /// Inputs to the SHA3 opcode
     pub sha3_inputs: Vec<Vec<u8>>,
+
+    /// Kanvas
+    #[cfg(feature = "kanvas")]
+    /// L1 base fee
+    pub l1_base_fee: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee overhead
+    pub l1_fee_overhead: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee scalar
+    pub l1_fee_scalar: Word,
 }
 
 /// ...
@@ -226,6 +237,12 @@ pub fn block_convert(
             .collect(),
         copy_events: block.copy_events.clone(),
         sha3_inputs: block.sha3_inputs.clone(),
+        #[cfg(feature = "kanvas")]
+        l1_base_fee: block.l1_base_fee,
+        #[cfg(feature = "kanvas")]
+        l1_fee_overhead: block.l1_fee_overhead,
+        #[cfg(feature = "kanvas")]
+        l1_fee_scalar: block.l1_fee_scalar,
         ..Default::default()
     }
 }

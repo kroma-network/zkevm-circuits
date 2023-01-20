@@ -28,6 +28,10 @@ pub enum ExecutionState {
     EndDepositTx,
     EndInnerBlock,
     EndBlock,
+    #[cfg(feature = "kanvas")]
+    BaseFeeHook,
+    #[cfg(feature = "kanvas")]
+    RollupFeeHook,
     // Opcode successful cases
     STOP,
     ADD_SUB,     // ADD, SUB

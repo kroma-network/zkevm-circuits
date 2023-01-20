@@ -140,6 +140,11 @@ pub struct Transaction {
     #[cfg(feature = "kanvas")]
     /// Mint
     pub mint: Word,
+
+    /// Kanvas Non-deposit tx
+    #[cfg(feature = "kanvas")]
+    /// Rollup data gas
+    pub rollup_data_gas: u64,
 }
 
 impl From<&Transaction> for crate::Transaction {
@@ -183,6 +188,8 @@ impl From<&crate::Transaction> for Transaction {
             s: tx.s,
             #[cfg(feature = "kanvas")]
             mint: Transaction::get_mint(tx).unwrap_or_default(),
+            #[cfg(feature = "kanvas")]
+            rollup_data_gas: Transaction::compute_rollup_data_gas(tx),
         }
     }
 }
@@ -208,6 +215,16 @@ impl Transaction {
             return Some(Word::from_dec_str(v.as_str().unwrap()).unwrap());
         }
         None
+    }
+
+    /// Compute rollup data gas.
+    pub fn compute_rollup_data_gas(tx: &crate::Transaction) -> u64 {
+        let data = tx.rlp();
+        let mut zeros = 0;
+        let mut non_zeros = 0;
+        data.iter()
+            .for_each(|x| if *x == 0 { zeros += 1 } else { non_zeros += 1 });
+        zeros * 4 + (non_zeros + 68) * 16
     }
 
     /// Whether this Transaction is a deposit transaction.

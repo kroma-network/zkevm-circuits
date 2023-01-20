@@ -109,6 +109,16 @@ pub struct Block {
     pub code: HashMap<Hash, Vec<u8>>,
     /// Inputs to the SHA3 opcode
     pub sha3_inputs: Vec<Vec<u8>>,
+
+    #[cfg(feature = "kanvas")]
+    /// L1 base fee
+    pub l1_base_fee: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee overhead
+    pub l1_fee_overhead: Word,
+    #[cfg(feature = "kanvas")]
+    /// L1 fee scalar
+    pub l1_fee_scalar: Word,
 }
 
 impl Block {

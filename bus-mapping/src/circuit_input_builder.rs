@@ -13,9 +13,9 @@ mod transaction;
 use self::access::gen_state_access_trace;
 pub use self::block::BlockHead;
 use crate::error::Error;
-#[cfg(feature = "kanvas")]
-use crate::evm::opcodes::gen_end_deposit_tx_ops;
 use crate::evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops};
+#[cfg(feature = "kanvas")]
+use crate::evm::opcodes::{gen_end_deposit_tx_ops, gen_fee_hook_ops};
 use crate::operation::{CallContextField, RW};
 use crate::rpc::GethClient;
 use crate::state_db::{self, CodeDB, StateDB};
@@ -27,6 +27,8 @@ use eth_types::evm_types::GasCost;
 use eth_types::geth_types;
 #[cfg(feature = "kanvas")]
 use eth_types::geth_types::DEPOSIT_TX_TYPE;
+#[cfg(feature = "kanvas")]
+use eth_types::kanvas_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
 use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
 use ethers_providers::JsonRpcClient;
@@ -206,6 +208,27 @@ impl<'a> CircuitInputBuilder {
                     tx.value,
                     gas_cost
                 );
+
+                #[cfg(feature = "kanvas")]
+                if tx.transaction_type.is_none()
+                    || tx.transaction_type.unwrap().as_u64() != DEPOSIT_TX_TYPE
+                {
+                    let base_fee =
+                        U256::from(geth_trace.gas.0) * eth_block.base_fee_per_gas.unwrap();
+                    let (_, base_fee_recipient_account) =
+                        self.sdb.get_account_mut(&BASE_FEE_RECIPIENT);
+                    base_fee_recipient_account.balance += base_fee;
+                    log::trace!("collect base fee: value {}", base_fee);
+
+                    let rollup_data_gas =
+                        eth_types::geth_types::Transaction::compute_rollup_data_gas(tx);
+                    let l1_fee = self
+                        .sdb
+                        .do_compute_l1_fee(&mut self.block, rollup_data_gas)?;
+                    let (_, l1_fee_recipient_account) = self.sdb.get_account_mut(&L1_FEE_RECIPIENT);
+                    l1_fee_recipient_account.balance += l1_fee;
+                    log::trace!("collect l1 fee: value {}", l1_fee);
+                }
                 continue;
             }
             log::info!(
@@ -323,6 +346,11 @@ impl<'a> CircuitInputBuilder {
             #[cfg(feature = "kanvas")]
             tx.steps_mut().push(end_deposit_tx_step);
         } else {
+            #[cfg(feature = "kanvas")]
+            let fee_hook_steps = gen_fee_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            #[cfg(feature = "kanvas")]
+            tx.steps_mut().extend(fee_hook_steps);
+
             let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             tx.steps_mut().push(end_tx_step);
         }

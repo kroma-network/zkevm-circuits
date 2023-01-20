@@ -15,6 +15,9 @@ use eth_types::{
 use keccak256::EMPTY_HASH;
 use log::warn;
 
+#[cfg(feature = "kanvas")]
+use eth_types::kanvas_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
+
 #[cfg(any(feature = "test", test))]
 pub use self::sha3::sha3_tests::{gen_sha3_code, MemoryKind};
 
@@ -639,6 +642,79 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
     }
 
     Ok(exec_step)
+}
+
+#[cfg(feature = "kanvas")]
+pub fn gen_base_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+    debug_assert!(!state.tx.is_deposit());
+    let mut exec_step = state.new_base_fee_fee_hook_step();
+    let call = state.tx.calls()[0].clone();
+
+    state.call_context_read(
+        &mut exec_step,
+        call.call_id,
+        CallContextField::TxId,
+        state.tx_ctx.id().into(),
+    );
+
+    let gas_used = state.tx.gas - exec_step.gas_left.0;
+
+    let (found, base_fee_recipient_account) = state.sdb.get_account_mut(&BASE_FEE_RECIPIENT);
+    if !found {
+        return Err(Error::AccountNotFound(*BASE_FEE_RECIPIENT));
+    }
+
+    let block_info = state
+        .block
+        .headers
+        .get(&state.tx.block_num)
+        .unwrap()
+        .clone();
+
+    let base_fee_recipient_balance_prev = base_fee_recipient_account.balance;
+    let base_fee_recipient_balance =
+        base_fee_recipient_balance_prev + block_info.base_fee * gas_used;
+    base_fee_recipient_account.balance = base_fee_recipient_balance;
+    state.account_write(
+        &mut exec_step,
+        *BASE_FEE_RECIPIENT,
+        AccountField::Balance,
+        base_fee_recipient_balance,
+        base_fee_recipient_balance_prev,
+    )?;
+
+    Ok(exec_step)
+}
+
+#[cfg(feature = "kanvas")]
+pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+    debug_assert!(!state.tx.is_deposit());
+    let mut exec_step = state.new_rollup_fee_hook_step();
+
+    let l1_fee = state.sdb.compute_l1_fee(state.block, state.tx)?;
+    let (found, l1_fee_recipient_account) = state.sdb.get_account_mut(&L1_FEE_RECIPIENT);
+    if !found {
+        return Err(Error::AccountNotFound(*L1_FEE_RECIPIENT));
+    }
+    let l1_fee_recipient_balance_prev = l1_fee_recipient_account.balance;
+    let l1_fee_recipient_balance = l1_fee_recipient_balance_prev + l1_fee;
+    l1_fee_recipient_account.balance = l1_fee_recipient_balance;
+    state.account_write(
+        &mut exec_step,
+        *L1_FEE_RECIPIENT,
+        AccountField::Balance,
+        l1_fee_recipient_balance,
+        l1_fee_recipient_balance_prev,
+    )?;
+
+    Ok(exec_step)
+}
+
+#[cfg(feature = "kanvas")]
+pub fn gen_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
+    let base_fee_hook_step = gen_base_fee_hook_ops(state)?;
+    let rollup_fee_hook_step = gen_rollup_fee_hook_ops(state)?;
+    Ok(vec![base_fee_hook_step, rollup_fee_hook_step])
 }
 
 #[derive(Debug, Copy, Clone)]
