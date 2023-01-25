@@ -45,7 +45,7 @@ use std::{
 use crate::table::TxFieldTag::{
     BlockNumber, CallData, CallDataGasCost, CallDataLength, CalleeAddress, CallerAddress, Gas,
     GasPrice, IsCreate, Nonce, SigR, SigS, SigV, TxHashLength, TxHashRLC, TxSignHash, TxSignLength,
-    TxSignRLC,
+    TxSignRLC, Type,
 };
 use gadgets::is_zero::{IsZeroChip, IsZeroConfig, IsZeroInstruction};
 pub use halo2_proofs::halo2curves::{
@@ -70,8 +70,15 @@ use halo2_proofs::circuit::Chip;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 use halo2_proofs::{circuit::SimpleFloorPlanner, plonk::Circuit};
 
+#[cfg(feature = "kroma")]
+// This contains followings:
+// - transaction type
+const ADDITIONAL_KROMA_TX_LEN: usize = 1;
+#[cfg(not(feature = "kroma"))]
+const ADDITIONAL_KROMA_TX_LEN: usize = 0;
+
 /// Number of rows of one tx occupies in the fixed part of tx table
-pub const TX_LEN: usize = 19;
+pub const TX_LEN: usize = 19 + ADDITIONAL_KROMA_TX_LEN;
 /// Offset of TxHash tag in the tx table
 pub const TX_HASH_OFFSET: usize = 18;
 
@@ -1456,6 +1463,12 @@ impl<F: Field> TxCircuit<F> {
                     };
                     for (tag, rlp_tag, value) in [
                         // need to be in same order as that tx table load function uses
+                        #[cfg(feature = "kroma")]
+                        (
+                            Type,
+                            RlpTxTag::TransactionType,
+                            Value::known(F::from(tx.transaction_type)),
+                        ),
                         (Nonce, RlpTxTag::Nonce, Value::known(F::from(tx.nonce))),
                         (Gas, RlpTxTag::Gas, Value::known(F::from(tx.gas))),
                         (

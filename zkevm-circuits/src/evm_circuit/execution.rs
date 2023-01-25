@@ -21,8 +21,9 @@ use crate::{
     util::{query_expression, Challenges, Expr},
 };
 use bus_mapping::util::read_env_var;
-use eth_types::Field;
+use eth_types::{evm_types::rwc_util::end_tx_rwc, Field};
 use gadgets::util::not;
+
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Region, Value},
@@ -75,6 +76,8 @@ mod create;
 mod dummy;
 mod dup;
 mod end_block;
+#[cfg(feature = "kroma")]
+mod end_deposit_tx;
 mod end_inner_block;
 mod end_tx;
 mod error_code_store;
@@ -155,6 +158,8 @@ use create::CreateGadget;
 use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
+#[cfg(feature = "kroma")]
+use end_deposit_tx::EndDepositTxGadget;
 use end_inner_block::EndInnerBlockGadget;
 use end_tx::EndTxGadget;
 use error_code_store::ErrorCodeStoreGadget;
@@ -254,6 +259,8 @@ pub(crate) struct ExecutionConfig<F> {
     end_block_gadget: Box<EndBlockGadget<F>>,
     end_inner_block_gadget: Box<EndInnerBlockGadget<F>>,
     end_tx_gadget: Box<EndTxGadget<F>>,
+    #[cfg(feature = "kroma")]
+    end_deposit_tx_gadget: Box<EndDepositTxGadget<F>>,
     // opcode gadgets
     add_sub_gadget: Box<AddSubGadget<F>>,
     addmod_gadget: Box<AddModGadget<F>>,
@@ -523,6 +530,8 @@ impl<F: Field> ExecutionConfig<F> {
             end_block_gadget: configure_gadget!(),
             end_inner_block_gadget: configure_gadget!(),
             end_tx_gadget: configure_gadget!(),
+            #[cfg(feature = "kroma")]
+            end_deposit_tx_gadget: configure_gadget!(),
             // opcode gadgets
             add_sub_gadget: configure_gadget!(),
             addmod_gadget: configure_gadget!(),
@@ -783,6 +792,12 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::EndTx,
                             vec![ExecutionState::BeginTx, ExecutionState::EndInnerBlock],
                         ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "EndDepositTx can only transit to BeginTx or EndInnerBlock",
+                            ExecutionState::EndDepositTx,
+                            vec![ExecutionState::BeginTx, ExecutionState::EndInnerBlock],
+                        ),
                         (
                             "EndInnerBlock can only transition to BeginTx, EndInnerBlock or EndBlock",
                             ExecutionState::EndInnerBlock,
@@ -799,10 +814,26 @@ impl<F: Field> ExecutionConfig<F> {
                 )
                 .chain(
                     IntoIterator::into_iter([
+                        #[cfg(feature = "kroma")]
+                        (
+                            "Only EndTx, EndDepositTx or EndInnerBlock can transit to BeginTx",
+                            ExecutionState::BeginTx,
+                            vec![ExecutionState::EndTx, ExecutionState::EndDepositTx, ExecutionState::EndInnerBlock],
+                        ),
+                        #[cfg(not(feature = "kroma"))]
                         (
                             "Only EndTx or EndInnerBlock can transit to BeginTx",
                             ExecutionState::BeginTx,
                             vec![ExecutionState::EndTx, ExecutionState::EndInnerBlock],
+                        ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "Only ExecutionState which halts or BeginTx can transit to EndDepositTx",
+                            ExecutionState::EndDepositTx,
+                            ExecutionState::iter()
+                                .filter(ExecutionState::halts)
+                                .chain(iter::once(ExecutionState::BeginTx))
+                                .collect(),
                         ),
                         (
                             "Only ExecutionState which halts or BeginTx can transit to EndTx",
@@ -817,6 +848,13 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::EndBlock,
                             vec![ExecutionState::EndInnerBlock, ExecutionState::EndBlock],
                         ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "Only EndTx, EndDepositTx or EndInnerBlock can transit to EndInnerBlock",
+                            ExecutionState::EndInnerBlock,
+                            vec![ExecutionState::EndTx, ExecutionState::EndDepositTx, ExecutionState::EndInnerBlock],
+                        ),
+                        #[cfg(not(feature = "kroma"))]
                         (
                             "Only EndTx or EndInnerBlock can transit to EndInnerBlock",
                             ExecutionState::EndInnerBlock,
@@ -1034,7 +1072,7 @@ impl<F: Field> ExecutionConfig<F> {
                     let height = step.execution_state.get_step_height();
 
                     // Assign the step witness
-                    if step.execution_state == ExecutionState::EndTx {
+                    if step.execution_state.ends_tx() {
                         let mut tx = transaction.clone();
                         tx.call_data.clear();
                         tx.calls.clear();
@@ -1042,7 +1080,12 @@ impl<F: Field> ExecutionConfig<F> {
                         tx.rlp_signed.clear();
                         tx.rlp_unsigned.clear();
                         let total_gas = {
-                            let gas_used = tx.gas - step.gas_left;
+                            let gas_used = eth_types::evm_types::gas_utils::gas_used(
+                                tx.transaction_type,
+                                tx.id == 1,
+                                tx.gas,
+                                step.gas_left,
+                            );
                             let current_cumulative_gas_used: u64 = if tx.id == 1 {
                                 0
                             } else {
@@ -1317,6 +1360,8 @@ impl<F: Field> ExecutionConfig<F> {
             // internal states
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::EndTx => assign_exec_step!(self.end_tx_gadget),
+            #[cfg(feature = "kroma")]
+            ExecutionState::EndDepositTx => assign_exec_step!(self.end_deposit_tx_gadget),
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
             // opcode

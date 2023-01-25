@@ -15,6 +15,10 @@ use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 
+#[cfg(feature = "kroma")]
+/// Kroma deposit transaction type
+pub const DEPOSIT_TX_TYPE: u64 = 0x7e;
+
 /// Definition of all of the data related to an account.
 #[serde_as]
 #[derive(PartialEq, Eq, Debug, Default, Clone, Serialize)]
@@ -111,6 +115,8 @@ impl BlockConstants {
 /// Definition of all of the constants related to an Ethereum transaction.
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Transaction {
+    /// Transaction type
+    pub transaction_type: Option<U64>,
     /// Sender address
     pub from: Address,
     /// Recipient address (None for contract creation)
@@ -119,7 +125,7 @@ pub struct Transaction {
     pub nonce: Word,
     /// Gas Limit / Supplied gas
     pub gas_limit: Word,
-    /// Transfered value
+    /// Transferred value
     pub value: Word,
     /// Gas Price
     pub gas_price: Word,
@@ -148,6 +154,7 @@ pub struct Transaction {
 impl From<&Transaction> for crate::Transaction {
     fn from(tx: &Transaction) -> crate::Transaction {
         crate::Transaction {
+            transaction_type: tx.transaction_type.clone(),
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -170,6 +177,7 @@ impl From<&Transaction> for crate::Transaction {
 impl From<&crate::Transaction> for Transaction {
     fn from(tx: &crate::Transaction) -> Transaction {
         Transaction {
+            transaction_type: tx.transaction_type.clone(),
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -204,6 +212,14 @@ impl From<&Transaction> for TransactionRequest {
 }
 
 impl Transaction {
+    /// Whether this Transaction is a deposit transaction.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return self.transaction_type.unwrap_or_default().as_u64() == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kroma"))]
+        return false;
+    }
+
     /// Return the SignData associated with this Transaction.
     pub fn sign_data(&self, chain_id: u64) -> Result<SignData, Error> {
         let sig_r_le = self.r.to_le_bytes();

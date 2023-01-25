@@ -1,3 +1,5 @@
+#[cfg(feature = "kroma")]
+use crate::{evm_circuit::util::math_gadget::IsEqualGadget, table::TxContextFieldTag};
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
@@ -17,8 +19,13 @@ use crate::{
     util::Expr,
 };
 use bus_mapping::evm::OpcodeId;
+#[cfg(feature = "kroma")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::Field;
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{
+    circuit::Value,
+    plonk::{Error, Expression},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct StopGadget<F> {
@@ -26,6 +33,20 @@ pub(crate) struct StopGadget<F> {
     is_out_of_range: IsZeroGadget<F>,
     opcode: Cell<F>,
     restore_context: RestoreContextGadget<F>,
+    #[cfg(feature = "kroma")]
+    tx_id: Cell<F>,
+    #[cfg(feature = "kroma")]
+    tx_type: Cell<F>,
+    #[cfg(feature = "kroma")]
+    is_deposit_tx: IsEqualGadget<F>,
+}
+
+fn stop_rwc<F: Field>(success: bool) -> Expression<F> {
+    let base = 1 + if success { 1 } else { 0 };
+    #[cfg(feature = "kroma")]
+    return (base + 1).expr();
+    #[cfg(not(feature = "kroma"))]
+    return base.expr();
 }
 
 impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
@@ -56,19 +77,30 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
         // Call ends with STOP must be successful
         cb.call_context_lookup(false.expr(), None, CallContextFieldTag::IsSuccess, 1.expr());
 
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
-        cb.require_equal(
-            "Go to EndTx only when is_root",
-            cb.curr.state.is_root.expr(),
-            is_to_end_tx,
-        );
+        #[cfg(feature = "kroma")]
+        // Lookup in call_ctx the TxId
+        let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
+        #[cfg(feature = "kroma")]
+        // Lookup the tx_type in tx table
+        let tx_type = cb.tx_context(tx_id.expr(), TxContextFieldTag::Type, None);
+        #[cfg(feature = "kroma")]
+        let is_deposit_tx = IsEqualGadget::construct(cb, tx_type.expr(), DEPOSIT_TX_TYPE.expr());
+        #[cfg(feature = "kroma")]
+        StopGadget::constrain_state_transition(cb, is_deposit_tx.expr());
+        #[cfg(not(feature = "kroma"))]
+        StopGadget::constrain_state_transition(cb);
 
         // When it's a root call
         cb.condition(cb.curr.state.is_root.expr(), |cb| {
+            #[cfg(feature = "kroma")]
+            let rwc = 2.expr();
+            #[cfg(not(feature = "kroma"))]
+            let rwc = 1.expr();
+
             // Do step state transition
             cb.require_step_state_transition(StepStateTransition {
                 call_id: Same,
-                rw_counter: Delta(1.expr()),
+                rw_counter: Delta(rwc),
                 ..StepStateTransition::any()
             });
         });
@@ -91,6 +123,12 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
             is_out_of_range,
             opcode,
             restore_context,
+            #[cfg(feature = "kroma")]
+            tx_id,
+            #[cfg(feature = "kroma")]
+            tx_type,
+            #[cfg(feature = "kroma")]
+            is_deposit_tx,
         }
     }
 
@@ -99,7 +137,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
         region: &mut CachedRegion<'_, '_, F>,
         offset: usize,
         block: &Block<F>,
-        _: &Transaction,
+        _tx: &Transaction,
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
@@ -128,7 +166,57 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
                 .assign(region, offset, block, call, step, 1)?;
         }
 
+        #[cfg(feature = "kroma")]
+        self.tx_id
+            .assign(region, offset, Value::known(F::from(_tx.id as u64)))?;
+
+        #[cfg(feature = "kroma")]
+        self.tx_type
+            .assign(region, offset, Value::known(F::from(_tx.transaction_type)))?;
+
+        #[cfg(feature = "kroma")]
+        self.is_deposit_tx.assign(
+            region,
+            offset,
+            F::from(_tx.transaction_type),
+            F::from(DEPOSIT_TX_TYPE),
+        )?;
+
         Ok(())
+    }
+}
+
+impl<F: Field> StopGadget<F> {
+    #[cfg(feature = "kroma")]
+    fn constrain_state_transition(cb: &mut ConstraintBuilder<F>, is_deposit_tx: Expression<F>) {
+        cb.condition(is_deposit_tx.expr(), |cb| {
+            let is_to_end_deposit_tx = cb
+                .next
+                .execution_state_selector([ExecutionState::EndDepositTx]);
+            cb.require_equal(
+                "Go to EndDepositTx only when is_root",
+                cb.curr.state.is_root.expr(),
+                is_to_end_deposit_tx,
+            );
+        });
+        cb.condition(1.expr() - is_deposit_tx.expr(), |cb| {
+            let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+            cb.require_equal(
+                "Go to EndTx only when is_root",
+                cb.curr.state.is_root.expr(),
+                is_to_end_tx,
+            );
+        });
+    }
+
+    #[cfg(not(feature = "kroma"))]
+    fn constrain_state_transition(cb: &mut ConstraintBuilder<F>) {
+        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+        cb.require_equal(
+            "Go to EndTx only when is_root",
+            cb.curr.state.is_root.expr(),
+            is_to_end_tx,
+        );
     }
 }
 

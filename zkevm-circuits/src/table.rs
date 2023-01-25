@@ -102,6 +102,8 @@ impl<F: Field, C: Into<Column<Any>> + Copy, const W: usize> LookupTable<F> for [
 pub enum TxFieldTag {
     /// Unused tag
     Null = 0,
+    /// Type
+    Type,
     /// Nonce
     Nonce,
     /// GasPrice

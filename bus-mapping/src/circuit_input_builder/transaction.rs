@@ -2,8 +2,12 @@
 
 use std::collections::BTreeMap;
 
-use eth_types::{evm_types::Memory, geth_types, Address, GethExecTrace, Signature, Word, H256};
+use eth_types::{
+    evm_types::Memory, geth_types, Address, GethExecTrace, Signature, Word, H256, U64,
+};
 use ethers_core::utils::get_contract_address;
+#[cfg(feature = "kroma")]
+use geth_types::DEPOSIT_TX_TYPE;
 
 use crate::{
     state_db::{CodeDB, StateDB},
@@ -181,6 +185,8 @@ impl TransactionContext {
 pub struct Transaction {
     /// ..
     pub block_num: u64,
+    /// Transaction Type
+    pub transaction_type: u64,
     /// Nonce
     pub nonce: u64,
     /// Hash
@@ -210,7 +216,11 @@ pub struct Transaction {
 impl From<&Transaction> for geth_types::Transaction {
     fn from(tx: &Transaction) -> geth_types::Transaction {
         geth_types::Transaction {
-            hash: tx.hash,
+            transaction_type: if tx.transaction_type == 0 {
+                None
+            } else {
+                Some(U64::from(tx.transaction_type))
+            },
             from: tx.from,
             to: Some(tx.to),
             nonce: Word::from(tx.nonce),
@@ -221,6 +231,7 @@ impl From<&Transaction> for geth_types::Transaction {
             v: tx.signature.v,
             r: tx.signature.r,
             s: tx.signature.s,
+            hash: tx.hash,
             ..Default::default()
         }
     }
@@ -230,6 +241,7 @@ impl Transaction {
     /// Create a dummy Transaction with zero values
     pub fn dummy() -> Self {
         Self {
+            transaction_type: 0,
             nonce: 0,
             gas: 0,
             gas_price: Word::zero(),
@@ -318,6 +330,7 @@ impl Transaction {
             }
         );
         Ok(Self {
+            transaction_type: eth_tx.transaction_type.unwrap_or_default().as_u64(),
             block_num: eth_tx.block_number.unwrap().as_u64(),
             hash: eth_tx.hash,
             nonce: eth_tx.nonce.as_u64(),
@@ -341,6 +354,14 @@ impl Transaction {
     /// Whether this [`Transaction`] is a create one
     pub fn is_create(&self) -> bool {
         self.calls[0].is_create()
+    }
+
+    /// Whether this [`Transaction`] is a Kroma deposit transaction.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kroma"))]
+        return false;
     }
 
     /// Return the list of execution steps of this transaction.

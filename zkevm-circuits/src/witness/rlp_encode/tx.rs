@@ -54,6 +54,8 @@ pub enum RlpTxTag {
     /// combination in its accumulator value. Its used to support a lookup
     /// for rlc(rlp(tx)).
     Rlp,
+    /// Denotes the byte(s) for the tx’s type.
+    TransactionType,
 }
 
 impl_expr!(RlpTxTag);

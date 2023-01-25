@@ -7,7 +7,10 @@ use bus_mapping::{
     circuit_input_builder,
     circuit_input_builder::{get_dummy_tx, get_dummy_tx_hash},
 };
+#[cfg(feature = "kroma")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::{
+    evm_types::rwc_util::end_tx_rwc,
     sign_types::{biguint_to_32bytes_le, ct_option_ok_or, recover_pk, SignData, SECP256K1_Q},
     Address, Error, Field, Signature, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H256,
 };
@@ -37,6 +40,8 @@ pub struct Transaction {
     pub id: usize,
     /// The hash of the transaction
     pub hash: H256,
+    /// The type of the transaction
+    pub transaction_type: u64,
     /// The sender account nonce of the transaction
     pub nonce: u64,
     /// The gas limit of the transaction
@@ -76,6 +81,19 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// Whether tx is a system deposit tx.
+    pub fn is_system_deposit(&self) -> bool {
+        return self.is_deposit() && self.id == 1;
+    }
+
+    /// Whether tx is a deposit tx.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kroma"))]
+        return false;
+    }
+
     /// Assignments for tx table, split into tx_data (all fields except
     /// calldata) and tx_calldata
     /// Return a fixed dummy tx for chain_id
@@ -151,6 +169,13 @@ impl Transaction {
         let tx_sign_hash_be_bytes = keccak256(&self.rlp_unsigned);
 
         let ret = vec![
+            #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Type as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.transaction_type)),
+            ],
             [
                 Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::Nonce as u64)),
@@ -398,6 +423,7 @@ impl From<MockTransaction> for Transaction {
             s: sig.s,
             calls: vec![],
             steps: vec![],
+            transaction_type: mock_tx.transaction_type.as_u64(),
         }
     }
 }
@@ -446,6 +472,7 @@ pub(super) fn tx_convert(
         id,
         hash: tx.hash, // NOTE that if tx is not of legacy type, then tx.hash does not equal to
         // keccak(rlp_signed)
+        transaction_type: tx.transaction_type,
         nonce: tx.nonce,
         gas: tx.gas,
         gas_price: tx.gas_price,
@@ -493,11 +520,12 @@ pub(super) fn tx_convert(
             .iter()
             .map(|step| step_convert(step, tx.block_num))
             .chain({
-                let rw_counter = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                let rwc =
+                    tx.steps().last().unwrap().rwc.0 + end_tx_rwc(tx.transaction_type, id == 1);
                 debug_assert!(next_block_num >= tx.block_num);
                 let end_inner_block_steps = (tx.block_num..next_block_num)
                     .map(|block_num| ExecStep {
-                        rw_counter,
+                        rw_counter: rwc,
                         execution_state: ExecutionState::EndInnerBlock,
                         block_num,
                         ..Default::default()

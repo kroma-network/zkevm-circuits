@@ -24,6 +24,8 @@ pub enum ExecutionState {
     // Internal state
     BeginTx,
     EndTx,
+    #[cfg(feature = "kroma")]
+    EndDepositTx,
     EndInnerBlock,
     EndBlock,
     // Opcode successful cases
@@ -132,6 +134,17 @@ impl ExecutionState {
 
     pub(crate) fn amount() -> usize {
         Self::iter().count()
+    }
+
+    pub(crate) fn ends_tx(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return matches!(self, Self::EndTx | Self::EndDepositTx);
+        #[cfg(not(feature = "kroma"))]
+        return matches!(self, Self::EndTx);
+    }
+
+    pub(crate) fn halts_in_success(&self) -> bool {
+        matches!(self, Self::STOP | Self::RETURN_REVERT | Self::SELFDESTRUCT)
     }
 
     pub(crate) fn halts_in_exception(&self) -> bool {

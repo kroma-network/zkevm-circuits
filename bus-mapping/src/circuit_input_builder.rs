@@ -12,6 +12,8 @@ mod transaction;
 
 use self::access::gen_state_access_trace;
 pub use self::block::BlockHead;
+#[cfg(feature = "kroma")]
+use crate::evm::opcodes::gen_end_deposit_tx_ops;
 use crate::{
     error::Error,
     evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
@@ -452,12 +454,19 @@ impl<'a> CircuitInputBuilder {
         }
 
         // TODO: Move into gen_associated_steps with
-        // - execution_state: EndTx
+        // - execution_state: EndTx, EndDepositTx
         // - op: None
-        // Generate EndTx step
-        log::trace!("gen_end_tx_ops");
-        let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
-        tx.steps_mut().push(end_tx_step);
+        // Generate EndTx / EndDepositTx step
+        if tx.is_deposit() {
+            #[cfg(feature = "kroma")]
+            let end_deposit_tx_step =
+                gen_end_deposit_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            #[cfg(feature = "kroma")]
+            tx.steps_mut().push(end_deposit_tx_step);
+        } else {
+            let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            tx.steps_mut().push(end_tx_step);
+        }
 
         self.sdb.commit_tx();
         self.block.txs.push(tx);

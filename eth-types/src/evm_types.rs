@@ -6,6 +6,7 @@ use std::fmt;
 pub mod gas_utils;
 pub mod memory;
 pub mod opcode_ids;
+pub mod rwc_util;
 pub mod stack;
 pub mod storage;
 
