@@ -187,6 +187,10 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                     });
                     for (tag, value) in &[
                         (
+                            TxFieldTag::Type,
+                            F::from(tx.transaction_type.unwrap_or_default().as_u64()),
+                        ),
+                        (
                             TxFieldTag::Nonce,
                             rlc(tx.nonce.to_le_bytes(), self.randomness),
                         ),

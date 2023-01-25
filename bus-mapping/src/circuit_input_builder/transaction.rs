@@ -3,9 +3,11 @@
 use std::collections::BTreeMap;
 
 use eth_types::evm_types::Memory;
-use eth_types::Signature;
 use eth_types::{geth_types, Address, GethExecTrace, Word, H256};
+use eth_types::{Signature, U64};
 use ethers_core::utils::get_contract_address;
+#[cfg(feature = "kanvas")]
+use geth_types::DEPOSIT_TX_TYPE;
 
 use crate::{
     state_db::{CodeDB, StateDB},
@@ -183,6 +185,8 @@ impl TransactionContext {
 pub struct Transaction {
     /// ..
     pub block_num: u64,
+    /// Transaction Type
+    pub transaction_type: u64,
     /// Nonce
     pub nonce: u64,
     /// Hash
@@ -210,6 +214,11 @@ pub struct Transaction {
 impl From<&Transaction> for geth_types::Transaction {
     fn from(tx: &Transaction) -> geth_types::Transaction {
         geth_types::Transaction {
+            transaction_type: if tx.transaction_type == 0 {
+                None
+            } else {
+                Some(U64::from(tx.transaction_type))
+            },
             from: tx.from,
             to: Some(tx.to),
             nonce: Word::from(tx.nonce),
@@ -284,6 +293,7 @@ impl Transaction {
         };
 
         Ok(Self {
+            transaction_type: eth_tx.transaction_type.unwrap_or_default().as_u64(),
             block_num: eth_tx.block_number.unwrap().as_u64(),
             hash: eth_tx.hash,
             nonce: eth_tx.nonce.as_u64(),
@@ -306,6 +316,14 @@ impl Transaction {
     /// Whether this [`Transaction`] is a create one
     pub fn is_create(&self) -> bool {
         self.calls[0].is_create()
+    }
+
+    /// Whether this [`Transaction`] is a Kanvas deposit transaction.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kanvas")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kanvas"))]
+        return false;
     }
 
     /// Return the list of execution steps of this transaction.

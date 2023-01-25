@@ -110,6 +110,9 @@ pub enum ExecState {
     BeginTx,
     /// Virtual step End Tx
     EndTx,
+    #[cfg(feature = "kanvas")]
+    /// Virtual step End Tx for Kanvas deposit tx
+    EndDepositTx,
 }
 
 impl ExecState {

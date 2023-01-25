@@ -23,7 +23,14 @@ use halo2_proofs::{
 };
 
 /// Fixed by the spec
-const TX_LEN: usize = 9;
+#[cfg(feature = "kanvas")]
+// This contains followings:
+// - transaction type
+const ADDITIONAL_KANVAS_TX_LEN: usize = 1;
+#[cfg(not(feature = "kanvas"))]
+const ADDITIONAL_KANVAS_TX_LEN: usize = 0;
+
+const TX_LEN: usize = 9 + ADDITIONAL_KANVAS_TX_LEN;
 const BLOCK_LEN: usize = 7 + 256;
 const EXTRA_LEN: usize = 2;
 
@@ -43,6 +50,8 @@ pub struct BlockValues {
 /// Values of the tx table (as in the spec)
 #[derive(Default, Debug, Clone)]
 pub struct TxValues {
+    #[cfg(feature = "kanvas")]
+    transaction_type: Word,
     nonce: Word,
     gas: Word, //gas limit
     gas_price: Word,
@@ -62,10 +71,10 @@ pub struct ExtraValues {
     prev_state_root: H256,
 }
 
-/// PublicData contains all the values that the PiCircuit recieves as input
+/// PublicData contains all the values that the PiCircuit receives as input
 #[derive(Debug, Clone)]
 pub struct PublicData {
-    /// List of tranactions
+    /// List of transactions
     pub txs: Vec<Transaction>,
     /// Information of Ethereum block
     pub extra: GethData,
@@ -130,6 +139,8 @@ impl PublicData {
             let mut msg_hash_le = [0u8; 32];
             msg_hash_le.copy_from_slice(sign_data.msg_hash.to_bytes().as_slice());
             tx_vals.push(TxValues {
+                #[cfg(feature = "kanvas")]
+                transaction_type: Word::from(tx.transaction_type.unwrap_or_default().as_u64()),
                 nonce: tx.nonce,
                 gas_price: tx.gas_price,
                 gas: tx.gas_limit,
@@ -743,6 +754,11 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                     let tx = if i < txs.len() { &txs[i] } else { &tx_default };
 
                     for (tag, value) in &[
+                        #[cfg(feature = "kanvas")]
+                        (
+                            TxFieldTag::Type,
+                            rlc(tx.transaction_type.to_le_bytes(), self.randomness),
+                        ),
                         (
                             TxFieldTag::Nonce,
                             rlc(tx.nonce.to_le_bytes(), self.randomness),
@@ -924,6 +940,8 @@ mod pi_circuit_test {
             let tx = if i < txs.len() { &txs[i] } else { &tx_default };
 
             for val in &[
+                #[cfg(feature = "kanvas")]
+                rlc(tx.transaction_type.to_le_bytes(), randomness),
                 rlc(tx.nonce.to_le_bytes(), randomness),
                 rlc(tx.gas.to_le_bytes(), randomness),
                 rlc(tx.gas_price.to_le_bytes(), randomness),

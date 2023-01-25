@@ -197,6 +197,8 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
             }
             circuit_input_builder::ExecState::BeginTx => ExecutionState::BeginTx,
             circuit_input_builder::ExecState::EndTx => ExecutionState::EndTx,
+            #[cfg(feature = "kanvas")]
+            circuit_input_builder::ExecState::EndDepositTx => ExecutionState::EndDepositTx,
         }
     }
 }

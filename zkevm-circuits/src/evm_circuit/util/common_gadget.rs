@@ -16,7 +16,7 @@ use crate::{
     util::Expr,
     witness::{Block, Call, ExecStep},
 };
-use eth_types::{Field, ToLittleEndian, ToScalar, U256};
+use eth_types::{Field, ToLittleEndian, ToScalar, U256, evm_types::rwc_util::stop_rwc_offset};
 use halo2_proofs::{
     circuit::Value,
     plonk::{Error, Expression},
@@ -194,15 +194,15 @@ impl<F: Field> RestoreContextGadget<F> {
                 [U256::zero(); 9]
             } else {
                 [
-                    step.rw_indices[1],
-                    step.rw_indices[2],
-                    step.rw_indices[3],
-                    step.rw_indices[4],
-                    step.rw_indices[5],
-                    step.rw_indices[6],
-                    step.rw_indices[7],
-                    step.rw_indices[8],
-                    step.rw_indices[9],
+                    step.rw_indices[stop_rwc_offset(1)],
+                    step.rw_indices[stop_rwc_offset(2)],
+                    step.rw_indices[stop_rwc_offset(3)],
+                    step.rw_indices[stop_rwc_offset(4)],
+                    step.rw_indices[stop_rwc_offset(5)],
+                    step.rw_indices[stop_rwc_offset(6)],
+                    step.rw_indices[stop_rwc_offset(7)],
+                    step.rw_indices[stop_rwc_offset(8)],
+                    step.rw_indices[stop_rwc_offset(9)],
                 ]
                 .map(|idx| block.rws[idx].call_context_value())
             };

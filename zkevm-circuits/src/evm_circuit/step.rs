@@ -24,6 +24,8 @@ pub enum ExecutionState {
     // Internal state
     BeginTx,
     EndTx,
+    #[cfg(feature = "kanvas")]
+    EndDepositTx,
     EndInnerBlock,
     EndBlock,
     // Opcode successful cases
@@ -134,6 +136,13 @@ impl ExecutionState {
 
     pub(crate) fn amount() -> usize {
         Self::iter().count()
+    }
+
+    pub(crate) fn ends_tx(&self) -> bool {
+        #[cfg(feature = "kanvas")]
+        return matches!(self, Self::EndTx | Self::EndDepositTx);
+        #[cfg(not(feature = "kanvas"))]
+        return matches!(self, Self::EndTx);
     }
 
     pub(crate) fn halts_in_success(&self) -> bool {
