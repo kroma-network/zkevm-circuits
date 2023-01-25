@@ -41,8 +41,8 @@ use std::marker::PhantomData;
 
 use crate::table::TxFieldTag::{
     CallData, CallDataGasCost, CallDataLength, CalleeAddress, CallerAddress, Gas, GasPrice,
-    IsCreate, Nonce, SigR, SigS, SigV, TxHashLength, TxHashRLC, TxSignHash, TxSignLength,
-    TxSignRLC,
+    IsCreate, Nonce, SigR, SigS, SigV, TransactionType, TxHashLength, TxHashRLC, TxSignHash,
+    TxSignLength, TxSignRLC,
 };
 use gadgets::is_zero::{IsZeroChip, IsZeroConfig, IsZeroInstruction};
 pub use halo2_proofs::halo2curves::{
@@ -60,8 +60,15 @@ use halo2_proofs::plonk::FirstPhase as SecondPhase;
 #[cfg(not(feature = "onephase"))]
 use halo2_proofs::plonk::SecondPhase;
 
+#[cfg(feature = "kanvas")]
+// This contains followings:
+// - transaction type
+const ADDITIONAL_KANVAS_TX_LEN: usize = 1;
+#[cfg(not(feature = "kanvas"))]
+const ADDITIONAL_KANVAS_TX_LEN: usize = 0;
+
 /// Number of rows of one tx occupies in the fixed part of tx table
-pub const TX_LEN: usize = 19;
+pub const TX_LEN: usize = 19 + ADDITIONAL_KANVAS_TX_LEN;
 /// Offset of TxHash tag in the tx table
 pub const TX_HASH_OFFSET: usize = 18;
 
@@ -1335,8 +1342,14 @@ impl<F: Field> TxCircuit<F> {
                                 .fold(F::zero(), |acc, byte| acc * rand + F::from(byte as u64))
                         })
                     };
+
                     for (tag, rlp_tag, value) in [
                         // need to be in same order as that tx table load function uses
+                        (
+                            TransactionType,
+                            RlpTxTag::TransactionType,
+                            Value::known(F::from(tx.transaction_type)),
+                        ),
                         (Nonce, RlpTxTag::Nonce, Value::known(F::from(tx.nonce))),
                         (Gas, RlpTxTag::Gas, Value::known(F::from(tx.gas))),
                         (

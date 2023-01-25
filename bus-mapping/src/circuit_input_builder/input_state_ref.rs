@@ -95,6 +95,14 @@ impl<'a> CircuitInputStateRef<'a> {
         }
     }
 
+    #[cfg(feature = "kanvas")]
+    /// Create a new EndDepositTx step
+    pub fn new_end_deposit_tx_step(&self) -> ExecStep {
+        let mut exec_step = self.new_end_tx_step();
+        exec_step.exec_state = ExecState::EndDepositTx;
+        exec_step
+    }
+
     /// Push an [`Operation`](crate::operation::Operation) into the
     /// [`OperationContainer`](crate::operation::OperationContainer) with the
     /// next [`RWCounter`](crate::operation::RWCounter) and then adds a

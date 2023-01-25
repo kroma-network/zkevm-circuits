@@ -28,3 +28,4 @@ mpt-circuits = { package = "halo2-mpt-circuits", git = "https://github.com/scrol
 [features]
 default = ["warn-unimplemented"]
 warn-unimplemented = []
+kanvas = []

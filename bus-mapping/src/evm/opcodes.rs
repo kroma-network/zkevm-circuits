@@ -652,6 +652,74 @@ pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
     Ok(exec_step)
 }
 
+#[cfg(feature = "kanvas")]
+pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+    let mut exec_step = state.new_end_deposit_tx_step();
+    let call = state.tx.calls()[0].clone();
+
+    state.call_context_read(
+        &mut exec_step,
+        call.call_id,
+        CallContextField::TxId,
+        state.tx_ctx.id().into(),
+    );
+    state.call_context_read(
+        &mut exec_step,
+        call.call_id,
+        CallContextField::IsPersistent,
+        Word::from(call.is_persistent as u8),
+    );
+
+    // handle tx receipt tag
+    state.tx_receipt_write(
+        &mut exec_step,
+        state.tx_ctx.id(),
+        TxReceiptField::PostStateOrStatus,
+        call.is_persistent as u64,
+    )?;
+
+    let log_id = exec_step.log_id;
+    state.tx_receipt_write(
+        &mut exec_step,
+        state.tx_ctx.id(),
+        TxReceiptField::LogLength,
+        log_id as u64,
+    )?;
+
+    if state.tx_ctx.id() > 1 {
+        // query pre tx cumulative gas
+        state.tx_receipt_read(
+            &mut exec_step,
+            state.tx_ctx.id() - 1,
+            TxReceiptField::CumulativeGasUsed,
+            state.block_ctx.cumulative_gas_used,
+        )?;
+    }
+
+    state.block_ctx.cumulative_gas_used += if state.tx_ctx.id() == 1 {
+        0
+    } else {
+        state.tx.gas
+    };
+    state.tx_receipt_write(
+        &mut exec_step,
+        state.tx_ctx.id(),
+        TxReceiptField::CumulativeGasUsed,
+        state.block_ctx.cumulative_gas_used,
+    )?;
+
+    if !state.tx_ctx.is_last_tx() {
+        state.call_context_write(
+            &mut exec_step,
+            state.block_ctx.rwc.0 + 1,
+            CallContextField::TxId,
+            (state.tx_ctx.id() + 1).into(),
+        );
+    }
+
+    Ok(exec_step)
+}
+
 #[derive(Debug, Copy, Clone)]
 struct DummySelfDestruct;
 

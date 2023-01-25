@@ -10,6 +10,7 @@ use eth_types::{
 };
 use gadgets::impl_expr;
 use halo2_proofs::plonk::Expression;
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 /// An execution step of the EVM.
@@ -112,6 +113,9 @@ pub enum ExecState {
     EndTx,
     /// Virtual step End Block
     EndBlock,
+    #[cfg(feature = "kanvas")]
+    /// Virtual step End Tx for Kanvas deposit tx
+    EndDepositTx,
 }
 
 impl ExecState {

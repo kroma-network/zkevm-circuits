@@ -25,6 +25,8 @@ pub enum ExecutionState {
     // Internal state
     BeginTx,
     EndTx,
+    #[cfg(feature = "kanvas")]
+    EndDepositTx,
     EndInnerBlock,
     EndBlock,
     // Opcode successful cases
@@ -58,6 +60,7 @@ pub enum ExecutionState {
     GASPRICE,
     EXTCODESIZE,
     EXTCODECOPY,
+    RETURN,
     RETURNDATASIZE,
     RETURNDATACOPY,
     EXTCODEHASH,
@@ -131,6 +134,17 @@ impl ExecutionState {
         Self::iter().count()
     }
 
+    pub(crate) fn ends_tx(&self) -> bool {
+        #[cfg(feature = "kanvas")]
+        return matches!(self, Self::EndTx | Self::EndDepositTx);
+        #[cfg(not(feature = "kanvas"))]
+        return matches!(self, Self::EndTx);
+    }
+
+    pub(crate) fn halts_in_success(&self) -> bool {
+        matches!(self, Self::STOP | Self::RETURN | Self::SELFDESTRUCT)
+    }
+
     pub(crate) fn halts_in_exception(&self) -> bool {
         matches!(
             self,
@@ -168,6 +182,7 @@ impl ExecutionState {
     pub(crate) fn halts(&self) -> bool {
         matches!(self, Self::STOP | Self::RETURN_REVERT | Self::SELFDESTRUCT)
             || self.halts_in_exception()
+            || self.halts_in_success()
     }
 
     pub(crate) fn responsible_opcodes(&self) -> Vec<OpcodeId> {

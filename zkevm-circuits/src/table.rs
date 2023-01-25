@@ -31,6 +31,7 @@ use halo2_proofs::plonk::SecondPhase;
 use itertools::Itertools;
 use keccak256::plain::Keccak;
 use std::array;
+use strum::IntoEnumIterator;
 use strum_macros::{EnumCount, EnumIter};
 
 /// Trait used for dynamic tables.  Used to get an automatic implementation of
@@ -70,6 +71,8 @@ impl<F: Field, C: Into<Column<Any>> + Clone, const W: usize> LookupTable<F> for 
 pub enum TxFieldTag {
     /// Unused tag
     Null = 0,
+    /// Type
+    Type,
     /// Nonce
     Nonce,
     /// GasPrice
@@ -115,6 +118,8 @@ pub enum TxFieldTag {
     CallData,
     /// The block number in which this tx is included.
     BlockNumber,
+    /// The type of transaction (if it's a deposit tx, value is 126)
+    TransactionType,
 }
 impl_expr!(TxFieldTag);
 

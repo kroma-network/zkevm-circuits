@@ -21,7 +21,10 @@ use crate::{
     util::Expr,
     witness::{Block, Call, ExecStep},
 };
-use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar, U256};
+use eth_types::{
+    evm_types::{rwc_util::stop_rwc_offset, GasCost},
+    Field, ToLittleEndian, ToScalar, U256,
+};
 use gadgets::util::{select, sum};
 use halo2_proofs::{
     circuit::Value,
@@ -212,9 +215,18 @@ impl<F: Field> RestoreContextGadget<F> {
             if call.is_root {
                 [U256::zero(); 9]
             } else {
-                [0, 1, 2, 3, 4, 5, 6, 7, 8]
-                    .map(|i| step.rw_indices[i + rw_offset])
-                    .map(|idx| block.rws[idx].call_context_value())
+                [
+                    step.rw_indices[stop_rwc_offset(0 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(1 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(2 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(3 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(4 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(5 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(6 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(7 + rw_offset)],
+                    step.rw_indices[stop_rwc_offset(8 + rw_offset)],
+                ]
+                .map(|idx| block.rws[idx].call_context_value())
             };
 
         for (cell, value) in [

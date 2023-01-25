@@ -324,7 +324,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
             cb.gate(meta.query_selector(q_not_end))
         });
-
         meta.lookup_any("keccak(rpi)", |meta| {
             let is_enabled = meta.query_advice(keccak_table.is_enabled, Rotation::cur());
             let input_rlc = meta.query_advice(keccak_table.input_rlc, Rotation::cur());

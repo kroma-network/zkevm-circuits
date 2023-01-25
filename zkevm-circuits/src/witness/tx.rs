@@ -3,6 +3,9 @@ use crate::util::{rlc_be_bytes, Challenges};
 use crate::{evm_circuit::util::RandomLinearCombination, table::TxContextFieldTag};
 use bus_mapping::circuit_input_builder;
 use bus_mapping::circuit_input_builder::{get_dummy_tx, get_dummy_tx_hash};
+use eth_types::evm_types::rwc_util::end_tx_rwc;
+#[cfg(feature = "kanvas")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::sign_types::{
     biguint_to_32bytes_le, ct_option_ok_or, recover_pk, SignData, SECP256K1_Q,
 };
@@ -66,6 +69,9 @@ pub struct Transaction {
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
     pub steps: Vec<ExecStep>,
+
+    /// The type of the transaction
+    pub transaction_type: u64,
 }
 
 impl Transaction {
@@ -89,6 +95,7 @@ impl Transaction {
             rlp_signed,
             rlp_unsigned,
             hash: dummy_tx_hash,
+            transaction_type: 0,
 
             ..Default::default()
         }
@@ -124,6 +131,20 @@ impl Transaction {
             msg_hash,
         })
     }
+
+    /// Whether tx is a system deposit tx.
+    pub fn is_system_deposit(&self) -> bool {
+        return self.is_deposit() && self.id == 1;
+    }
+
+    /// Whether tx is a deposit tx.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kanvas")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kanvas"))]
+        return false;
+    }
+
     /// Assignments for tx table
     pub fn table_assignments_fixed<F: Field>(
         &self,
@@ -141,6 +162,12 @@ impl Transaction {
         let tx_sign_hash_be_bytes = keccak256(&self.rlp_unsigned);
 
         let ret = vec![
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Type as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.transaction_type)),
+            ],
             [
                 Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::Nonce as u64)),
@@ -391,6 +418,7 @@ impl From<MockTransaction> for Transaction {
             s: sig.s,
             calls: vec![],
             steps: vec![],
+            transaction_type: mock_tx.transaction_type.as_u64(),
         }
     }
 }
@@ -435,6 +463,7 @@ pub(super) fn tx_convert(
         id,
         hash: tx.hash, // NOTE that if tx is not of legacy type, then tx.hash does not equal to
         // keccak(rlp_signed)
+        transaction_type: tx.transaction_type,
         nonce: tx.nonce,
         gas: tx.gas,
         gas_price: tx.gas_price,
@@ -486,7 +515,8 @@ pub(super) fn tx_convert(
                 let block_gap = next_tx.block_num - tx.block_num;
                 (0..block_gap)
                     .map(|i| {
-                        let rwc = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                        let rwc = tx.steps().last().unwrap().rwc.0
+                            + end_tx_rwc(tx.transaction_type, id == 1);
                         ExecStep {
                             rw_counter: rwc,
                             execution_state: ExecutionState::EndInnerBlock,
@@ -496,7 +526,8 @@ pub(super) fn tx_convert(
                     })
                     .collect::<Vec<ExecStep>>()
             } else {
-                let rwc = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                let rwc =
+                    tx.steps().last().unwrap().rwc.0 + end_tx_rwc(tx.transaction_type, id == 1);
                 vec![
                     ExecStep {
                         rw_counter: rwc,

@@ -32,6 +32,14 @@ impl Opcode for Stop {
             1.into(),
         );
 
+        #[cfg(feature = "kanvas")]
+        state.call_context_read(
+            &mut exec_step,
+            call.call_id,
+            CallContextField::TxId,
+            state.tx_ctx.id().into(),
+        );
+
         if !call.is_root {
             state.caller_ctx_mut()?.return_data = vec![];
 
@@ -40,6 +48,13 @@ impl Opcode for Stop {
             // in python spec, and should be reusable among all expected halting opcodes or
             // exceptions.
             state.gen_restore_context_ops(&mut exec_step, geth_steps)?;
+        } else {
+            state.call_context_read(
+                &mut exec_step,
+                call.call_id,
+                CallContextField::IsPersistent,
+                1.into(),
+            );
         }
 
         state.handle_return(geth_step)?;

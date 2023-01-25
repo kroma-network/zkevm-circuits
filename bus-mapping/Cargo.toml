@@ -46,5 +46,6 @@ mock = { path = "../mock" }
 rand = "0.8"
 
 [features]
-default = ["test"]
+default = []
+kanvas = ["eth-types/kanvas"]
 test = ["mock", "rand"]
