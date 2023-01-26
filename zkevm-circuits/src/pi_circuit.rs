@@ -23,7 +23,15 @@ use halo2_proofs::{
 };
 
 /// Fixed by the spec
-const TX_LEN: usize = 9;
+#[cfg(feature = "kanvas")]
+// This contains followings:
+// - transaction type
+// - mint
+const ADDITIONAL_KANVAS_TX_LEN: usize = 2;
+#[cfg(not(feature = "kanvas"))]
+const ADDITIONAL_KANVAS_TX_LEN: usize = 0;
+
+const TX_LEN: usize = 9 + ADDITIONAL_KANVAS_TX_LEN;
 const BLOCK_LEN: usize = 7 + 256;
 const EXTRA_LEN: usize = 2;
 
@@ -43,6 +51,8 @@ pub struct BlockValues {
 /// Values of the tx table (as in the spec)
 #[derive(Default, Debug, Clone)]
 pub struct TxValues {
+    #[cfg(feature = "kanvas")]
+    transaction_type: Word,
     nonce: Word,
     gas: Word, //gas limit
     gas_price: Word,
@@ -52,6 +62,8 @@ pub struct TxValues {
     value: Word,
     call_data_len: u64,
     tx_sign_hash: [u8; 32],
+    #[cfg(feature = "kanvas")]
+    mint: Word,
 }
 
 /// Extra values (not contained in block or tx tables)
@@ -62,10 +74,10 @@ pub struct ExtraValues {
     prev_state_root: H256,
 }
 
-/// PublicData contains all the values that the PiCircuit recieves as input
+/// PublicData contains all the values that the PiCircuit receives as input
 #[derive(Debug, Clone)]
 pub struct PublicData {
-    /// List of tranactions
+    /// List of transactions
     pub txs: Vec<Transaction>,
     /// Information of Ethereum block
     pub extra: GethData,
@@ -130,6 +142,8 @@ impl PublicData {
             let mut msg_hash_le = [0u8; 32];
             msg_hash_le.copy_from_slice(sign_data.msg_hash.to_bytes().as_slice());
             tx_vals.push(TxValues {
+                #[cfg(feature = "kanvas")]
+                transaction_type: Word::from(tx.transaction_type.unwrap_or_default().as_u64()),
                 nonce: tx.nonce,
                 gas_price: tx.gas_price,
                 gas: tx.gas_limit,
@@ -139,6 +153,8 @@ impl PublicData {
                 value: tx.value,
                 call_data_len: tx.call_data.0.len() as u64,
                 tx_sign_hash: msg_hash_le,
+                #[cfg(feature = "kanvas")]
+                mint: tx.mint,
             });
         }
         tx_vals
@@ -743,6 +759,11 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                     let tx = if i < txs.len() { &txs[i] } else { &tx_default };
 
                     for (tag, value) in &[
+                        #[cfg(feature = "kanvas")]
+                        (
+                            TxFieldTag::Type,
+                            rlc(tx.transaction_type.to_le_bytes(), self.randomness),
+                        ),
                         (
                             TxFieldTag::Nonce,
                             rlc(tx.nonce.to_le_bytes(), self.randomness),
@@ -769,6 +790,11 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                         (
                             TxFieldTag::TxSignHash,
                             rlc(tx.tx_sign_hash, self.randomness),
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            TxFieldTag::Mint,
+                            rlc(tx.mint.to_le_bytes(), self.randomness),
                         ),
                     ] {
                         config.assign_tx_row(
@@ -924,6 +950,8 @@ mod pi_circuit_test {
             let tx = if i < txs.len() { &txs[i] } else { &tx_default };
 
             for val in &[
+                #[cfg(feature = "kanvas")]
+                rlc(tx.transaction_type.to_le_bytes(), randomness),
                 rlc(tx.nonce.to_le_bytes(), randomness),
                 rlc(tx.gas.to_le_bytes(), randomness),
                 rlc(tx.gas_price.to_le_bytes(), randomness),
@@ -933,6 +961,8 @@ mod pi_circuit_test {
                 rlc(tx.value.to_le_bytes(), randomness),
                 F::from(tx.call_data_len),
                 rlc(tx.tx_sign_hash, randomness),
+                #[cfg(feature = "kanvas")]
+                rlc(tx.mint.to_le_bytes(), randomness),
             ] {
                 result[id_offset + offset] = F::from((i + 1) as u64);
                 result[index_offset + offset] = F::zero();

@@ -15,6 +15,10 @@ use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 
+#[cfg(feature = "kanvas")]
+/// Kanvas deposit transaction type
+pub const DEPOSIT_TX_TYPE: u64 = 0x7e;
+
 /// Definition of all of the data related to an account.
 #[serde_as]
 #[derive(PartialEq, Eq, Debug, Default, Clone, Serialize)]
@@ -100,6 +104,8 @@ impl BlockConstants {
 /// Definition of all of the constants related to an Ethereum transaction.
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Transaction {
+    /// Transaction type
+    pub transaction_type: Option<U64>,
     /// Sender address
     pub from: Address,
     /// Recipient address (None for contract creation)
@@ -108,7 +114,7 @@ pub struct Transaction {
     pub nonce: Word,
     /// Gas Limit / Supplied gas
     pub gas_limit: Word,
-    /// Transfered value
+    /// Transferred value
     pub value: Word,
     /// Gas Price
     pub gas_price: Word,
@@ -129,11 +135,17 @@ pub struct Transaction {
     pub r: Word,
     /// "s" value of the transaction signature
     pub s: Word,
+
+    /// Kanvas Deposit tx
+    #[cfg(feature = "kanvas")]
+    /// Mint
+    pub mint: Word,
 }
 
 impl From<&Transaction> for crate::Transaction {
     fn from(tx: &Transaction) -> crate::Transaction {
         crate::Transaction {
+            transaction_type: tx.transaction_type.clone(),
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -155,6 +167,7 @@ impl From<&Transaction> for crate::Transaction {
 impl From<&crate::Transaction> for Transaction {
     fn from(tx: &crate::Transaction) -> Transaction {
         Transaction {
+            transaction_type: tx.transaction_type.clone(),
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -168,6 +181,8 @@ impl From<&crate::Transaction> for Transaction {
             v: tx.v.as_u64(),
             r: tx.r,
             s: tx.s,
+            #[cfg(feature = "kanvas")]
+            mint: Transaction::get_mint(tx).unwrap_or_default(),
         }
     }
 }
@@ -186,6 +201,23 @@ impl From<&Transaction> for TransactionRequest {
 }
 
 impl Transaction {
+    /// Retrieve mint from `tx.other`.
+    pub fn get_mint(_tx: &crate::Transaction) -> Option<Word> {
+        #[cfg(feature = "kanvas")]
+        if let Some(v) = _tx.other.get("mint") {
+            return Some(Word::from_dec_str(v.as_str().unwrap()).unwrap());
+        }
+        None
+    }
+
+    /// Whether this Transaction is a deposit transaction.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kanvas")]
+        return self.transaction_type.unwrap_or_default().as_u64() == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kanvas"))]
+        return false;
+    }
+
     /// Return the SignData associated with this Transaction.
     pub fn sign_data(&self, chain_id: u64) -> Result<SignData, Error> {
         let sig_r_le = self.r.to_le_bytes();

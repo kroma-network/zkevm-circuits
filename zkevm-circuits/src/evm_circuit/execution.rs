@@ -13,7 +13,7 @@ use crate::{
     table::{LookupTable, RwTableTag, TxReceiptFieldTag},
     util::Expr,
 };
-use eth_types::Field;
+use eth_types::{evm_types::rwc_util::end_tx_rwc, Field};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -45,6 +45,8 @@ mod comparator;
 mod dummy;
 mod dup;
 mod end_block;
+#[cfg(feature = "kanvas")]
+mod end_deposit_tx;
 mod end_inner_block;
 mod end_tx;
 mod error_oog_constant;
@@ -100,6 +102,8 @@ use comparator::ComparatorGadget;
 use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
+#[cfg(feature = "kanvas")]
+use end_deposit_tx::EndDepositTxGadget;
 use end_inner_block::EndInnerBlockGadget;
 use end_tx::EndTxGadget;
 use error_oog_constant::ErrorOOGConstantGadget;
@@ -173,6 +177,8 @@ pub(crate) struct ExecutionConfig<F> {
     end_block_gadget: EndBlockGadget<F>,
     end_inner_block_gadget: EndInnerBlockGadget<F>,
     end_tx_gadget: EndTxGadget<F>,
+    #[cfg(feature = "kanvas")]
+    end_deposit_tx_gadget: EndDepositTxGadget<F>,
     // opcode gadgets
     add_sub_gadget: AddSubGadget<F>,
     addmod_gadget: AddModGadget<F>,
@@ -401,6 +407,8 @@ impl<F: Field> ExecutionConfig<F> {
             end_block_gadget: configure_gadget!(),
             end_inner_block_gadget: configure_gadget!(),
             end_tx_gadget: configure_gadget!(),
+            #[cfg(feature = "kanvas")]
+            end_deposit_tx_gadget: configure_gadget!(),
             // opcode gadgets
             add_sub_gadget: configure_gadget!(),
             addmod_gadget: configure_gadget!(),
@@ -625,6 +633,12 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::EndTx,
                             vec![ExecutionState::BeginTx, ExecutionState::EndInnerBlock],
                         ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "EndDepositTx can only transit to BeginTx or EndInnerBlock",
+                            ExecutionState::EndDepositTx,
+                            vec![ExecutionState::BeginTx, ExecutionState::EndInnerBlock],
+                        ),
                         (
                             "EndInnerBlock can only transition to BeginTx, EndInnerBlock or EndBlock",
                             ExecutionState::EndInnerBlock,
@@ -641,10 +655,26 @@ impl<F: Field> ExecutionConfig<F> {
                 )
                 .chain(
                     IntoIterator::into_iter([
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "Only EndTx, EndDepositTx or EndInnerBlock can transit to BeginTx",
+                            ExecutionState::BeginTx,
+                            vec![ExecutionState::EndTx, ExecutionState::EndDepositTx, ExecutionState::EndInnerBlock],
+                        ),
+                        #[cfg(not(feature = "kanvas"))]
                         (
                             "Only EndTx or EndInnerBlock can transit to BeginTx",
                             ExecutionState::BeginTx,
                             vec![ExecutionState::EndTx, ExecutionState::EndInnerBlock],
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "Only ExecutionState which halts or BeginTx can transit to EndDepositTx",
+                            ExecutionState::EndDepositTx,
+                            ExecutionState::iter()
+                                .filter(ExecutionState::halts)
+                                .chain(iter::once(ExecutionState::BeginTx))
+                                .collect(),
                         ),
                         (
                             "Only ExecutionState which halts or BeginTx can transit to EndTx",
@@ -659,6 +689,13 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::EndBlock,
                             vec![ExecutionState::EndInnerBlock, ExecutionState::EndBlock],
                         ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "Only EndTx, EndDepositTx or EndInnerBlock can transit to EndInnerBlock",
+                            ExecutionState::EndInnerBlock,
+                            vec![ExecutionState::EndTx, ExecutionState::EndDepositTx, ExecutionState::EndInnerBlock],
+                        ),
+                        #[cfg(not(feature = "kanvas"))]
                         (
                             "Only EndTx or EndInnerBlock can transit to EndInnerBlock",
                             ExecutionState::EndInnerBlock,
@@ -783,8 +820,8 @@ impl<F: Field> ExecutionConfig<F> {
                     rw_counter: if block.txs.is_empty() {
                         0
                     } else {
-                        // if it is the first tx,  less 1 rw lookup, refer to end_tx gadget
-                        last_tx.steps.last().unwrap().rw_counter + 9 - (last_tx.id == 1) as usize
+                        last_tx.steps.last().unwrap().rw_counter
+                            + end_tx_rwc(last_tx.transaction_type, last_tx.id == 1)
                     },
                     execution_state: ExecutionState::EndBlock,
                     block_num: last_tx.block_number,
@@ -807,13 +844,18 @@ impl<F: Field> ExecutionConfig<F> {
                     let height = self.get_step_height(step.execution_state);
                     // Assign the step witness
                     let next = steps.peek();
-                    if step.execution_state == ExecutionState::EndTx {
+                    if step.execution_state.ends_tx() {
                         let mut tx = transaction.clone();
                         tx.call_data.clear();
                         tx.calls.clear();
                         tx.steps.clear();
                         let total_gas = {
-                            let gas_used = tx.gas - step.gas_left;
+                            let gas_used = eth_types::evm_types::gas_utils::gas_used(
+                                tx.transaction_type,
+                                tx.id == 1,
+                                tx.gas,
+                                step.gas_left,
+                            );
                             let current_cumulative_gas_used: u64 = if tx.id == 1 {
                                 0
                             } else {
@@ -1000,6 +1042,8 @@ impl<F: Field> ExecutionConfig<F> {
             // internal states
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::EndTx => assign_exec_step!(self.end_tx_gadget),
+            #[cfg(feature = "kanvas")]
+            ExecutionState::EndDepositTx => assign_exec_step!(self.end_deposit_tx_gadget),
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
             // opcode

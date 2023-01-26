@@ -1,5 +1,8 @@
 use crate::{evm_circuit::util::RandomLinearCombination, table::TxContextFieldTag};
 use bus_mapping::circuit_input_builder;
+use eth_types::evm_types::rwc_util::end_tx_rwc;
+#[cfg(feature = "kanvas")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::H256;
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
 
@@ -15,6 +18,8 @@ pub struct Transaction {
     pub id: usize,
     /// The hash of the transaction
     pub hash: H256,
+    /// The type of the transaction
+    pub transaction_type: u64,
     /// The sender account nonce of the transaction
     pub nonce: u64,
     /// The gas limit of the transaction
@@ -39,13 +44,37 @@ pub struct Transaction {
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
     pub steps: Vec<ExecStep>,
+
+    /// Kanvas deposit tx
+    #[cfg(feature = "kanvas")]
+    /// The mint
+    pub mint: Word,
 }
 
 impl Transaction {
+    /// Whether tx is a system deposit tx.
+    pub fn is_system_deposit(&self) -> bool {
+        return self.is_deposit() && self.id == 1;
+    }
+
+    /// Whether tx is a deposit tx.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kanvas")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kanvas"))]
+        return false;
+    }
+
     /// Assignments for tx table
     pub fn table_assignments<F: Field>(&self, randomness: F) -> Vec<[F; 4]> {
         [
             vec![
+                [
+                    F::from(self.id as u64),
+                    F::from(TxContextFieldTag::Type as u64),
+                    F::zero(),
+                    F::from(self.transaction_type),
+                ],
                 [
                     F::from(self.id as u64),
                     F::from(TxContextFieldTag::Nonce as u64),
@@ -122,6 +151,16 @@ impl Transaction {
                     F::zero(),
                     F::from(self.block_number),
                 ],
+                #[cfg(feature = "kanvas")]
+                [
+                    F::from(self.id as u64),
+                    F::from(TxContextFieldTag::Mint as u64),
+                    F::zero(),
+                    RandomLinearCombination::random_linear_combine(
+                        self.mint.to_le_bytes(),
+                        randomness,
+                    ),
+                ],
             ],
             self.call_data
                 .iter()
@@ -149,6 +188,7 @@ pub(super) fn tx_convert(
         block_number: tx.block_num,
         id,
         hash: tx.hash,
+        transaction_type: tx.transaction_type,
         nonce: tx.nonce,
         gas: tx.gas,
         gas_price: tx.gas_price,
@@ -158,6 +198,8 @@ pub(super) fn tx_convert(
         value: tx.value,
         call_data: tx.input.clone(),
         call_data_length: tx.input.len(),
+        #[cfg(feature = "kanvas")]
+        mint: tx.mint,
         call_data_gas_cost: tx
             .input
             .iter()
@@ -194,7 +236,8 @@ pub(super) fn tx_convert(
                 let block_gap = next_tx.block_num - tx.block_num;
                 (0..block_gap)
                     .map(|i| {
-                        let rwc = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                        let rwc = tx.steps().last().unwrap().rwc.0
+                            + end_tx_rwc(tx.transaction_type, id == 1);
                         ExecStep {
                             rw_counter: rwc,
                             execution_state: ExecutionState::EndInnerBlock,
@@ -204,7 +247,8 @@ pub(super) fn tx_convert(
                     })
                     .collect::<Vec<ExecStep>>()
             } else {
-                let rwc = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                let rwc =
+                    tx.steps().last().unwrap().rwc.0 + end_tx_rwc(tx.transaction_type, id == 1);
                 vec![
                     ExecStep {
                         rw_counter: rwc,

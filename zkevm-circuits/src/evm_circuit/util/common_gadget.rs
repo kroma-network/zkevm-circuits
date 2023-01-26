@@ -16,7 +16,7 @@ use crate::{
     util::Expr,
     witness::{Block, Call, ExecStep},
 };
-use eth_types::{Field, ToLittleEndian, ToScalar, U256};
+use eth_types::{Field, ToLittleEndian, ToScalar, U256, evm_types::rwc_util::stop_rwc_offset};
 use halo2_proofs::{
     circuit::Value,
     plonk::{Error, Expression},
@@ -194,15 +194,15 @@ impl<F: Field> RestoreContextGadget<F> {
                 [U256::zero(); 9]
             } else {
                 [
-                    step.rw_indices[1],
-                    step.rw_indices[2],
-                    step.rw_indices[3],
-                    step.rw_indices[4],
-                    step.rw_indices[5],
-                    step.rw_indices[6],
-                    step.rw_indices[7],
-                    step.rw_indices[8],
-                    step.rw_indices[9],
+                    step.rw_indices[stop_rwc_offset(1)],
+                    step.rw_indices[stop_rwc_offset(2)],
+                    step.rw_indices[stop_rwc_offset(3)],
+                    step.rw_indices[stop_rwc_offset(4)],
+                    step.rw_indices[stop_rwc_offset(5)],
+                    step.rw_indices[stop_rwc_offset(6)],
+                    step.rw_indices[stop_rwc_offset(7)],
+                    step.rw_indices[stop_rwc_offset(8)],
+                    step.rw_indices[stop_rwc_offset(9)],
                 ]
                 .map(|idx| block.rws[idx].call_context_value())
             };
@@ -257,7 +257,11 @@ impl<F: Field, const N_ADDENDS: usize, const INCREASE: bool>
         address: Expression<F>,
         updates: Vec<Word<F>>,
         reversion_info: Option<&mut ReversionInfo<F>>,
+        condition: Option<Expression<F>>,
     ) -> Self {
+        // NOTE(chokobole): if |reversion_info.is_some()| and |condition.is_some()|,
+        // this causes a 'Nested condition is not supported' assertion.
+        debug_assert!(reversion_info.is_none() || condition.is_none());
         debug_assert!(updates.len() == N_ADDENDS - 1);
 
         let balance_addend = cb.query_word();
@@ -279,13 +283,25 @@ impl<F: Field, const N_ADDENDS: usize, const INCREASE: bool>
             balance_sum,
         );
 
-        cb.account_write(
-            address,
-            AccountFieldTag::Balance,
-            value,
-            value_prev,
-            reversion_info,
-        );
+        if let Some(condition) = condition {
+            cb.condition(condition, |cb| {
+                cb.account_write(
+                    address,
+                    AccountFieldTag::Balance,
+                    value,
+                    value_prev,
+                    reversion_info,
+                );
+            });
+        } else {
+            cb.account_write(
+                address,
+                AccountFieldTag::Balance,
+                value,
+                value_prev,
+                reversion_info,
+            );
+        }
 
         Self { add_words }
     }
@@ -348,9 +364,15 @@ impl<F: Field> TransferWithGasFeeGadget<F> {
             sender_address,
             vec![value.clone(), gas_fee],
             Some(reversion_info),
+            None,
         );
-        let receiver =
-            UpdateBalanceGadget::construct(cb, receiver_address, vec![value], Some(reversion_info));
+        let receiver = UpdateBalanceGadget::construct(
+            cb,
+            receiver_address,
+            vec![value],
+            Some(reversion_info),
+            None,
+        );
 
         Self { sender, receiver }
     }
@@ -401,9 +423,15 @@ impl<F: Field> TransferGadget<F> {
             sender_address,
             vec![value.clone()],
             Some(reversion_info),
+            None,
         );
-        let receiver =
-            UpdateBalanceGadget::construct(cb, receiver_address, vec![value], Some(reversion_info));
+        let receiver = UpdateBalanceGadget::construct(
+            cb,
+            receiver_address,
+            vec![value],
+            Some(reversion_info),
+            None,
+        );
 
         Self { sender, receiver }
     }

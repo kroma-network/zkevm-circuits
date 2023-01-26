@@ -91,6 +91,14 @@ impl<'a> CircuitInputStateRef<'a> {
         }
     }
 
+    #[cfg(feature = "kanvas")]
+    /// Create a new EndDepositTx step
+    pub fn new_end_deposit_tx_step(&self) -> ExecStep {
+        let mut exec_step = self.new_end_tx_step();
+        exec_step.exec_state = ExecState::EndDepositTx;
+        exec_step
+    }
+
     /// Push an [`Operation`](crate::operation::Operation) into the
     /// [`OperationContainer`](crate::operation::OperationContainer) with the
     /// next [`RWCounter`](crate::operation::RWCounter) and then adds a
@@ -401,6 +409,26 @@ impl<'a> CircuitInputStateRef<'a> {
                 is_warm_prev,
             },
         );
+        Ok(())
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Push 1 [`AccountOp`] to update `sender` balance by `mint`.
+    pub fn mint(&mut self, step: &mut ExecStep, addr: Address, mint: Word) -> Result<(), Error> {
+        let (found, sender_account) = self.sdb.get_account(&addr);
+        if !found {
+            return Err(Error::AccountNotFound(addr));
+        }
+        let sender_balance_prev = sender_account.balance;
+        let sender_balance = sender_account.balance + mint;
+        self.account_write(
+            step,
+            addr,
+            AccountField::Balance,
+            sender_balance,
+            sender_balance_prev,
+        )?;
+
         Ok(())
     }
 

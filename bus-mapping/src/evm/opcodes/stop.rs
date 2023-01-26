@@ -32,6 +32,14 @@ impl Opcode for Stop {
             1.into(),
         );
 
+        #[cfg(feature = "kanvas")]
+        state.call_context_read(
+            &mut exec_step,
+            call.call_id,
+            CallContextField::TxId,
+            state.tx_ctx.id().into(),
+        );
+
         if call.is_root {
             state.call_context_read(
                 &mut exec_step,

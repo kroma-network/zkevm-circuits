@@ -56,6 +56,8 @@ impl<F: Field, C: Into<Column<Any>> + Clone, const W: usize> LookupTable<F> for 
 pub enum TxFieldTag {
     /// Unused tag
     Null = 0,
+    /// Type
+    Type,
     /// Nonce
     Nonce,
     /// Gas
@@ -81,6 +83,11 @@ pub enum TxFieldTag {
     CallData,
     /// The block number in which this tx is included.
     BlockNumber,
+
+    /// Kanvas Deposit Tx
+    #[cfg(feature = "kanvas")]
+    /// Mint
+    Mint,
 }
 impl_expr!(TxFieldTag);
 
