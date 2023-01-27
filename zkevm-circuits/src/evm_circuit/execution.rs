@@ -27,6 +27,8 @@ use strum::{EnumCount, IntoEnumIterator};
 mod add_sub;
 mod addmod;
 mod address;
+#[cfg(feature = "kanvas")]
+mod base_fee_hook;
 mod begin_tx;
 mod bitwise;
 mod block_ctx;
@@ -69,6 +71,8 @@ mod pc;
 mod pop;
 mod push;
 mod r#return;
+#[cfg(feature = "kanvas")]
+mod rollup_fee_hook;
 mod sdiv_smod;
 mod selfbalance;
 mod sha3;
@@ -83,6 +87,8 @@ mod swap;
 use add_sub::AddSubGadget;
 use addmod::AddModGadget;
 use address::AddressGadget;
+#[cfg(feature = "kanvas")]
+use base_fee_hook::BaseFeeHookGadget;
 use begin_tx::BeginTxGadget;
 use bitwise::BitwiseGadget;
 use block_ctx::{BlockCtxU160Gadget, BlockCtxU256Gadget, BlockCtxU64Gadget};
@@ -125,6 +131,8 @@ use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
 use r#return::ReturnGadget;
+#[cfg(feature = "kanvas")]
+use rollup_fee_hook::RollupFeeHookGadget;
 use sdiv_smod::SignedDivModGadget;
 use selfbalance::SelfbalanceGadget;
 use shl_shr::ShlShrGadget;
@@ -179,6 +187,10 @@ pub(crate) struct ExecutionConfig<F> {
     end_tx_gadget: EndTxGadget<F>,
     #[cfg(feature = "kanvas")]
     end_deposit_tx_gadget: EndDepositTxGadget<F>,
+    #[cfg(feature = "kanvas")]
+    base_fee_hook: BaseFeeHookGadget<F>,
+    #[cfg(feature = "kanvas")]
+    rollup_fee_hook: RollupFeeHookGadget<F>,
     // opcode gadgets
     add_sub_gadget: AddSubGadget<F>,
     addmod_gadget: AddModGadget<F>,
@@ -409,6 +421,10 @@ impl<F: Field> ExecutionConfig<F> {
             end_tx_gadget: configure_gadget!(),
             #[cfg(feature = "kanvas")]
             end_deposit_tx_gadget: configure_gadget!(),
+            #[cfg(feature = "kanvas")]
+            base_fee_hook: configure_gadget!(),
+            #[cfg(feature = "kanvas")]
+            rollup_fee_hook: configure_gadget!(),
             // opcode gadgets
             add_sub_gadget: configure_gadget!(),
             addmod_gadget: configure_gadget!(),
@@ -649,6 +665,18 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::EndBlock,
                             vec![ExecutionState::EndBlock],
                         ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "BaseFeeHook can only transit to RollupFeeHook",
+                            ExecutionState::BaseFeeHook,
+                            vec![ExecutionState::RollupFeeHook],
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "RollupFeeHook can only transit to EndTx",
+                            ExecutionState::RollupFeeHook,
+                            vec![ExecutionState::EndTx],
+                        ),
                     ])
                     .filter(move |(_, from, _)| *from == G::EXECUTION_STATE)
                     .map(|(_, _, to)| 1.expr() - step_next.execution_state_selector(to)),
@@ -676,9 +704,19 @@ impl<F: Field> ExecutionConfig<F> {
                                 .chain(iter::once(ExecutionState::BeginTx))
                                 .collect(),
                         ),
+                        #[cfg(not(feature = "kanvas"))]
                         (
                             "Only ExecutionState which halts or BeginTx can transit to EndTx",
                             ExecutionState::EndTx,
+                            ExecutionState::iter()
+                                .filter(ExecutionState::halts)
+                                .chain(iter::once(ExecutionState::BeginTx))
+                                .collect(),
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        (
+                            "Only ExecutionState which halts or BeginTx can transit to BaseFeeHook",
+                            ExecutionState::BaseFeeHook,
                             ExecutionState::iter()
                                 .filter(ExecutionState::halts)
                                 .chain(iter::once(ExecutionState::BeginTx))
@@ -1046,6 +1084,10 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::EndDepositTx => assign_exec_step!(self.end_deposit_tx_gadget),
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
+            #[cfg(feature = "kanvas")]
+            ExecutionState::BaseFeeHook => assign_exec_step!(self.base_fee_hook),
+            #[cfg(feature = "kanvas")]
+            ExecutionState::RollupFeeHook => assign_exec_step!(self.rollup_fee_hook),
             // opcode
             ExecutionState::ADD_SUB => assign_exec_step!(self.add_sub_gadget),
             ExecutionState::ADDMOD => assign_exec_step!(self.addmod_gadget),

@@ -20,6 +20,8 @@ pub mod error;
 pub mod bytecode;
 pub mod evm_types;
 pub mod geth_types;
+#[cfg(feature = "kanvas")]
+pub mod kanvas_params;
 pub mod sign_types;
 
 pub use bytecode::Bytecode;
