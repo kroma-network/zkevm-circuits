@@ -11,7 +11,7 @@ lazy_static = "1.4"
 ethers = { version = "0.17.0", features = ["ethers-solc"] }
 serde_json = "1.0.66"
 serde = { version = "1.0.130", features = ["derive"] }
-bus-mapping = { path = "../bus-mapping" }
+bus-mapping = { path = "../bus-mapping", features = ["test"]}
 eth-types = { path = "../eth-types" }
 zkevm-circuits = { path = "../zkevm-circuits", features = ["test"] }
 tokio = { version = "1.13", features = ["macros", "rt-multi-thread"] }
@@ -33,6 +33,7 @@ pretty_assertions = "1.0.0"
 
 [features]
 default = ["circuits"]
+kanvas = ["bus-mapping/kanvas", "eth-types/kanvas", "zkevm-circuits/kanvas"]
 rpc = []
 circuit_input_builder = []
 circuits = []
