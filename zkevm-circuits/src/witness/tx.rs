@@ -84,10 +84,10 @@ pub struct Transaction {
     /// The mint
     pub mint: Word,
 
-    /// kroma non-deposit tx
+    /// Kroma non-deposit tx
     #[cfg(feature = "kroma")]
-    /// The gas that needs to be rolled up to L1.
-    pub rollup_data_gas: u64,
+    /// The gas cost that needs to be rolled up to L1.
+    pub rollup_data_gas_cost: u64,
 }
 
 impl Transaction {
@@ -446,7 +446,7 @@ impl From<MockTransaction> for Transaction {
             #[cfg(feature = "kroma")]
             mint: mock_tx.mint,
             #[cfg(feature = "kroma")]
-            rollup_data_gas: 1000,
+            rollup_data_gas_cost: 1000,
         }
     }
 }
@@ -508,7 +508,7 @@ pub(super) fn tx_convert(
         #[cfg(feature = "kroma")]
         mint: tx.mint,
         #[cfg(feature = "kroma")]
-        rollup_data_gas: tx.rollup_data_gas,
+        rollup_data_gas_cost: tx.rollup_data_gas_cost,
         call_data_gas_cost: tx
             .input
             .iter()

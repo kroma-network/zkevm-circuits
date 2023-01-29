@@ -316,7 +316,7 @@ impl StateDB {
     /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kroma-geth
     /// for details.
     pub fn compute_l1_fee(&self, block: &mut Block, tx: &Transaction) -> Result<Word, Error> {
-        self.do_compute_l1_fee(block, tx.rollup_data_gas)
+        self.do_compute_l1_fee(block, tx.rollup_data_gas_cost)
     }
 
     #[cfg(feature = "kroma")]
@@ -325,7 +325,7 @@ impl StateDB {
     pub fn do_compute_l1_fee(
         &self,
         block: &mut Block,
-        rollup_data_gas: u64,
+        rollup_data_gas_cost: u64,
     ) -> Result<Word, Error> {
         let (found, l1_base_fee) = self.get_storage(&L1_BLOCK, &BASE_FEE_KEY);
         if !found {
@@ -345,7 +345,7 @@ impl StateDB {
         block.l1_fee_scalar = l1_fee_scalar.clone();
 
         Ok(
-            (Word::from(rollup_data_gas) + l1_fee_overhead) * l1_base_fee * l1_fee_scalar
+            (Word::from(rollup_data_gas_cost) + l1_fee_overhead) * l1_base_fee * l1_fee_scalar
                 / *L1_COST_DENOMINATOR,
         )
     }
