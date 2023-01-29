@@ -219,8 +219,8 @@ pub struct Transaction {
 
     /// Kanvas non-deposit tx.
     #[cfg(feature = "kanvas")]
-    /// Rollup data gas
-    pub rollup_data_gas: u64,
+    /// Rollup data gas cost
+    pub rollup_data_gas_cost: u64,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
@@ -245,7 +245,7 @@ impl From<&Transaction> for geth_types::Transaction {
             #[cfg(feature = "kanvas")]
             mint: tx.mint,
             #[cfg(feature = "kanvas")]
-            rollup_data_gas: tx.rollup_data_gas,
+            rollup_data_gas_cost: tx.rollup_data_gas_cost,
             ..Default::default()
         }
     }
@@ -276,7 +276,7 @@ impl Transaction {
             #[cfg(feature = "kanvas")]
             mint: Word::zero(),
             #[cfg(feature = "kanvas")]
-            rollup_data_gas: Default::default(),
+            rollup_data_gas_cost: Default::default(),
         }
     }
 
@@ -369,7 +369,9 @@ impl Transaction {
             #[cfg(feature = "kanvas")]
             mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
             #[cfg(feature = "kanvas")]
-            rollup_data_gas: eth_types::geth_types::Transaction::compute_rollup_data_gas(eth_tx),
+            rollup_data_gas_cost: eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(
+                eth_tx,
+            ),
         })
     }
 
