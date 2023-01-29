@@ -35,12 +35,12 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         // Add l1 rollup fee to l1_fee_recipient's balance
-        let rollup_data_gas = cb.query_word();
+        let rollup_data_gas_cost = cb.query_word();
         let l1_fee_overhead = cb.query_word();
         let l1_gas_to_use = cb.query_word();
         let add_rollup_data_gas_by_l1_fee_overhead = AddWordsGadget::construct(
             cb,
-            [rollup_data_gas, l1_fee_overhead],
+            [rollup_data_gas_cost, l1_fee_overhead],
             l1_gas_to_use.clone(),
         );
 
@@ -112,12 +112,12 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
         let (l1_fee_recipient_balance, l1_fee_recipient_balance_prev) =
             block.rws[step.rw_indices[0]].account_value_pair();
 
-        let rollup_data_gas = eth_types::Word::from(tx.rollup_data_gas);
-        let l1_gas_to_use = rollup_data_gas + block.l1_fee_overhead;
+        let rollup_data_gas_cost = eth_types::Word::from(tx.rollup_data_gas_cost);
+        let l1_gas_to_use = rollup_data_gas_cost + block.l1_fee_overhead;
         self.add_rollup_data_gas_by_l1_fee_overhead.assign(
             region,
             offset,
-            [rollup_data_gas, block.l1_fee_overhead],
+            [rollup_data_gas_cost, block.l1_fee_overhead],
             l1_gas_to_use,
         )?;
         let l1_fee_tmp = l1_gas_to_use * block.l1_fee_scalar;

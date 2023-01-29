@@ -143,8 +143,8 @@ pub struct Transaction {
 
     /// Kanvas Non-deposit tx
     #[cfg(feature = "kanvas")]
-    /// Rollup data gas
-    pub rollup_data_gas: u64,
+    /// Rollup data gas cost
+    pub rollup_data_gas_cost: u64,
 }
 
 impl From<&Transaction> for crate::Transaction {
@@ -189,7 +189,7 @@ impl From<&crate::Transaction> for Transaction {
             #[cfg(feature = "kanvas")]
             mint: Transaction::get_mint(tx).unwrap_or_default(),
             #[cfg(feature = "kanvas")]
-            rollup_data_gas: Transaction::compute_rollup_data_gas(tx),
+            rollup_data_gas_cost: Transaction::compute_rollup_data_gas_cost(tx),
         }
     }
 }
@@ -217,8 +217,8 @@ impl Transaction {
         None
     }
 
-    /// Compute rollup data gas.
-    pub fn compute_rollup_data_gas(tx: &crate::Transaction) -> u64 {
+    /// Compute rollup data gas cost.
+    pub fn compute_rollup_data_gas_cost(tx: &crate::Transaction) -> u64 {
         let data = tx.rlp();
         let mut zeros = 0;
         let mut non_zeros = 0;

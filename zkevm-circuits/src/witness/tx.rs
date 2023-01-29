@@ -52,8 +52,8 @@ pub struct Transaction {
 
     /// Kanvas non-deposit tx
     #[cfg(feature = "kanvas")]
-    /// The gas that needs to be rolled up to L1.
-    pub rollup_data_gas: u64,
+    /// The gas cost that needs to be rolled up to L1.
+    pub rollup_data_gas_cost: u64,
 }
 
 impl Transaction {
@@ -206,7 +206,7 @@ pub(super) fn tx_convert(
         #[cfg(feature = "kanvas")]
         mint: tx.mint,
         #[cfg(feature = "kanvas")]
-        rollup_data_gas: tx.rollup_data_gas,
+        rollup_data_gas_cost: tx.rollup_data_gas_cost,
         call_data_gas_cost: tx
             .input
             .iter()
