@@ -152,6 +152,10 @@ pub enum TxFieldTag {
     #[cfg(feature = "kroma")]
     /// Mint
     Mint,
+    /// Kroma Non-deposit Tx
+    #[cfg(feature = "kroma")]
+    /// The gas cost that needs to be rolled up to L1.
+    RollupDataGasCost,
 }
 impl_expr!(TxFieldTag);
 

@@ -56,6 +56,13 @@ pub enum RlpTxTag {
     Rlp,
     /// Denotes the byte(s) for the tx’s type.
     TransactionType,
+
+    #[cfg(feature = "kroma")]
+    /// Denotes the amount to mint for deposit tx.
+    Mint,
+    #[cfg(feature = "kroma")]
+    /// Denotes the gas cost to roll up a tx.
+    RollupDataGasCost,
 }
 
 impl_expr!(RlpTxTag);
