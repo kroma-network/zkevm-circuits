@@ -774,6 +774,14 @@ pub fn gen_base_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecSte
 pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     debug_assert!(!state.tx.is_deposit());
     let mut exec_step = state.new_rollup_fee_hook_step();
+    let call = state.tx.calls()[0].clone();
+
+    state.call_context_read(
+        &mut exec_step,
+        call.call_id,
+        CallContextField::TxId,
+        state.tx_ctx.id().into(),
+    );
 
     let l1_fee = state.sdb.compute_l1_fee(state.block, state.tx)?;
     let (found, l1_fee_recipient_account) = state.sdb.get_account_mut(&L1_FEE_RECIPIENT);

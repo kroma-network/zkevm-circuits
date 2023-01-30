@@ -121,6 +121,11 @@ pub enum TxFieldTag {
     #[cfg(feature = "kanvas")]
     /// Mint
     Mint,
+
+    /// Kanvas Non-deposit Tx
+    #[cfg(feature = "kanvas")]
+    /// The gas cost that needs to be rolled up to L1.
+    RollupDataGasCost,
 }
 impl_expr!(TxFieldTag);
 

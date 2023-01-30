@@ -7,13 +7,15 @@
 pub mod sign_verify;
 
 use crate::evm_circuit::util::constraint_builder::BaseConstraintBuilder;
+#[cfg(feature = "kanvas")]
+use crate::evm_circuit::util::RandomLinearCombination;
 use crate::table::{KeccakTable, LookupTable, RlpTable, TxFieldTag, TxTable};
 #[cfg(not(feature = "enable-sign-verify"))]
 use crate::tx_circuit::sign_verify::pub_key_hash_to_address;
 use crate::util::{random_linear_combine_word as rlc, Challenges, SubCircuit, SubCircuitConfig};
 use crate::witness;
 use crate::witness::{RlpDataType, RlpTxTag, Transaction};
-use bus_mapping::circuit_input_builder::keccak_inputs_sign_verify;
+use bus_mapping::circuit_input_builder::{keccak_inputs_sign_verify, keccak_inputs_tx_circuit};
 #[cfg(not(feature = "enable-sign-verify"))]
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness};
 use eth_types::{
@@ -1360,6 +1362,7 @@ impl<F: Field> TxCircuit<F> {
                                 .evm_word()
                                 .map(|challenge| rlc(tx.gas_price.to_le_bytes(), challenge)),
                         ),
+                        // TODO(chokobole): To know why it's encoded using rlc.
                         (
                             CallerAddress,
                             RlpTxTag::Padding, // FIXME
@@ -1460,8 +1463,18 @@ impl<F: Field> TxCircuit<F> {
                         #[cfg(feature = "kanvas")]
                         (
                             TxFieldTag::Mint,
-                            RlpTxTag::Rlp,
-                            //rlc(tx.mint.to_le_bytes(), self.randomness),
+                            RlpTxTag::Mint,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+                        // because it is used to add with another rlc value in RollupFeeHook
+                        // gadget.
+                        (
+                            TxFieldTag::RollupDataGasCost,
+                            RlpTxTag::RollupDataGasCost,
                             challenges
                                 .evm_word()
                                 .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
