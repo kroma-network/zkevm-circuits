@@ -166,6 +166,18 @@ impl Transaction {
                         randomness,
                     ),
                 ],
+                #[cfg(feature = "kanvas")]
+                // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+                // because it is used to add with another rlc value in RollupFeeHook gadget.
+                [
+                    F::from(self.id as u64),
+                    F::from(TxContextFieldTag::RollupDataGasCost as u64),
+                    F::zero(),
+                    RandomLinearCombination::random_linear_combine(
+                        self.rollup_data_gas_cost.to_le_bytes(),
+                        randomness,
+                    ),
+                ],
             ],
             self.call_data
                 .iter()
