@@ -336,9 +336,10 @@ impl Transaction {
             }
         };
 
+        let transaction_type = eth_tx.transaction_type.unwrap_or_default().as_u64();
         log::debug!(
             "eth_tx's type: {:?}, idx: {:?}, hash: {:?}, tx: {:?}",
-            eth_tx.transaction_type,
+            transaction_type,
             eth_tx.transaction_index,
             eth_tx.hash,
             {
@@ -348,7 +349,7 @@ impl Transaction {
             }
         );
         Ok(Self {
-            transaction_type: eth_tx.transaction_type.unwrap_or_default().as_u64(),
+            transaction_type,
             block_num: eth_tx.block_number.unwrap().as_u64(),
             hash: eth_tx.hash,
             nonce: eth_tx.nonce.as_u64(),
@@ -369,9 +370,11 @@ impl Transaction {
             #[cfg(feature = "kroma")]
             mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
             #[cfg(feature = "kroma")]
-            rollup_data_gas_cost: eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(
-                eth_tx,
-            ),
+            rollup_data_gas_cost: if transaction_type != DEPOSIT_TX_TYPE {
+                eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(eth_tx)
+            } else {
+                0
+            },
         })
     }
 
