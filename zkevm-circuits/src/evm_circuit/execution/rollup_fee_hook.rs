@@ -10,6 +10,7 @@ use crate::{
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
+    table::{CallContextFieldTag, TxContextFieldTag},
     util::Expr,
 };
 use eth_types::{
@@ -20,6 +21,7 @@ use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct RollupFeeHookGadget<F> {
+    tx_id: Cell<F>,
     add_rollup_data_gas_by_l1_fee_overhead: AddWordsGadget<F, 2, true>,
     mul_l1_gas_to_use_by_base_fee: MulAddWordsGadget<F>,
     mul_l1_fee_tmp_by_l1_fee_scalar: MulAddWordsGadget<F>,
@@ -35,12 +37,14 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         // Add l1 rollup fee to l1_fee_recipient's balance
-        let rollup_data_gas = cb.query_word();
+        let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
+        let tx_rollup_data_gas_cost =
+            cb.tx_context_as_word(tx_id.expr(), TxContextFieldTag::RollupDataGasCost, None);
         let l1_fee_overhead = cb.query_word();
         let l1_gas_to_use = cb.query_word();
         let add_rollup_data_gas_by_l1_fee_overhead = AddWordsGadget::construct(
             cb,
-            [rollup_data_gas, l1_fee_overhead],
+            [tx_rollup_data_gas_cost, l1_fee_overhead],
             l1_gas_to_use.clone(),
         );
 
@@ -86,11 +90,12 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             UpdateBalanceGadget::construct(cb, l1_fee_recipient.expr(), vec![l1_fee], None, None);
 
         cb.require_step_state_transition(StepStateTransition {
-            rw_counter: Delta(1.expr()),
+            rw_counter: Delta(2.expr()),
             ..StepStateTransition::any()
         });
 
         Self {
+            tx_id,
             add_rollup_data_gas_by_l1_fee_overhead,
             mul_l1_gas_to_use_by_base_fee,
             mul_l1_fee_tmp_by_l1_fee_scalar,
@@ -110,14 +115,17 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
         step: &ExecStep,
     ) -> Result<(), Error> {
         let (l1_fee_recipient_balance, l1_fee_recipient_balance_prev) =
-            block.rws[step.rw_indices[0]].account_value_pair();
+            block.rws[step.rw_indices[1]].account_value_pair();
 
-        let rollup_data_gas = eth_types::Word::from(tx.rollup_data_gas);
-        let l1_gas_to_use = rollup_data_gas + block.l1_fee_overhead;
+        self.tx_id
+            .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
+
+        let rollup_data_gas_cost = eth_types::Word::from(tx.rollup_data_gas_cost);
+        let l1_gas_to_use = rollup_data_gas_cost + block.l1_fee_overhead;
         self.add_rollup_data_gas_by_l1_fee_overhead.assign(
             region,
             offset,
-            [rollup_data_gas, block.l1_fee_overhead],
+            [rollup_data_gas_cost, block.l1_fee_overhead],
             l1_gas_to_use,
         )?;
         let l1_fee_tmp = l1_gas_to_use * block.l1_fee_scalar;

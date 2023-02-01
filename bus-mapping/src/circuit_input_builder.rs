@@ -220,11 +220,11 @@ impl<'a> CircuitInputBuilder {
                     base_fee_recipient_account.balance += base_fee;
                     log::trace!("collect base fee: value {}", base_fee);
 
-                    let rollup_data_gas =
-                        eth_types::geth_types::Transaction::compute_rollup_data_gas(tx);
+                    let rollup_data_gas_cost =
+                        eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(tx);
                     let l1_fee = self
                         .sdb
-                        .do_compute_l1_fee(&mut self.block, rollup_data_gas)?;
+                        .do_compute_l1_fee(&mut self.block, rollup_data_gas_cost)?;
                     let (_, l1_fee_recipient_account) = self.sdb.get_account_mut(&L1_FEE_RECIPIENT);
                     l1_fee_recipient_account.balance += l1_fee;
                     log::trace!("collect l1 fee: value {}", l1_fee);

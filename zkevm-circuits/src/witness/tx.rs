@@ -52,8 +52,8 @@ pub struct Transaction {
 
     /// Kanvas non-deposit tx
     #[cfg(feature = "kanvas")]
-    /// The gas that needs to be rolled up to L1.
-    pub rollup_data_gas: u64,
+    /// The gas cost that needs to be rolled up to L1.
+    pub rollup_data_gas_cost: u64,
 }
 
 impl Transaction {
@@ -166,6 +166,18 @@ impl Transaction {
                         randomness,
                     ),
                 ],
+                #[cfg(feature = "kanvas")]
+                // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+                // because it is used to add with another rlc value in RollupFeeHook gadget.
+                [
+                    F::from(self.id as u64),
+                    F::from(TxContextFieldTag::RollupDataGasCost as u64),
+                    F::zero(),
+                    RandomLinearCombination::random_linear_combine(
+                        self.rollup_data_gas_cost.to_le_bytes(),
+                        randomness,
+                    ),
+                ],
             ],
             self.call_data
                 .iter()
@@ -206,7 +218,7 @@ pub(super) fn tx_convert(
         #[cfg(feature = "kanvas")]
         mint: tx.mint,
         #[cfg(feature = "kanvas")]
-        rollup_data_gas: tx.rollup_data_gas,
+        rollup_data_gas_cost: tx.rollup_data_gas_cost,
         call_data_gas_cost: tx
             .input
             .iter()

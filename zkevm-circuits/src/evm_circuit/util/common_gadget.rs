@@ -16,7 +16,7 @@ use crate::{
     util::Expr,
     witness::{Block, Call, ExecStep},
 };
-use eth_types::{Field, ToLittleEndian, ToScalar, U256, evm_types::rwc_util::stop_rwc_offset};
+use eth_types::{evm_types::rwc_util::stop_rwc_offset, Field, ToLittleEndian, ToScalar, U256};
 use halo2_proofs::{
     circuit::Value,
     plonk::{Error, Expression},

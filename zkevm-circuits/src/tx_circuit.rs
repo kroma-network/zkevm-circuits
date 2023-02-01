@@ -6,6 +6,8 @@
 
 pub mod sign_verify;
 
+#[cfg(feature = "kanvas")]
+use crate::evm_circuit::util::RandomLinearCombination;
 use crate::table::{KeccakTable, TxFieldTag, TxTable};
 use crate::util::{power_of_randomness_from_instance, random_linear_combine_word as rlc};
 use bus_mapping::circuit_input_builder::keccak_inputs_tx_circuit;
@@ -190,6 +192,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                             TxFieldTag::Type,
                             F::from(tx.transaction_type.unwrap_or_default().as_u64()),
                         ),
+                        // TODO(chokobole): To know why it's encoded using rlc.
                         (
                             TxFieldTag::Nonce,
                             rlc(tx.nonce.to_le_bytes(), self.randomness),
@@ -233,6 +236,17 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                         (
                             TxFieldTag::Mint,
                             rlc(tx.mint.to_le_bytes(), self.randomness),
+                        ),
+                        #[cfg(feature = "kanvas")]
+                        // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+                        // because it is used to add with another rlc value in RollupFeeHook
+                        // gadget.
+                        (
+                            TxFieldTag::RollupDataGasCost,
+                            RandomLinearCombination::random_linear_combine(
+                                tx.rollup_data_gas_cost.to_le_bytes(),
+                                self.randomness,
+                            ),
                         ),
                     ] {
                         let assigned_cell =
