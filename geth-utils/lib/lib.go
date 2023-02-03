@@ -13,6 +13,7 @@ import (
 
 // TODO: Add proper error handling.  For example, return an int, where 0 means
 // ok, and !=0 means error.
+//
 //export CreateTrace
 func CreateTrace(configStr *C.char) *C.char {
 	var config gethutil.TraceConfig

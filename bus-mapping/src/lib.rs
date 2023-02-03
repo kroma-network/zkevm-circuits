@@ -53,7 +53,7 @@
 //! use eth_types::{
 //!     self, address, Address, Word, Hash, U64, GethExecTrace, GethExecStep, geth_types::GethData, bytecode
 //! };
-//! use mock::test_ctx::{TestContext, helpers::*};
+//! use mock::{tx_idx, test_ctx::{TestContext2_1, helpers::*}};
 //! use eth_types::evm_types::Gas;
 //! use bus_mapping::circuit_input_builder::{Block, CircuitInputBuilder};
 //!
@@ -121,7 +121,7 @@
 //! };
 //!
 //! // Get the execution steps from the external tracer
-//! let block: GethData = TestContext::<2, 1>::new(
+//! let block: GethData = TestContext2_1::new(
 //!     None,
 //!     account_0_code_account_1_no_code(code),
 //!     tx_from_1_to_0,
@@ -139,7 +139,7 @@
 //! let geth_steps: Vec<GethExecStep> = serde_json::from_str(input_trace).unwrap();
 //! let geth_trace = GethExecTrace {
 //!     return_value: "".to_string(),
-//!     gas: Gas(block.eth_block.transactions[0].gas.as_u64()),
+//!     gas: Gas(block.eth_block.transactions[tx_idx!(0)].gas.as_u64()),
 //!     failed: false,
 //!     struct_logs: geth_steps,
 //! };
@@ -148,7 +148,7 @@
 //! let stack_ops = builder.block.container.sorted_stack();
 //!
 //! // You can also iterate over the steps of the trace and witness the EVM Proof.
-//! builder.block.txs()[0].steps().iter();
+//! builder.block.txs()[tx_idx!(0)].steps().iter();
 //! ```
 //!
 //! Assume we have the following trace:

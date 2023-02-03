@@ -497,13 +497,24 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm_circuit::test::{rand_bytes, run_test_circuit_geth_data_default};
-    use bus_mapping::evm::OpcodeId;
+    use crate::evm_circuit::{
+        test::{rand_bytes, run_test_circuit, run_test_circuit_geth_data_default},
+        witness::block_convert,
+    };
+    use bus_mapping::{evm::OpcodeId, mock::BlockData};
     use eth_types::{
         self, bytecode, evm_types::GasCost, geth_types::GethData, word, Bytecode, Word,
     };
     use halo2_proofs::halo2curves::bn256::Fr;
-    use mock::{eth, gwei, TestContext, MOCK_ACCOUNTS};
+    use mock::{
+        eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, tx_idx, SimpleTestContext,
+        MOCK_ACCOUNTS,
+    };
+    #[cfg(feature = "kanvas")]
+    use mock::{
+        test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx},
+        TestContext,
+    };
 
     fn gas(call_data: &[u8]) -> Word {
         Word::from(
@@ -534,7 +545,7 @@ mod test {
 
     fn test_ok(tx: eth_types::Transaction, code: Option<Bytecode>) {
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             |accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(10));
@@ -544,7 +555,9 @@ mod test {
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(tx.to.unwrap())
                     .from(tx.from)
                     .gas_price(tx.gas_price.unwrap())
@@ -606,14 +619,19 @@ mod test {
             STOP
         };
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0].address(to).balance(eth(1)).code(code);
                 accs[1].address(from).balance(eth(1)).nonce(multibyte_nonce);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, _| {
-                txs[0].to(to).from(from).nonce(multibyte_nonce);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(to).from(from).nonce(multibyte_nonce);
             },
             |block, _| block,
         )
@@ -734,19 +752,22 @@ mod test {
     #[cfg(feature = "kanvas")]
     #[test]
     fn begin_tx_gadget_deposit() {
+        use mock::{declare_test_context, test_ctx::helpers::system_deposit_tx, tx_idx};
+        declare_test_context!(TestContext2_2, 2, 2);
         // Get the execution steps from the external tracer
         use eth_types::geth_types::DEPOSIT_TX_TYPE;
-        // use mock::declare_test_context;
-        // let block: GethData = TestContext2_2::new(z
-        let block: GethData = TestContext::<2, 2>::new(
+        use mock::{declare_test_context, test_ctx::helpers::system_deposit_tx, tx_idx};
+        let block: GethData = TestContext2_2::new(
             None,
             account_0_code_account_1_no_code(bytecode! { STOP }),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .transaction_type(DEPOSIT_TX_TYPE);
-                txs[1]
+                txs[tx_idx!(1)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .transaction_type(DEPOSIT_TX_TYPE)

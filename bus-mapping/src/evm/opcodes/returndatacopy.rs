@@ -191,7 +191,7 @@ mod return_tests {
     use eth_types::geth_types::GethData;
     use eth_types::{bytecode, word};
     use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     #[test]
     fn test_ok() {
@@ -242,7 +242,7 @@ mod return_tests {
             STOP
         };
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -306,7 +306,7 @@ mod return_tests {
             STOP
         };
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,

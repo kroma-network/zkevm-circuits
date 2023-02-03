@@ -94,7 +94,7 @@ impl<F: Field> ExecutionGadget<F> for CodesizeGadget<F> {
 #[cfg(test)]
 mod tests {
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     use crate::test_util::run_test_circuits;
 
@@ -113,7 +113,7 @@ mod tests {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
                 None
             ),
             Ok(())

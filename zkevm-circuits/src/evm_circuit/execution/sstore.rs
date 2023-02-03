@@ -535,7 +535,9 @@ mod test {
     use crate::test_util::{run_test_circuits, BytecodeTestConfig};
 
     use eth_types::{bytecode, Word};
-    use mock::{test_ctx::helpers::tx_from_1_to_0, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::setup_kanvas_required_accounts;
+    use mock::{test_ctx::helpers::tx_from_1_to_0, SimpleTestContext, MOCK_ACCOUNTS};
 
     #[test]
     fn sstore_gadget_no_refund() {
@@ -623,9 +625,10 @@ mod test {
             REVERT
         };
         for bytecode in [bytecode_success, bytecode_failure] {
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
-                |accs| {
+                #[allow(unused_mut)]
+                |mut accs| {
                     accs[0]
                         .address(MOCK_ACCOUNTS[0])
                         .balance(Word::from(10u64.pow(19)))
@@ -634,6 +637,8 @@ mod test {
                     accs[1]
                         .address(MOCK_ACCOUNTS[1])
                         .balance(Word::from(10u64.pow(19)));
+                    #[cfg(feature = "kanvas")]
+                    setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
                 },
                 tx_from_1_to_0,
                 |block, _txs| block,

@@ -104,7 +104,12 @@ mod calldataload_tests {
         geth_types::GethData,
         ToWord, Word,
     };
-    use mock::{test_ctx::helpers::account_0_code_account_1_no_code, TestContext};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1},
+        tx_idx,
+    };
     use rand::random;
 
     use crate::{circuit_input_builder::ExecState, mock::BlockData, operation::StackOp};
@@ -156,17 +161,22 @@ mod calldataload_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -178,14 +188,14 @@ mod calldataload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATALOAD))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[step.call_index].call_id;
-        let caller_id = builder.block.txs()[0].calls()[step.call_index].caller_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
+        let caller_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].caller_id;
 
         // 1 stack read, 3 call context reads, 32 memory reads and 1 stack write.
         assert_eq!(step.bus_mapping_instance.len(), 37);
@@ -270,11 +280,13 @@ mod calldataload_tests {
             STOP
         };
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .input(calldata.clone().into());
@@ -289,13 +301,13 @@ mod calldataload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATALOAD))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         // 1 stack read, 2 call context reads and 1 stack write.
         assert_eq!(step.bus_mapping_instance.len(), 4);
@@ -329,7 +341,7 @@ mod calldataload_tests {
                     &CallContextOp {
                         call_id,
                         field: CallContextField::TxId,
-                        value: Word::from(1),
+                        value: Word::from(tx_idx!(1)),
                     }
                 ),
                 (

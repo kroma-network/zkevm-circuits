@@ -53,12 +53,12 @@ mod stackonlyop_tests {
     };
     use itertools::Itertools;
     use mock::test_ctx::{helpers::*, TestContext};
-    use mock::{MOCK_BASEFEE, MOCK_DIFFICULTY, MOCK_GASLIMIT};
+    use mock::{tx_idx, SimpleTestContext, MOCK_BASEFEE, MOCK_DIFFICULTY, MOCK_GASLIMIT};
     use pretty_assertions::assert_eq;
     use std::ops::{BitOr, BitXor};
 
     #[cfg(feature = "kanvas")]
-    const CALL_ID: usize = 1176;
+    const CALL_ID: usize = 1173;
     #[cfg(not(feature = "kanvas"))]
     const CALL_ID: usize = 1;
 
@@ -69,7 +69,7 @@ mod stackonlyop_tests {
         pushes: Vec<StackOp>,
     ) {
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -83,7 +83,7 @@ mod stackonlyop_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(opcode))
@@ -352,12 +352,12 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 word!("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
             )],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 word!("0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0"),
             )],

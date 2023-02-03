@@ -120,7 +120,7 @@ mod test {
         test_util::run_test_circuits,
     };
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     fn test_ok(destination: usize, condition: Word) {
         assert!((68..(1 << 24) - 1).contains(&destination));
@@ -141,7 +141,35 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
+                None
+            ),
+            Ok(())
+        );
+    }
+
+    fn test_invalid(destination: usize, condition: Word) {
+        assert!((68..(1 << 24) - 1).contains(&destination));
+
+        let mut bytecode = bytecode! {
+            PUSH32(condition)
+            PUSH32(destination)
+            JUMPI
+            STOP
+        };
+
+        // incorrect assigning for invalid jump
+        for _ in 0..(destination - 60) {
+            bytecode.write(0, false);
+        }
+        bytecode.append(&bytecode! {
+            JUMPDEST
+            STOP
+        });
+
+        assert_eq!(
+            run_test_circuits(
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())

@@ -208,14 +208,15 @@ mod extcodecopy_tests {
             TxAccessListAccountOp, RW,
         },
     };
-    use eth_types::{address, bytecode, Bytecode, Bytes, ToWord, Word};
+    use eth_types::{address, bytecode, word, Bytecode, Bytes, ToWord, Word};
     use eth_types::{
         evm_types::{MemoryAddress, OpcodeId, StackAddress},
         geth_types::GethData,
         H256, U256,
     };
     use ethers_core::utils::keccak256;
-    use mock::TestContext;
+    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
+    use mock::{declare_test_context, SimpleTestContext, TestContext};
 
     fn test_ok(
         code_ext: Bytes,
@@ -224,6 +225,7 @@ mod extcodecopy_tests {
         memory_offset: usize,
         copy_size: usize,
     ) {
+        declare_test_context!(TestContext3_1, 3, 1);
         let external_address = address!("0xaabbccddee000000000000000000000000000000");
         let mut code = Bytecode::default();
         if is_warm {
@@ -250,7 +252,9 @@ mod extcodecopy_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new(
+        // let block: GethData = TestContext::<3, 1>::new(  scroll-dev-1220
+        // let block: GethData = SimpleTestContext::new(  ls-dev-0920
+        let block: GethData = TestContext3_1::new(
             None,
             |accs| {
                 accs[0]

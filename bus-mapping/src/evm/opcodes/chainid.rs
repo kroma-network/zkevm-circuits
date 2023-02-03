@@ -9,8 +9,8 @@ mod chainid_tests {
         geth_types::GethData,
     };
 
-    use mock::test_ctx::{helpers::*, TestContext};
-    use mock::MOCK_CHAIN_ID;
+    use mock::test_ctx::helpers::*;
+    use mock::{tx_idx, SimpleTestContext, MOCK_CHAIN_ID};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -21,7 +21,7 @@ mod chainid_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -35,11 +35,13 @@ mod chainid_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CHAINID))
             .unwrap();
+
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         assert_eq!(
             {
@@ -49,7 +51,7 @@ mod chainid_tests {
             },
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress::from(1023), *MOCK_CHAIN_ID)
+                &StackOp::new(call_id, StackAddress::from(1023), *MOCK_CHAIN_ID)
             )
         );
     }

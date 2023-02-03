@@ -182,7 +182,7 @@ mod test {
     use eth_types::bytecode;
     use eth_types::evm_types::{GasCost, OpcodeId};
     use eth_types::Word;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{test_ctx::helpers::*, tx_idx, SimpleTestContext};
     use std::iter;
 
     fn test_ok(opcode: OpcodeId, address: Word, value: Word, gas_cost: u64) {
@@ -201,11 +201,13 @@ mod test {
             ..Default::default()
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(Word::from(test_config.gas_limit));

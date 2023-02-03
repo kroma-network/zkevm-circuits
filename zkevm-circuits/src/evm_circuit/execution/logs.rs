@@ -262,7 +262,7 @@ impl<F: Field> ExecutionGadget<F> for LogGadget<F> {
 #[cfg(test)]
 mod test {
     use eth_types::{evm_types::OpcodeId, Bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use rand::Rng;
 
     use crate::test_util::run_test_circuits;
@@ -367,8 +367,8 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(code_prepare).unwrap(),
-                None
+                SimpleTestContext::simple_ctx_with_bytecode(code_prepare).unwrap(),
+                None,
             ),
             Ok(()),
         );
@@ -422,7 +422,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(code_prepare).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(code_prepare).unwrap(),
                 None,
             ),
             Ok(()),

@@ -225,7 +225,7 @@ mod test {
     use crate::test_util::run_test_circuits;
     use eth_types::evm_types::Stack;
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::{tx_idx, SimpleTestContext};
 
     fn test(
         a: Word,
@@ -241,11 +241,11 @@ mod test {
             STOP
         };
 
-        let mut ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap();
+        let mut ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
         if let Some(r) = r {
             let mut last = ctx
                 .geth_traces
-                .first_mut()
+                .get_mut(tx_idx!(0))
                 .unwrap()
                 .struct_logs
                 .last_mut()

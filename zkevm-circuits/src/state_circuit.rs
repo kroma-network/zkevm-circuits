@@ -679,7 +679,15 @@ mod state_circuit_stats {
     use crate::evm_circuit::step::ExecutionState;
     use bus_mapping::{circuit_input_builder::ExecState, mock::BlockData};
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, Address};
-    use mock::{eth, test_ctx::TestContext, MOCK_ACCOUNTS};
+    use halo2_proofs::halo2curves::bn256::Fr;
+    use halo2_proofs::plonk::{Circuit, ConstraintSystem};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{TestContext, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
+    };
     use strum::IntoEnumIterator;
 
     /// This function prints to stdout a table with all the implemented states
@@ -746,18 +754,23 @@ mod state_circuit_stats {
                 };
                 code.write_op(opcode);
                 code.write_op(OpcodeId::STOP);
-                let block: GethData = TestContext::<3, 1>::new(
+                let block: GethData = TestContext3_1::new(
                     None,
-                    |accs| {
+                    #[allow(unused_mut)]
+                    |mut accs| {
                         accs[0]
                             .address(MOCK_ACCOUNTS[0])
                             .balance(eth(10))
                             .code(code.clone());
                         accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
                         accs[2].address(Address::zero()).balance(eth(10)).code(code);
+                        #[cfg(feature = "kanvas")]
+                        setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
                     },
                     |mut txs, accs| {
-                        txs[0]
+                        #[cfg(feature = "kanvas")]
+                        system_deposit_tx(txs[0]);
+                        txs[tx_idx!(0)]
                             .from(accs[1].address)
                             .to(accs[0].address)
                             .input(vec![1, 2, 3, 4, 5, 6, 7].into());

@@ -315,7 +315,12 @@ mod test {
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{self, bytecode, geth_types::GethData};
     use halo2_proofs::halo2curves::bn256::Fr;
-    use mock::{eth, test_ctx::helpers::account_0_code_account_1_no_code, TestContext};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{
+        declare_test_context, eth, test_ctx::helpers::account_0_code_account_1_no_code, tx_idx,
+        TestContext,
+    };
 
     fn test_ok(block: GethData) {
         assert_eq!(
@@ -346,22 +351,26 @@ mod test {
         //     None,
         // )]);
 
+        declare_test_context!(TestContext2_3, 2, 3);
+
         // Multiple txs
         test_ok(
             // Get the execution steps from the external tracer
-            TestContext::<2, 3>::new(
+            TestContext2_3::new(
                 None,
                 account_0_code_account_1_no_code(bytecode! { STOP }),
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kanvas")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .to(accs[0].address)
                         .from(accs[1].address)
                         .value(eth(1));
-                    txs[1]
+                    txs[tx_idx!(1)]
                         .to(accs[0].address)
                         .from(accs[1].address)
                         .value(eth(1));
-                    txs[2]
+                    txs[tx_idx!(2)]
                         .to(accs[0].address)
                         .from(accs[1].address)
                         .value(eth(1));

@@ -906,19 +906,22 @@ pub mod dev {
 
 #[cfg(test)]
 mod tests {
-    use super::dev::test_copy_circuit_from_block;
+    use super::dev::{test_copy_circuit, test_copy_circuit_from_block};
+    use bus_mapping::evm::{gen_sha3_code, MemoryKind};
+    use eth_types::{bytecode, geth_types::GethData, ToWord, Word};
+    use mock::test_ctx::helpers::account_0_code_account_1_no_code;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{tx_idx, SimpleTestContext, TestContext, MOCK_ACCOUNTS};
+
     use crate::evm_circuit::test::rand_bytes;
     use crate::evm_circuit::witness::block_convert;
-    use bus_mapping::evm::{gen_sha3_code, MemoryKind};
     use bus_mapping::{
         circuit_input_builder::{CircuitInputBuilder, CircuitsParams},
         mock::BlockData,
     };
-    use eth_types::{bytecode, geth_types::GethData, ToWord, Word};
     use halo2_proofs::dev::VerifyFailure;
     use halo2_proofs::halo2curves::bn256::Fr;
-    use mock::test_ctx::helpers::account_0_code_account_1_no_code;
-    use mock::{TestContext, MOCK_ACCOUNTS};
     use pretty_assertions::assert_eq;
 
     fn gen_calldatacopy_data() -> CircuitInputBuilder {
@@ -931,11 +934,13 @@ mod tests {
             STOP
         };
         let calldata = rand_bytes(length);
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .input(calldata.into());
@@ -967,7 +972,7 @@ mod tests {
             CODECOPY
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -1014,7 +1019,7 @@ mod tests {
 
     fn gen_sha3_data() -> CircuitInputBuilder {
         let (code, _) = gen_sha3_code(0x20, 0x200, MemoryKind::EqualToSize);
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
@@ -1069,7 +1074,11 @@ mod tests {
     fn copy_circuit_valid_extcodecopy() {
         let builder = gen_extcodecopy_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(14, block), Ok(()));
+        #[cfg(feature = "kanvas")]
+        let k = 12;
+        #[cfg(not(feature = "kanvas"))]
+        let k = 10;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]

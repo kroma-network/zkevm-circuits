@@ -147,7 +147,7 @@ mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::run_test_circuits};
     use eth_types::bytecode;
     use eth_types::evm_types::OpcodeId;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     fn test_ok(opcode: OpcodeId, bytes: &[u8]) {
         assert!(bytes.len() == opcode.data_len());
@@ -162,7 +162,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())
@@ -231,5 +231,38 @@ mod test {
         {
             test_ok(opcode, &rand_bytes(idx + 1));
         }
+    }
+
+    #[test]
+    fn stack_overflow_simple() {
+        test_stack_overflow(OpcodeId::PUSH1, &[1]);
+    }
+
+    fn test_stack_overflow(opcode: OpcodeId, bytes: &[u8]) {
+        assert!(bytes.len() as u8 == opcode.as_u8() - OpcodeId::PUSH1.as_u8() + 1,);
+
+        let mut bytecode = bytecode! {
+            .write_op(opcode)
+        };
+        for b in bytes {
+            bytecode.write(*b, false);
+        }
+        // still add 1024 causes stack overflow
+        for _ in 0..1025 {
+            bytecode.write_op(opcode);
+            for b in bytes {
+                bytecode.write(*b, false);
+            }
+        }
+        // append final stop op code
+        bytecode.write_op(OpcodeId::STOP);
+
+        assert_eq!(
+            run_test_circuits(
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
+                None
+            ),
+            Ok(())
+        );
     }
 }

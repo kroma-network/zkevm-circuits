@@ -85,7 +85,7 @@ pub mod sha3_tests {
     use ethers_core::utils::keccak256;
     use mock::{
         test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
+        tx_idx, SimpleTestContext,
     };
     use rand::{random, Rng};
 
@@ -179,7 +179,7 @@ pub mod sha3_tests {
         memory_view.resize(size, 0);
         let expected_sha3_value = keccak256(&memory_view);
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -200,13 +200,13 @@ pub mod sha3_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::SHA3))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         // stack read and write.
         assert_eq!(
@@ -229,12 +229,20 @@ pub mod sha3_tests {
             ]
         );
 
+        let memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == call_id)
+            .unwrap();
+
         // Memory reads.
         // Initial memory_len bytes are the memory writes from MSTORE instruction, so we
         // skip them.
         assert_eq!(
             (memory_len..(memory_len + size))
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[idx + memory_offset])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             {

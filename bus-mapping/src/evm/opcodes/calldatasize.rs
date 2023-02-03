@@ -49,7 +49,7 @@ mod calldatasize_tests {
         geth_types::GethData,
     };
 
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{test_ctx::helpers::*, tx_idx, SimpleTestContext};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -60,7 +60,7 @@ mod calldatasize_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -74,14 +74,18 @@ mod calldatasize_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATASIZE))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
-        let call_data_size = block.eth_block.transactions[0].input.as_ref().len().into();
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
+        let call_data_size = block.eth_block.transactions[tx_idx!(0)]
+            .input
+            .as_ref()
+            .len()
+            .into();
         assert_eq!(
             {
                 let operation =
@@ -105,7 +109,7 @@ mod calldatasize_tests {
             },
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress::from(1023), call_data_size)
+                &StackOp::new(call_id, StackAddress::from(1023), call_data_size)
             )
         );
     }
