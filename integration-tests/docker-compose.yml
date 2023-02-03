@@ -1,9 +1,8 @@
 version: '3'
 services:
   geth0:
-    image: "ethereum/client-go:v1.10.18"
+    image: "663832282095.dkr.ecr.ap-northeast-2.amazonaws.com/lightscale/kanvas-geth:latest"
     container_name: zkevm-geth0
     ports:
       - 8545:8545
     command: --dev --vmdebug --gcmode=archive --http --http.addr 0.0.0.0 --http.port 8545 --http.vhosts "*" --http.corsdomain "*" --http.api "eth,net,web3,personal,txpool,miner,debug" --verbosity 6
-
