@@ -23,7 +23,7 @@ use halo2_proofs::{circuit::Value, plonk::Error};
 pub(crate) struct RollupFeeHookGadget<F> {
     tx_id: Cell<F>,
     add_rollup_data_gas_by_l1_fee_overhead: AddWordsGadget<F, 2, true>,
-    mul_l1_gas_to_use_by_base_fee: MulAddWordsGadget<F>,
+    mul_l1_gas_to_use_by_l1_base_fee: MulAddWordsGadget<F>,
     mul_l1_fee_tmp_by_l1_fee_scalar: MulAddWordsGadget<F>,
     div_l1_fee_by_l1_cost_denominator: MulAddWordsGadget<F>,
     l1_fee_recipient: Cell<F>,
@@ -48,20 +48,20 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             l1_gas_to_use.clone(),
         );
 
-        let l1_fee_scalar = cb.query_word_rlc();
+        let l1_base_fee = cb.query_word_rlc();
         let zero = cb.query_word_rlc();
         let l1_fee_tmp = cb.query_word_rlc();
-        let mul_l1_gas_to_use_by_base_fee =
-            MulAddWordsGadget::construct(cb, [&l1_gas_to_use, &l1_fee_scalar, &zero, &l1_fee_tmp]);
+        let mul_l1_gas_to_use_by_l1_base_fee =
+            MulAddWordsGadget::construct(cb, [&l1_gas_to_use, &l1_base_fee, &zero, &l1_fee_tmp]);
         cb.require_zero(
-            "mul_l1_gas_to_use_by_base_fee's overflow == 0",
-            mul_l1_gas_to_use_by_base_fee.overflow(),
+            "mul_l1_gas_to_use_by_l1_base_fee's overflow == 0",
+            mul_l1_gas_to_use_by_l1_base_fee.overflow(),
         );
 
-        let l1_base_fee = cb.query_word_rlc();
+        let l1_fee_scalar = cb.query_word_rlc();
         let l1_fee_tmp2 = cb.query_word_rlc();
         let mul_l1_fee_tmp_by_l1_fee_scalar =
-            MulAddWordsGadget::construct(cb, [&l1_fee_tmp, &l1_base_fee, &zero, &l1_fee_tmp2]);
+            MulAddWordsGadget::construct(cb, [&l1_fee_tmp, &l1_fee_scalar, &zero, &l1_fee_tmp2]);
         cb.require_zero(
             "mul_l1_fee_tmp_by_l1_fee_scalar's overflow == 0",
             mul_l1_fee_tmp_by_l1_fee_scalar.overflow(),
@@ -97,7 +97,7 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
         Self {
             tx_id,
             add_rollup_data_gas_by_l1_fee_overhead,
-            mul_l1_gas_to_use_by_base_fee,
+            mul_l1_gas_to_use_by_l1_base_fee,
             mul_l1_fee_tmp_by_l1_fee_scalar,
             div_l1_fee_by_l1_cost_denominator,
             l1_fee_recipient,
@@ -128,24 +128,24 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             [rollup_data_gas_cost, block.l1_fee_overhead],
             l1_gas_to_use,
         )?;
-        let l1_fee_tmp = l1_gas_to_use * block.l1_fee_scalar;
-        self.mul_l1_gas_to_use_by_base_fee.assign(
+        let l1_fee_tmp = l1_gas_to_use * block.l1_base_fee;
+        self.mul_l1_gas_to_use_by_l1_base_fee.assign(
             region,
             offset,
             [
                 l1_gas_to_use,
-                block.l1_fee_scalar,
+                block.l1_base_fee,
                 eth_types::Word::zero(),
                 l1_fee_tmp,
             ],
         )?;
-        let l1_fee_tmp2 = l1_fee_tmp * block.l1_base_fee;
+        let l1_fee_tmp2 = l1_fee_tmp * block.l1_fee_scalar;
         self.mul_l1_fee_tmp_by_l1_fee_scalar.assign(
             region,
             offset,
             [
                 l1_fee_tmp,
-                block.l1_base_fee,
+                block.l1_fee_scalar,
                 eth_types::Word::zero(),
                 l1_fee_tmp2,
             ],
