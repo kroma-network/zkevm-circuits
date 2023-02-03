@@ -5,6 +5,8 @@ use super::{
     CallKind, CodeSource, CopyEvent, ExecState, ExecStep, ExpEvent, Transaction,
     TransactionContext,
 };
+#[cfg(feature = "kroma")]
+use crate::l1_block_operation::{L1BlockField, L1BlockOp};
 use crate::{
     error::{get_step_reported_error, ExecError},
     exec_trace::OperationRef,
@@ -543,6 +545,40 @@ impl<'a> CircuitInputStateRef<'a> {
                 is_warm_prev,
             },
         );
+        Ok(())
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Push a read type [`L1BlockOp`] into the
+    /// [`OperationContainer`](crate::operation::OperationContainer) with the
+    /// next [`RWCounter`](crate::operation::RWCounter), and then
+    /// adds a reference to the stored operation ([`OperationRef`]) inside
+    /// the bus-mapping instance of the current [`ExecStep`].  Then increase
+    /// the `block_ctx` [`RWCounter`](crate::operation::RWCounter)  by one.
+    pub fn l1_block_read(
+        &mut self,
+        step: &mut ExecStep,
+        field: L1BlockField,
+        value: Word,
+    ) -> Result<(), Error> {
+        self.push_op(step, RW::READ, L1BlockOp { field, value });
+        Ok(())
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Push a write type [`L1BlockOp`] into the
+    /// [`OperationContainer`](crate::operation::OperationContainer) with the
+    /// next [`RWCounter`](crate::operation::RWCounter), and then
+    /// adds a reference to the stored operation ([`OperationRef`]) inside
+    /// the bus-mapping instance of the current [`ExecStep`].  Then increase
+    /// the `block_ctx` [`RWCounter`](crate::operation::RWCounter)  by one.
+    pub fn l1_block_write(
+        &mut self,
+        step: &mut ExecStep,
+        field: L1BlockField,
+        value: Word,
+    ) -> Result<(), Error> {
+        self.push_op(step, RW::WRITE, L1BlockOp { field, value });
         Ok(())
     }
 

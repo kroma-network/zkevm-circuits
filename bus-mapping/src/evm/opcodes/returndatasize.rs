@@ -125,7 +125,7 @@ mod returndatasize_tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
-                max_rws: 1580,
+                max_rws: 1600,
                 ..Default::default()
             },
         )

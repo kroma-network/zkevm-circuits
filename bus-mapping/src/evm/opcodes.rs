@@ -20,6 +20,8 @@ use ethers_core::utils::get_contract_address;
 use crate::util::CHECK_MEM_STRICT;
 
 #[cfg(feature = "kroma")]
+use crate::l1_block_operation::L1BlockField;
+#[cfg(feature = "kroma")]
 use eth_types::kroma_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
 
 #[cfg(any(feature = "test", test))]
@@ -859,6 +861,17 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
         state.block_ctx.cumulative_gas_used,
     )?;
 
+    if state.tx_ctx.id() == 1 {
+        let (l1_base_fee, l1_fee_overhead, l1_fee_scalar) = state.sdb.get_l1_block()?;
+        state.l1_block_write(&mut exec_step, L1BlockField::L1BaseFee, l1_base_fee)?;
+        state.l1_block_write(&mut exec_step, L1BlockField::L1FeeOverhead, l1_fee_overhead)?;
+        state.l1_block_write(&mut exec_step, L1BlockField::L1FeeScalar, l1_fee_scalar)?;
+
+        state.block.l1_base_fee = l1_base_fee;
+        state.block.l1_fee_overhead = l1_fee_overhead;
+        state.block.l1_fee_scalar = l1_fee_scalar;
+    }
+
     if !state.tx_ctx.is_last_tx() {
         state.call_context_write(
             &mut exec_step,
@@ -926,7 +939,17 @@ pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecS
         state.tx_ctx.id().into(),
     );
 
-    let l1_fee = state.sdb.compute_l1_fee(state.block, state.tx)?;
+    let (l1_base_fee, l1_fee_overhead, l1_fee_scalar) = state.sdb.get_l1_block()?;
+    state.l1_block_read(&mut exec_step, L1BlockField::L1BaseFee, l1_base_fee)?;
+    state.l1_block_read(&mut exec_step, L1BlockField::L1FeeOverhead, l1_fee_overhead)?;
+    state.l1_block_read(&mut exec_step, L1BlockField::L1FeeScalar, l1_fee_scalar)?;
+
+    let l1_fee = state.sdb.compute_l1_fee(
+        l1_base_fee,
+        l1_fee_overhead,
+        l1_fee_scalar,
+        state.tx.rollup_data_gas_cost,
+    )?;
     let (found, l1_fee_recipient_account) = state.sdb.get_account_mut(&L1_FEE_RECIPIENT);
     if !found {
         return Err(Error::AccountNotFound(*L1_FEE_RECIPIENT));

@@ -11,6 +11,9 @@ use core::{cmp::Ordering, fmt, fmt::Debug};
 use eth_types::{Address, Word};
 use std::mem::swap;
 
+#[cfg(feature = "kroma")]
+use crate::l1_block_operation::L1BlockOp;
+
 /// Marker that defines whether an Operation performs a `READ` or a `WRITE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RW {
@@ -106,6 +109,10 @@ pub enum Target {
     TxReceipt,
     /// Means the target of the operation is the TxLog.
     TxLog,
+
+    #[cfg(feature = "kroma")]
+    /// Means the target of the operation is the L1Block.
+    L1Block,
 }
 
 /// Trait used for Operation Kinds.
@@ -924,6 +931,10 @@ pub enum OpEnum {
     TxLog(TxLogOp),
     /// Start
     Start(StartOp),
+
+    #[cfg(feature = "kroma")]
+    /// L1Block
+    L1Block(L1BlockOp),
 }
 
 /// Operation is a Wrapper over a type that implements Op with a RWCounter.
