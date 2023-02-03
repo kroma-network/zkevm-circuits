@@ -8,4 +8,4 @@ require (
 )
 
 // Uncomment for debugging
-// replace github.com/ethereum/go-ethereum => ../../go-ethereum
+replace github.com/ethereum/go-ethereum => github.com/light-scale/go-ethereum v0.0.0-20230130011216-386c9368af41
