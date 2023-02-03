@@ -236,6 +236,8 @@ pub mod error;
 pub mod evm;
 pub mod exec_trace;
 pub(crate) mod geth_errors;
+#[cfg(feature = "kanvas")]
+pub mod l1_block_operation;
 pub mod mock;
 pub mod operation;
 pub mod precompile;

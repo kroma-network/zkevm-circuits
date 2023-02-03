@@ -736,6 +736,8 @@ mod test {
     fn begin_tx_gadget_deposit() {
         // Get the execution steps from the external tracer
         use eth_types::geth_types::DEPOSIT_TX_TYPE;
+        // use mock::declare_test_context;
+        // let block: GethData = TestContext2_2::new(z
         let block: GethData = TestContext::<2, 2>::new(
             None,
             account_0_code_account_1_no_code(bytecode! { STOP }),

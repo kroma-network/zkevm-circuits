@@ -1,3 +1,5 @@
+#[cfg(feature = "kanvas")]
+use crate::table::L1BlockFieldTag;
 use crate::{
     evm_circuit::{
         param::STACK_CAPACITY,
@@ -1258,6 +1260,39 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 aux1: 0.expr(),
                 aux2: 0.expr(),
             },
+        );
+    }
+
+    // L1 Block
+
+    #[cfg(feature = "kanvas")]
+    pub(crate) fn l1_block(&mut self, field_tag: L1BlockFieldTag) -> Word<F> {
+        let word = self.query_word_rlc();
+        self.l1_block_lookup(false.expr(), field_tag, word.expr());
+        word
+    }
+
+    #[cfg(feature = "kanvas")]
+    pub(crate) fn l1_block_lookup(
+        &mut self,
+        is_write: Expression<F>,
+        field_tag: L1BlockFieldTag,
+        value: Expression<F>,
+    ) {
+        self.rw_lookup(
+            "L1Block lookup",
+            is_write,
+            RwTableTag::L1Block,
+            RwValues::new(
+                0.expr(),
+                0.expr(),
+                field_tag.expr(),
+                0.expr(),
+                value,
+                0.expr(),
+                0.expr(),
+                0.expr(),
+            ),
         );
     }
 

@@ -57,6 +57,11 @@ mod stackonlyop_tests {
     use pretty_assertions::assert_eq;
     use std::ops::{BitOr, BitXor};
 
+    #[cfg(feature = "kanvas")]
+    const CALL_ID: usize = 1176;
+    #[cfg(not(feature = "kanvas"))]
+    const CALL_ID: usize = 1;
+
     fn stack_only_opcode_impl<const N_POP: usize, const N_PUSH: usize>(
         opcode: OpcodeId,
         code: Bytecode,

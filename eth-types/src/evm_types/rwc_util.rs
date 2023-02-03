@@ -50,12 +50,8 @@ pub fn begin_tx_rwc_offset(_transaction_type: u64, rwc: usize) -> usize {
 /// RWC offset used by EndTx or EndDepositTx.
 pub fn end_tx_rwc(_transaction_type: u64, is_first: bool) -> usize {
     #[cfg(feature = "kanvas")]
-    let rwc_offset = if _transaction_type == DEPOSIT_TX_TYPE {
-        END_TX_NOT_USED_RWC_IF_DEPOSIT
-    } else {
-        0
-    } + if is_first { 1 } else { 0 };
-    #[cfg(not(feature = "kanvas"))]
-    let rwc_offset = if is_first { 1 } else { 0 };
-    return 9 - rwc_offset;
+    if _transaction_type == DEPOSIT_TX_TYPE && !is_first {
+        return 9 - END_TX_NOT_USED_RWC_IF_DEPOSIT
+    }
+    return 9 - if is_first { 1 } else { 0 };
 }

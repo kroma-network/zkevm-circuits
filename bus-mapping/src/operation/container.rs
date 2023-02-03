@@ -1,3 +1,5 @@
+#[cfg(feature = "kanvas")]
+use super::L1BlockOp;
 use super::{
     AccountDestructedOp, AccountOp, CallContextOp, MemoryOp, Op, OpEnum, Operation, RWCounter,
     StackOp, StartOp, StorageOp, Target, TxAccessListAccountOp, TxAccessListAccountStorageOp,
@@ -46,6 +48,9 @@ pub struct OperationContainer {
     pub tx_log: Vec<Operation<TxLogOp>>,
     /// Operations of Start
     pub start: Vec<Operation<StartOp>>,
+    #[cfg(feature = "kanvas")]
+    /// Operations of L1BlockOp
+    pub l1_block_log: Vec<Operation<L1BlockOp>>,
 }
 
 impl Default for OperationContainer {
@@ -71,6 +76,8 @@ impl OperationContainer {
             tx_receipt: Vec::new(),
             tx_log: Vec::new(),
             start: Vec::new(),
+            #[cfg(feature = "kanvas")]
+            l1_block_log: Vec::new(),
         }
     }
 
@@ -174,6 +181,11 @@ impl OperationContainer {
             OpEnum::Start(op) => {
                 self.start.push(Operation::new(rwc, rw, op));
                 OperationRef::from((Target::Start, self.start.len() - 1))
+            }
+            #[cfg(feature = "kanvas")]
+            OpEnum::L1Block(op) => {
+                self.l1_block_log.push(Operation::new(rwc, rw, op));
+                OperationRef::from((Target::L1Block, self.l1_block_log.len() - 1))
             }
         }
     }

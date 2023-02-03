@@ -234,6 +234,8 @@ pub(super) fn step_convert(step: &circuit_input_builder::ExecStep, block_num: u6
                     operation::Target::TxReceipt => RwTableTag::TxReceipt,
                     operation::Target::TxLog => RwTableTag::TxLog,
                     operation::Target::Start => RwTableTag::Start,
+                    #[cfg(feature = "kanvas")]
+                    operation::Target::L1Block => RwTableTag::L1Block,
                 };
                 (tag, x.as_usize())
             })

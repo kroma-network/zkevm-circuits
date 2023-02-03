@@ -8,10 +8,7 @@ use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "kanvas")]
-use crate::{
-    circuit_input_builder::{Block, Transaction},
-    Error,
-};
+use crate::Error;
 #[cfg(feature = "kanvas")]
 use eth_types::kanvas_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
@@ -331,20 +328,8 @@ impl StateDB {
     }
 
     #[cfg(feature = "kanvas")]
-    /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kanvas-geth
-    /// for details.
-    pub fn compute_l1_fee(&self, block: &mut Block, tx: &Transaction) -> Result<Word, Error> {
-        self.do_compute_l1_fee(block, tx.rollup_data_gas_cost)
-    }
-
-    #[cfg(feature = "kanvas")]
-    /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kanvas-geth
-    /// for details.
-    pub fn do_compute_l1_fee(
-        &self,
-        block: &mut Block,
-        rollup_data_gas_cost: u64,
-    ) -> Result<Word, Error> {
+    /// Get data from L1_BLOCK which are required to compute rollup l1 fee.
+    pub fn get_l1_block(&self) -> Result<(Word, Word, Word), Error> {
         let (found, l1_base_fee) = self.get_storage(&L1_BLOCK, &BASE_FEE_KEY);
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *BASE_FEE_KEY));
@@ -357,11 +342,22 @@ impl StateDB {
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_SCALAR_KEY));
         }
+        Ok((*l1_base_fee, *l1_fee_overhead, *l1_fee_scalar))
+    }
 
-        block.l1_base_fee = l1_base_fee.clone();
-        block.l1_fee_overhead = l1_fee_overhead.clone();
-        block.l1_fee_scalar = l1_fee_scalar.clone();
-
+    #[cfg(feature = "kanvas")]
+    /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kanvas-geth
+    /// for details.
+    pub fn compute_l1_fee(
+        &self,
+        l1_base_fee: Word,
+        l1_fee_overhead: Word,
+        l1_fee_scalar: Word,
+        rollup_data_gas_cost: u64,
+    ) -> Result<Word, Error> {
+        debug_assert!(!l1_base_fee.is_zero());
+        debug_assert!(!l1_fee_overhead.is_zero());
+        debug_assert!(!l1_fee_scalar.is_zero());
         Ok(
             (Word::from(rollup_data_gas_cost) + l1_fee_overhead) * l1_base_fee * l1_fee_scalar
                 / *L1_COST_DENOMINATOR,

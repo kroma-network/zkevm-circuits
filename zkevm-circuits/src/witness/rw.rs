@@ -1,11 +1,15 @@
 #![allow(missing_docs)]
 use std::collections::HashMap;
 
+#[cfg(feature = "kanvas")]
+use bus_mapping::l1_block_operation::L1BlockField;
 use bus_mapping::operation::{self, AccountField, CallContextField, TxLogField, TxReceiptField};
 use eth_types::{Address, Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
 use halo2_proofs::circuit::Value;
 use itertools::Itertools;
 
+#[cfg(feature = "kanvas")]
+use crate::table::L1BlockFieldTag;
 use crate::util::build_tx_log_address;
 use crate::{
     evm_circuit::util::RandomLinearCombination,
@@ -191,6 +195,15 @@ pub enum Rw {
         tx_id: usize,
         field_tag: TxReceiptFieldTag,
         value: u64,
+    },
+
+    #[cfg(feature = "kanvas")]
+    /// L1Block
+    L1Block {
+        rw_counter: usize,
+        is_write: bool,
+        field_tag: L1BlockFieldTag,
+        value: Word,
     },
 }
 
@@ -396,6 +409,8 @@ impl Rw {
             | Self::CallContext { rw_counter, .. }
             | Self::TxLog { rw_counter, .. }
             | Self::TxReceipt { rw_counter, .. } => *rw_counter,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { rw_counter, .. } => *rw_counter,
         }
     }
 
@@ -413,6 +428,8 @@ impl Rw {
             | Self::CallContext { is_write, .. }
             | Self::TxLog { is_write, .. }
             | Self::TxReceipt { is_write, .. } => *is_write,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { is_write, .. } => *is_write,
         }
     }
 
@@ -430,6 +447,8 @@ impl Rw {
             Self::CallContext { .. } => RwTableTag::CallContext,
             Self::TxLog { .. } => RwTableTag::TxLog,
             Self::TxReceipt { .. } => RwTableTag::TxReceipt,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { .. } => RwTableTag::L1Block,
         }
     }
 
@@ -445,6 +464,8 @@ impl Rw {
             | Self::Stack { call_id, .. }
             | Self::Memory { call_id, .. } => Some(*call_id),
             Self::Start { .. } | Self::Account { .. } | Self::AccountDestructed { .. } => None,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { .. } => None,
         }
     }
 
@@ -482,6 +503,8 @@ impl Rw {
             | Self::CallContext { .. }
             | Self::TxRefund { .. }
             | Self::TxReceipt { .. } => None,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { .. } => None,
         }
     }
 
@@ -490,6 +513,8 @@ impl Rw {
             Self::Account { field_tag, .. } => Some(*field_tag as u64),
             Self::CallContext { field_tag, .. } => Some(*field_tag as u64),
             Self::TxReceipt { field_tag, .. } => Some(*field_tag as u64),
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { field_tag, .. } => Some(*field_tag as u64),
             Self::Start { .. }
             | Self::Memory { .. }
             | Self::Stack { .. }
@@ -516,6 +541,8 @@ impl Rw {
             | Self::AccountDestructed { .. }
             | Self::TxLog { .. }
             | Self::TxReceipt { .. } => None,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { .. } => None,
         }
     }
 
@@ -563,6 +590,10 @@ impl Rw {
             Self::AccountDestructed { is_destructed, .. } => F::from(*is_destructed as u64),
             Self::Memory { byte, .. } => F::from(u64::from(*byte)),
             Self::TxRefund { value, .. } | Self::TxReceipt { value, .. } => F::from(*value),
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { value, .. } => {
+                RandomLinearCombination::random_linear_combine(value.to_le_bytes(), randomness)
+            }
         }
     }
 
@@ -603,6 +634,8 @@ impl Rw {
             | Self::CallContext { .. }
             | Self::TxLog { .. }
             | Self::TxReceipt { .. } => None,
+            #[cfg(feature = "kanvas")]
+            Self::L1Block { .. } => None,
         }
     }
 
@@ -840,6 +873,24 @@ impl From<&operation::OperationContainer> for RwMap {
                         TxReceiptField::PostStateOrStatus => TxReceiptFieldTag::PostStateOrStatus,
                         TxReceiptField::LogLength => TxReceiptFieldTag::LogLength,
                         TxReceiptField::CumulativeGasUsed => TxReceiptFieldTag::CumulativeGasUsed,
+                    },
+                    value: op.op().value,
+                })
+                .collect(),
+        );
+        #[cfg(feature = "kanvas")]
+        rws.insert(
+            RwTableTag::L1Block,
+            container
+                .l1_block_log
+                .iter()
+                .map(|op| Rw::L1Block {
+                    rw_counter: op.rwc().into(),
+                    is_write: op.rw().is_write(),
+                    field_tag: match op.op().field {
+                        L1BlockField::L1BaseFee => L1BlockFieldTag::L1BaseFee,
+                        L1BlockField::L1FeeOverhead => L1BlockFieldTag::L1FeeOverhead,
+                        L1BlockField::L1FeeScalar => L1BlockFieldTag::L1FeeScalar,
                     },
                     value: op.op().value,
                 })
