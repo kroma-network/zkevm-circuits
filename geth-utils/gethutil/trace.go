@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -44,7 +43,7 @@ type StructLogRes struct {
 
 // Copied from github.com/ethereum/go-ethereum/internal/ethapi.FormatLogs
 // FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []logger.StructLog) []StructLogRes {
+func FormatLogs(logs []*vm.StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
 		formatted[index] = StructLogRes{
@@ -63,10 +62,10 @@ func FormatLogs(logs []logger.StructLog) []StructLogRes {
 			}
 			formatted[index].Stack = &stack
 		}
-		if trace.Memory != nil {
-			memory := make([]string, 0, (len(trace.Memory)+31)/32)
-			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+		if trace.Memory.Len() != 0 {
+			memory := make([]string, 0, (trace.Memory.Len()+31)/32)
+			for i := 0; i+32 <= trace.Memory.Len(); i += 32 {
+				memory = append(memory, fmt.Sprintf("%x", trace.Memory.Bytes()[i:i+32]))
 			}
 			formatted[index].Memory = &memory
 		}
@@ -98,6 +97,7 @@ type Account struct {
 }
 
 type Transaction struct {
+	Type       hexutil.Uint64  `json:"transaction_type"`
 	From       common.Address  `json:"from"`
 	To         *common.Address `json:"to"`
 	Nonce      hexutil.Uint64  `json:"nonce"`
@@ -111,6 +111,8 @@ type Transaction struct {
 		Address     common.Address `json:"address"`
 		StorageKeys []common.Hash  `json:"storage_keys"`
 	} `json:"access_list"`
+
+	Mint *hexutil.Big `json:"mint,omitempty"`
 }
 
 type TraceConfig struct {
@@ -121,7 +123,7 @@ type TraceConfig struct {
 	Block         Block                      `json:"block_constants"`
 	Accounts      map[common.Address]Account `json:"accounts"`
 	Transactions  []Transaction              `json:"transactions"`
-	LoggerConfig  *logger.Config             `json:"logger_config"`
+	LoggerConfig  *vm.LogConfig              `json:"logger_config"`
 }
 
 func Trace(config TraceConfig) ([]*ExecutionResult, error) {
@@ -158,19 +160,36 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 			txAccessList[i].Address = accessList.Address
 			txAccessList[i].StorageKeys = accessList.StorageKeys
 		}
-		messages[i] = types.NewMessage(
-			tx.From,
-			tx.To,
-			uint64(tx.Nonce),
-			toBigInt(tx.Value),
-			uint64(tx.GasLimit),
-			toBigInt(tx.GasPrice),
-			toBigInt(tx.GasFeeCap),
-			toBigInt(tx.GasTipCap),
-			tx.CallData,
-			txAccessList,
-			false,
-		)
+		if tx.Type == types.DepositTxType {
+			message, err := types.NewTx(&types.DepositTx{
+				SourceHash:          common.Hash{},
+				From:                tx.From,
+				To:                  tx.To,
+				Mint:                toBigInt(tx.Mint),
+				Value:               toBigInt(tx.Value),
+				Gas:                 uint64(tx.GasLimit),
+				IsSystemTransaction: i == 0,
+				Data:                tx.CallData,
+			}).AsMessage(types.MakeSigner(&chainConfig, config.Block.Number.ToInt()), config.Block.BaseFee.ToInt())
+			if err != nil {
+				return nil, err
+			}
+			messages[i] = message
+		} else {
+			messages[i] = types.NewMessage(
+				tx.From,
+				tx.To,
+				uint64(tx.Nonce),
+				toBigInt(tx.Value),
+				uint64(tx.GasLimit),
+				toBigInt(tx.GasPrice),
+				toBigInt(tx.GasFeeCap),
+				toBigInt(tx.GasTipCap),
+				tx.CallData,
+				txAccessList,
+				false,
+			)
+		}
 
 		txsGasLimit += uint64(tx.GasLimit)
 	}
@@ -214,7 +233,7 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 	// Run the transactions with tracing enabled.
 	executionResults := make([]*ExecutionResult, len(config.Transactions))
 	for i, message := range messages {
-		tracer := logger.NewStructLogger(config.LoggerConfig)
+		tracer := vm.NewStructLogger(config.LoggerConfig)
 		evm := vm.NewEVM(blockCtx, core.NewEVMTxContext(message), stateDB, &chainConfig, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
 		result, err := core.ApplyMessage(evm, message, new(core.GasPool).AddGas(message.Gas()))
