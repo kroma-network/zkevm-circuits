@@ -24,6 +24,8 @@ impl fmt::Debug for OperationRef {
                 Target::CallContext => "CallContext",
                 Target::TxReceipt => "TxReceipt",
                 Target::TxLog => "TxLog",
+                #[cfg(feature = "kanvas")]
+                Target::L1Block => "L1Block",
             },
             self.1
         ))

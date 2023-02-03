@@ -56,7 +56,7 @@ mod stackonlyop_tests {
     use pretty_assertions::assert_eq;
 
     #[cfg(feature = "kanvas")]
-    const CALL_ID: usize = 1173;
+    const CALL_ID: usize = 1176;
     #[cfg(not(feature = "kanvas"))]
     const CALL_ID: usize = 1;
 

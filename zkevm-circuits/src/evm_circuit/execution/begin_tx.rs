@@ -563,7 +563,7 @@ mod test {
         declare_test_context!(TestContext2_2, 2, 2);
         // Get the execution steps from the external tracer
         use eth_types::geth_types::DEPOSIT_TX_TYPE;
-        use mock::{declare_test_context, test_ctx::helpers::system_deposit_tx, tx_idx};
+        use mock::declare_test_context;
         let block: GethData = TestContext2_2::new(
             None,
             account_0_code_account_1_no_code(bytecode! { STOP }),

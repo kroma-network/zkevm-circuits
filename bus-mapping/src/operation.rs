@@ -15,6 +15,9 @@ use core::fmt::Debug;
 use eth_types::{Address, Word};
 use std::mem::swap;
 
+#[cfg(feature = "kanvas")]
+use crate::l1_block_operation::L1BlockOp;
+
 /// Marker that defines whether an Operation performs a `READ` or a `WRITE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RW {
@@ -110,6 +113,10 @@ pub enum Target {
     TxReceipt,
     /// Means the target of the operation is the TxLog.
     TxLog,
+
+    #[cfg(feature = "kanvas")]
+    /// Means the target of the operation is the L1Block.
+    L1Block,
 }
 
 /// Trait used for Operation Kinds.
@@ -951,6 +958,10 @@ pub enum OpEnum {
     TxReceipt(TxReceiptOp),
     /// TxLog
     TxLog(TxLogOp),
+
+    #[cfg(feature = "kanvas")]
+    /// L1Block
+    L1Block(L1BlockOp),
 }
 
 /// Operation is a Wrapper over a type that implements Op with a RWCounter.

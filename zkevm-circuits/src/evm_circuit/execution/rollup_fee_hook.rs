@@ -10,7 +10,7 @@ use crate::{
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
-    table::{CallContextFieldTag, TxContextFieldTag},
+    table::{CallContextFieldTag, L1BlockFieldTag, TxContextFieldTag},
     util::Expr,
 };
 use eth_types::{
@@ -45,11 +45,18 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
     const EXECUTION_STATE: ExecutionState = ExecutionState::RollupFeeHook;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
-        // Add l1 rollup fee to l1_fee_recipient's balance
         let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
+
+        let [l1_base_fee, l1_fee_overhead, l1_fee_scalar] = [
+            L1BlockFieldTag::L1BaseFee,
+            L1BlockFieldTag::L1FeeOverhead,
+            L1BlockFieldTag::L1FeeScalar,
+        ]
+        .map(|field_tag| cb.l1_block(field_tag));
+
+        // Add l1 rollup fee to l1_fee_recipient's balance
         let tx_rollup_data_gas_cost =
             cb.tx_context_as_word(tx_id.expr(), TxContextFieldTag::RollupDataGasCost, None);
-        let l1_fee_overhead = cb.query_word();
         let l1_gas_to_use = cb.query_word();
         let add_rollup_data_gas_by_l1_fee_overhead = AddWordsGadget::construct(
             cb,
@@ -57,7 +64,6 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             l1_gas_to_use.clone(),
         );
 
-        let l1_base_fee = cb.query_word();
         let zero = cb.query_word();
         let l1_fee_tmp = cb.query_word();
         let mul_l1_gas_to_use_by_l1_base_fee =
@@ -67,7 +73,6 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             mul_l1_gas_to_use_by_l1_base_fee.overflow(),
         );
 
-        let l1_fee_scalar = cb.query_word();
         let l1_fee_tmp2 = cb.query_word();
         let mul_l1_fee_tmp_by_l1_fee_scalar =
             MulAddWordsGadget::construct(cb, [&l1_fee_tmp, &l1_fee_scalar, &zero, &l1_fee_tmp2]);
@@ -99,7 +104,7 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             UpdateBalanceGadget::construct(cb, l1_fee_recipient.expr(), vec![l1_fee], None, None);
 
         cb.require_step_state_transition(StepStateTransition {
-            rw_counter: Delta(2.expr()),
+            rw_counter: Delta(5.expr()),
             ..StepStateTransition::any()
         });
 
@@ -133,7 +138,7 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
         step: &ExecStep,
     ) -> Result<(), Error> {
         let (l1_fee_recipient_balance, l1_fee_recipient_balance_prev) =
-            block.rws[step.rw_indices[1]].account_value_pair();
+            block.rws[step.rw_indices[4]].account_value_pair();
 
         self.tx_id
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
