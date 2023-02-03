@@ -147,7 +147,7 @@ mod codecopy_tests {
     use ethers_core::utils::keccak256;
     use mock::{
         test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
+        tx_idx, SimpleTestContext,
     };
 
     use crate::{
@@ -171,7 +171,7 @@ mod codecopy_tests {
             STOP
         };
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code.clone()),
             tx_from_1_to_0,
@@ -185,13 +185,13 @@ mod codecopy_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CODECOPY))
             .unwrap();
 
-        let expected_call_id = builder.block.txs()[0].calls()[step.call_index].call_id;
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
 
         assert_eq!(
             [0, 1, 2]
@@ -200,23 +200,31 @@ mod codecopy_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1021), Word::from(dst_offset)),
+                    &StackOp::new(expected_call_id, StackAddress::from(1021), Word::from(dst_offset)),
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022), Word::from(code_offset)),
+                    &StackOp::new(expected_call_id, StackAddress::from(1022), Word::from(code_offset)),
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(size)),
+                    &StackOp::new(expected_call_id, StackAddress::from(1023), Word::from(size)),
                 ),
             ]
         );
 
+        let memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == expected_call_id)
+            .unwrap();
+
         // RW table memory writes.
         assert_eq!(
             (0..size)
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             (0..size)
@@ -224,7 +232,7 @@ mod codecopy_tests {
                     (
                         RW::WRITE,
                         MemoryOp::new(
-                            1,
+                            expected_call_id,
                             MemoryAddress::from(dst_offset + idx),
                             if code_offset + idx < code.to_vec().len() {
                                 code.to_vec()[code_offset + idx]

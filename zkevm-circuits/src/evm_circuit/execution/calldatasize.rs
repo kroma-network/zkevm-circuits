@@ -94,7 +94,9 @@ mod test {
     };
     use eth_types::{address, bytecode, Word};
     use itertools::Itertools;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx, SimpleTestContext};
 
     fn test_ok(call_data_size: usize, is_root: bool) {
         let bytecode = bytecode! {
@@ -104,9 +106,10 @@ mod test {
 
         let block_data = if is_root {
             bus_mapping::mock::BlockData::new_from_geth_data(
-                TestContext::<2, 1>::new(
+                SimpleTestContext::new(
                     None,
-                    |accs| {
+                    #[allow(unused_mut)]
+                    |mut accs| {
                         accs[0]
                             .address(address!("0x0000000000000000000000000000000000000000"))
                             .balance(Word::from(1u64 << 30));
@@ -114,9 +117,13 @@ mod test {
                             .address(address!("0x0000000000000000000000000000000000000010"))
                             .balance(Word::from(1u64 << 20))
                             .code(bytecode);
+                        #[cfg(feature = "kanvas")]
+                        setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
                     },
                     |mut txs, accs| {
-                        txs[0]
+                        #[cfg(feature = "kanvas")]
+                        system_deposit_tx(txs[0]);
+                        txs[tx_idx!(0)]
                             .from(accs[0].address)
                             .to(accs[1].address)
                             .input(rand_bytes(call_data_size).into())
@@ -129,9 +136,10 @@ mod test {
             )
         } else {
             bus_mapping::mock::BlockData::new_from_geth_data(
-                TestContext::<3, 1>::new(
+                TestContext3_1::new(
                     None,
-                    |accs| {
+                    #[allow(unused_mut)]
+                    |mut accs| {
                         accs[0]
                             .address(address!("0x0000000000000000000000000000000000000000"))
                             .balance(Word::from(1u64 << 30));
@@ -153,9 +161,13 @@ mod test {
                             .address(address!("0x0000000000000000000000000000000000000020"))
                             .balance(Word::from(1u64 << 20))
                             .code(bytecode);
+                        #[cfg(feature = "kanvas")]
+                        setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
                     },
                     |mut txs, accs| {
-                        txs[0]
+                        #[cfg(feature = "kanvas")]
+                        system_deposit_tx(txs[0]);
+                        txs[tx_idx!(0)]
                             .from(accs[0].address)
                             .to(accs[1].address)
                             .gas(Word::from(30000));

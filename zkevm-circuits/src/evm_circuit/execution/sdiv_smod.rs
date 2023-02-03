@@ -245,7 +245,7 @@ mod test {
     use crate::{evm_circuit::test::rand_word, test_util::run_test_circuits};
     use eth_types::evm_types::OpcodeId;
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     fn test_ok(opcode: OpcodeId, a: Word, b: Word) {
         let bytecode = bytecode! {
@@ -257,7 +257,7 @@ mod test {
         };
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())

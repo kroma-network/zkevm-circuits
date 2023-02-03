@@ -52,8 +52,13 @@ mod stackonlyop_tests {
         word, Bytecode, Word,
     };
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{test_ctx::helpers::*, tx_idx, SimpleTestContext};
     use pretty_assertions::assert_eq;
+
+    #[cfg(feature = "kanvas")]
+    const CALL_ID: usize = 1173;
+    #[cfg(not(feature = "kanvas"))]
+    const CALL_ID: usize = 1;
 
     fn stack_only_opcode_impl<const N_POP: usize, const N_PUSH: usize>(
         opcode: OpcodeId,
@@ -62,7 +67,7 @@ mod stackonlyop_tests {
         pushes: Vec<StackOp>,
     ) {
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -76,7 +81,7 @@ mod stackonlyop_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(opcode))
@@ -116,12 +121,12 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 word!("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
             )],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 word!("0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0"),
             )],
@@ -139,11 +144,11 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(0x60)),
-                StackOp::new(1, StackAddress(1023), Word::from(0x80)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(0x60)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(0x80)),
             ],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 Word::from(0x60) + Word::from(0x80),
             )],
@@ -162,11 +167,15 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1021), Word::from(0x12345)),
-                StackOp::new(1, StackAddress(1022), Word::from(0x6789a)),
-                StackOp::new(1, StackAddress(1023), Word::from(0xbcdef)),
+                StackOp::new(CALL_ID, StackAddress(1021), Word::from(0x12345)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(0x6789a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(0xbcdef)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(0x79bdf))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(0x79bdf),
+            )],
         );
     }
 }

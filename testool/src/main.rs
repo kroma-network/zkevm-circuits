@@ -77,7 +77,7 @@ fn run_single_test(test: StateTest, config: StateTestConfig) -> Result<()> {
 
 fn run_bytecode(code: &str, bytecode_test_config: BytecodeTestConfig) -> Result<()> {
     use eth_types::bytecode;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use std::str::FromStr;
     use zkevm_circuits::test_util::run_test_circuits;
 
@@ -105,7 +105,7 @@ fn run_bytecode(code: &str, bytecode_test_config: BytecodeTestConfig) -> Result<
     };
 
     let result = run_test_circuits(
-        TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode)?,
+        SimpleTestContext::simple_ctx_with_bytecode(bytecode)?,
         Some(bytecode_test_config),
     );
 

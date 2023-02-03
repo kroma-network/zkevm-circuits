@@ -392,7 +392,7 @@ mod evm_circuit_stats {
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData};
     use halo2_proofs::halo2curves::bn256::Fr;
     use halo2_proofs::plonk::ConstraintSystem;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{test_ctx::helpers::*, SimpleTestContext};
     use strum::IntoEnumIterator;
 
     #[test]
@@ -437,7 +437,7 @@ mod evm_circuit_stats {
                 };
                 code.write_op(opcode);
                 code.write_op(OpcodeId::STOP);
-                let block: GethData = TestContext::<2, 1>::new(
+                let block: GethData = SimpleTestContext::new(
                     None,
                     account_0_code_account_1_no_code(code),
                     tx_from_1_to_0,

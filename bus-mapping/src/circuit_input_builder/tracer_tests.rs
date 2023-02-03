@@ -12,8 +12,8 @@ use eth_types::{
     address, bytecode, geth_types::GethData, word, Bytecode, Hash, ToAddress, ToWord, Word,
 };
 use lazy_static::lazy_static;
-use mock::test_ctx::{helpers::*, LoggerConfig, TestContext};
-use mock::MOCK_COINBASE;
+use mock::test_ctx::{helpers::*, LoggerConfig, TestContext3_1, TestContext3_2};
+use mock::{tx_idx, SimpleTestContext, MOCK_COINBASE};
 use pretty_assertions::assert_eq;
 use std::collections::HashSet;
 
@@ -136,9 +136,10 @@ fn tracer_err_depth() {
     };
 
     // Create a custom tx setting Gas to
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(*ADDR_A)
                 .balance(Word::from(1u64 << 20))
@@ -146,9 +147,13 @@ fn tracer_err_depth() {
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000010"))
                 .balance(Word::from(10u64.pow(19)));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
         |mut txs, accs| {
-            txs[0]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)]
                 .to(accs[0].address)
                 .from(accs[1].address)
                 .gas(Word::from(10u64.pow(15)));
@@ -159,17 +164,17 @@ fn tracer_err_depth() {
     .unwrap()
     .into();
 
-    let struct_logs = &block.geth_traces[0].struct_logs;
+    let struct_logs = &block.geth_traces[tx_idx!(0)].struct_logs;
 
     // get last CALL
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::CALL)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(step.op, OpcodeId::CALL);
     assert_eq!(step.depth, 1025u16);
     assert_eq!(step.error, None);
@@ -212,9 +217,10 @@ fn tracer_err_insufficient_balance() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -224,10 +230,14 @@ fn tracer_err_insufficient_balance() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -239,14 +249,14 @@ fn tracer_err_insufficient_balance() {
     .into();
 
     // get last CALL
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::CALL)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(step.error, None);
     assert_eq!(next_step.unwrap().op, OpcodeId::PUSH2);
     assert_eq!(next_step.unwrap().stack, Stack(vec![Word::zero()])); // failure = 0
@@ -276,9 +286,10 @@ fn tracer_call_success() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 1>::new(
+    let block: GethData = TestContext3_1::new(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a)
@@ -289,9 +300,13 @@ fn tracer_call_success() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
         },
         |block, _tx| block.number(0xcafeu64),
     )
@@ -299,14 +314,14 @@ fn tracer_call_success() {
     .into();
 
     // get last CALL
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::CALL)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(step.error, None);
     assert_eq!(next_step.unwrap().op, OpcodeId::STOP);
     assert_eq!(next_step.unwrap().stack, Stack(vec![]));
@@ -376,9 +391,10 @@ fn tracer_err_address_collision() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -386,10 +402,14 @@ fn tracer_err_address_collision() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -401,25 +421,25 @@ fn tracer_err_address_collision() {
     .into();
 
     // get last CREATE2
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::CREATE2)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     let memory = next_step.unwrap().memory.clone();
 
     let create2_address: Address = {
         // get first RETURN
-        let (index, _) = block.geth_traces[0]
+        let (index, _) = block.geth_traces[tx_idx!(0)]
             .struct_logs
             .iter()
             .enumerate()
             .find(|(_, s)| s.op == OpcodeId::RETURN)
             .unwrap();
-        let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+        let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
         let addr_word = next_step.unwrap().stack.last().unwrap();
         addr_word.to_address()
     };
@@ -515,9 +535,10 @@ fn tracer_err_code_store_out_of_gas() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -525,10 +546,14 @@ fn tracer_err_code_store_out_of_gas() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -540,14 +565,14 @@ fn tracer_err_code_store_out_of_gas() {
     .into();
 
     // get last RETURN
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::RETURN)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_code_store_out_of_gas(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -622,9 +647,10 @@ fn tracer_err_invalid_code() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -632,10 +658,14 @@ fn tracer_err_invalid_code() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -647,14 +677,14 @@ fn tracer_err_invalid_code() {
     .into();
 
     // get last RETURN
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::RETURN)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_invalid_code(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -728,9 +758,10 @@ fn tracer_err_max_code_size_exceeded() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -738,10 +769,14 @@ fn tracer_err_max_code_size_exceeded() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -753,14 +788,14 @@ fn tracer_err_max_code_size_exceeded() {
     .into();
 
     // get last RETURN
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::RETURN)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_max_code_size_exceeded(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -823,9 +858,10 @@ fn tracer_create_stop() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -835,10 +871,14 @@ fn tracer_create_stop() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -850,13 +890,13 @@ fn tracer_create_stop() {
     .into();
 
     // get first STOP
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .find(|(_, s)| s.op == OpcodeId::STOP)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     // Set up call context at STOP
@@ -899,9 +939,10 @@ fn tracer_err_invalid_jump() {
         STOP
     };
     let index = 1; // JUMP
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000010"))
                 .balance(Word::from(1u64 << 20))
@@ -909,9 +950,13 @@ fn tracer_err_invalid_jump() {
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .balance(Word::from(1u64 << 20));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address);
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
@@ -919,9 +964,9 @@ fn tracer_err_invalid_jump() {
     .unwrap()
     .into();
 
-    assert_eq!(block.geth_traces[0].struct_logs.len(), 2);
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    assert_eq!(block.geth_traces[tx_idx!(0)].struct_logs.len(), 2);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_invalid_jump(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -947,9 +992,10 @@ fn tracer_err_invalid_jump() {
     let index = 8; // JUMP
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -957,10 +1003,14 @@ fn tracer_err_invalid_jump() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -971,8 +1021,8 @@ fn tracer_err_invalid_jump() {
     .unwrap()
     .into();
 
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_invalid_jump(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1001,9 +1051,10 @@ fn tracer_err_execution_reverted() {
         STOP
     };
     let index = 2; // REVERT
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000010"))
                 .balance(Word::from(1u64 << 20))
@@ -1011,9 +1062,13 @@ fn tracer_err_execution_reverted() {
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .balance(Word::from(1u64 << 20));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address);
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
@@ -1021,9 +1076,9 @@ fn tracer_err_execution_reverted() {
     .unwrap()
     .into();
 
-    assert_eq!(block.geth_traces[0].struct_logs.len(), 3);
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    assert_eq!(block.geth_traces[tx_idx!(0)].struct_logs.len(), 3);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_execution_reverted(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1050,9 +1105,10 @@ fn tracer_err_execution_reverted() {
     let index = 10; // REVERT
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -1060,10 +1116,14 @@ fn tracer_err_execution_reverted() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1074,8 +1134,8 @@ fn tracer_err_execution_reverted() {
     .unwrap()
     .into();
 
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_execution_reverted(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1112,9 +1172,10 @@ fn tracer_stop() {
     let index = 10; // STOP
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -1122,10 +1183,14 @@ fn tracer_stop() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1136,8 +1201,8 @@ fn tracer_stop() {
     .unwrap()
     .into();
 
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
     assert_eq!(
@@ -1187,9 +1252,10 @@ fn tracer_err_return_data_out_of_bounds() {
         RETURN
     };
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -1199,10 +1265,14 @@ fn tracer_err_return_data_out_of_bounds() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1214,14 +1284,14 @@ fn tracer_err_return_data_out_of_bounds() {
     .into();
 
     // get last RETURNDATACOPY
-    let (index, step) = block.geth_traces[0]
+    let (index, step) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::RETURNDATACOPY)
         .unwrap();
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert!(check_err_return_data_out_of_bounds(step, next_step));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1245,9 +1315,10 @@ fn tracer_err_gas_uint_overflow() {
         PUSH32(0x100_0000_0000_0000_0000_u128) // offset
         MSTORE
     };
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000010"))
                 .balance(Word::from(1u64 << 20))
@@ -1255,9 +1326,13 @@ fn tracer_err_gas_uint_overflow() {
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .balance(Word::from(1u64 << 20));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address);
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
@@ -1266,8 +1341,8 @@ fn tracer_err_gas_uint_overflow() {
     .into();
 
     let index = 2; // MSTORE
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(step.op, OpcodeId::MSTORE);
     assert_eq!(step.error, Some(GETH_ERR_GAS_UINT_OVERFLOW.to_string()));
 
@@ -1284,9 +1359,10 @@ fn tracer_err_invalid_opcode() {
     let mut code = bytecode::Bytecode::default();
     code.write_op(OpcodeId::PC);
     code.write(0x0f, true);
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000010"))
                 .balance(Word::from(1u64 << 20))
@@ -1294,9 +1370,13 @@ fn tracer_err_invalid_opcode() {
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .balance(Word::from(1u64 << 20));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address);
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[1].address);
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
@@ -1304,9 +1384,9 @@ fn tracer_err_invalid_opcode() {
     .unwrap()
     .into();
 
-    let index = block.geth_traces[0].struct_logs.len() - 1; // 0x0f
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let index = block.geth_traces[tx_idx!(0)].struct_logs.len() - 1; // 0x0f
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(step.op, OpcodeId::INVALID(0x0f));
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1338,9 +1418,10 @@ fn tracer_err_write_protection() {
         PUSH3(0xbb)
     };
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -1348,10 +1429,14 @@ fn tracer_err_write_protection() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1363,8 +1448,8 @@ fn tracer_err_write_protection() {
     .into();
 
     let index = 9; // SSTORE
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(step.op, OpcodeId::SSTORE);
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1405,11 +1490,13 @@ fn tracer_err_out_of_gas() {
         PUSH1(0x2)
     };
     // Create a custom tx setting Gas to
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         |mut txs, accs| {
-            txs[0]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)]
                 .to(accs[0].address)
                 .from(accs[1].address)
                 .gas(Word::from(21004u64));
@@ -1419,7 +1506,7 @@ fn tracer_err_out_of_gas() {
     )
     .unwrap()
     .into();
-    let struct_logs = &block.geth_traces[0].struct_logs;
+    let struct_logs = &block.geth_traces[tx_idx!(0)].struct_logs;
 
     assert_eq!(struct_logs[1].error, Some(GETH_ERR_OUT_OF_GAS.to_string()));
 }
@@ -1431,7 +1518,7 @@ fn tracer_err_stack_overflow() {
     for i in 0u64..1025 {
         code.push(2, Word::from(i));
     }
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
@@ -1441,9 +1528,9 @@ fn tracer_err_stack_overflow() {
     .unwrap()
     .into();
 
-    let index = block.geth_traces[0].struct_logs.len() - 1; // PUSH2
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let index = block.geth_traces[tx_idx!(0)].struct_logs.len() - 1; // PUSH2
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(
         step.error,
         Some(format!("{} 1024 (1023)", GETH_ERR_STACK_OVERFLOW))
@@ -1462,7 +1549,7 @@ fn tracer_err_stack_underflow() {
     let code = bytecode! {
         SWAP5
     };
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
@@ -1473,8 +1560,8 @@ fn tracer_err_stack_underflow() {
     .into();
 
     let index = 0; // SWAP5
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(
         step.error,
         Some(format!("{} (0 <=> 6)", GETH_ERR_STACK_UNDERFLOW))
@@ -1542,9 +1629,10 @@ fn create2_address() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -1552,10 +1640,14 @@ fn create2_address() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1567,18 +1659,20 @@ fn create2_address() {
     .into();
 
     // get RETURN
-    let (index_return, _) = block.geth_traces[0]
+    let (index_return, _) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .find(|(_, s)| s.op == OpcodeId::RETURN)
         .unwrap();
-    let next_step_return = block.geth_traces[0].struct_logs.get(index_return + 1);
+    let next_step_return = block.geth_traces[tx_idx!(0)]
+        .struct_logs
+        .get(index_return + 1);
     let addr_expect = next_step_return.unwrap().stack.last().unwrap();
     let memory = next_step_return.unwrap().memory.clone();
 
     // get CREATE2
-    let step_create2 = block.geth_traces[0]
+    let step_create2 = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .find(|s| s.op == OpcodeId::CREATE2)
@@ -1649,9 +1743,10 @@ fn create_address() {
     };
     code_b.append(&code_b_end);
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
@@ -1659,10 +1754,14 @@ fn create_address() {
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1674,18 +1773,20 @@ fn create_address() {
     .into();
 
     // get last RETURN
-    let (index_return, _) = block.geth_traces[0]
+    let (index_return, _) = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .enumerate()
         .rev()
         .find(|(_, s)| s.op == OpcodeId::RETURN)
         .unwrap();
-    let next_step_return = block.geth_traces[0].struct_logs.get(index_return + 1);
+    let next_step_return = block.geth_traces[tx_idx!(0)]
+        .struct_logs
+        .get(index_return + 1);
     let addr_expect = next_step_return.unwrap().stack.last().unwrap();
 
     // get last CREATE
-    let step_create = block.geth_traces[0]
+    let step_create = block.geth_traces[tx_idx!(0)]
         .struct_logs
         .iter()
         .rev()
@@ -1742,18 +1843,23 @@ fn test_gen_access_trace() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
             accs[1].address(*ADDR_B).code(code_b);
             accs[2].address(ADDR_0).balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1766,8 +1872,8 @@ fn test_gen_access_trace() {
 
     let access_trace = gen_state_access_trace(
         &block.eth_block,
-        &block.eth_block.transactions[0],
-        &block.geth_traces[0],
+        &block.eth_block.transactions[tx_idx!(0)],
+        &block.geth_traces[tx_idx!(0)],
     )
     .unwrap();
 
@@ -1838,11 +1944,14 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0].address(*MOCK_COINBASE).code(code);
             accs[1].address(*ADDR_B).balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
@@ -1853,8 +1962,8 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
 
     let access_trace = gen_state_access_trace(
         &block.eth_block,
-        &block.eth_block.transactions[0],
-        &block.geth_traces[0],
+        &block.eth_block.transactions[tx_idx!(0)],
+        &block.geth_traces[tx_idx!(0)],
     )
     .unwrap();
 
@@ -1971,16 +2080,21 @@ fn test_gen_access_trace_create_push_call_stack() {
     code_b.append(&code_b_end);
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<3, 2>::new_with_logger_config(
+    let block: GethData = TestContext3_2::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0].address(*MOCK_COINBASE).code(code_a);
             accs[1].address(*ADDR_B).code(code_b);
             accs[2].balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kanvas")]
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
-            txs[1]
+            #[cfg(feature = "kanvas")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
+            txs[tx_idx!(1)]
                 .to(accs[1].address)
                 .from(accs[2].address)
                 .nonce(Word::one());
@@ -1993,8 +2107,8 @@ fn test_gen_access_trace_create_push_call_stack() {
 
     let access_trace = gen_state_access_trace(
         &block.eth_block,
-        &block.eth_block.transactions[0],
-        &block.geth_traces[0],
+        &block.eth_block.transactions[tx_idx!(0)],
+        &block.geth_traces[tx_idx!(0)],
     )
     .unwrap();
 

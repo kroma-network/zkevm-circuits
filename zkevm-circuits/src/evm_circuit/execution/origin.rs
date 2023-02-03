@@ -99,7 +99,7 @@ impl<F: Field> ExecutionGadget<F> for OriginGadget<F> {
 mod test {
     use crate::test_util::run_test_circuits;
     use eth_types::bytecode;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     #[test]
     fn origin_gadget_test() {
@@ -110,7 +110,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())

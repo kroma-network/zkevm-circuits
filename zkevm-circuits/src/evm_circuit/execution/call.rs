@@ -531,7 +531,9 @@ mod test {
     use eth_types::{bytecode::Bytecode, evm_types::OpcodeId, geth_types::Account};
     use eth_types::{Address, ToWord, Word};
     use itertools::Itertools;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
     use std::default::Default;
 
     #[derive(Clone, Copy, Debug, Default)]
@@ -618,9 +620,10 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account) {
-        let block = TestContext::<3, 1>::new(
+        let block = TestContext3_1::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -634,9 +637,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into());
@@ -655,9 +662,10 @@ mod test {
     }
 
     fn test_oog(caller: Account, callee: Account) {
-        let block = TestContext::<3, 1>::new(
+        let block = TestContext3_1::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -671,9 +679,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(21100.into());

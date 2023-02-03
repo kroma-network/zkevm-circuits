@@ -256,7 +256,10 @@ impl<F: Field> ExecutionGadget<F> for CallDataCopyGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::run_test_circuits};
     use eth_types::{bytecode, ToWord, Word};
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{helpers::*, TestContext3_1},
+        tx_idx, SimpleTestContext,
+    };
 
     fn test_ok_root(
         call_data_length: usize,
@@ -275,11 +278,13 @@ mod test {
         let call_data = rand_bytes(call_data_length);
 
         // Get the execution steps from the external tracer
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .input(call_data.into());
@@ -328,17 +333,22 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )

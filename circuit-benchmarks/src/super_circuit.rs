@@ -18,7 +18,9 @@ mod tests {
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
     };
-    use mock::{TestContext, MOCK_CHAIN_ID};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{account_n_l1_block_np1_system_tx_caller, system_deposit_tx};
+    use mock::{tx_idx, SimpleTestContext, MOCK_CHAIN_ID};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use std::collections::HashMap;
@@ -49,17 +51,22 @@ mod tests {
         let mut wallets = HashMap::new();
         wallets.insert(wallet_a.address(), wallet_a);
 
-        let mut block: GethData = TestContext::<2, 1>::new(
+        let mut block: GethData = SimpleTestContext::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0]
                     .address(addr_b)
                     .balance(Word::from(1u64 << 20))
                     .code(bytecode);
                 accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kanvas")]
+                account_n_l1_block_np1_system_tx_caller(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(Word::from(1_000_000u64));

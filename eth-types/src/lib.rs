@@ -21,6 +21,8 @@ pub mod bytecode;
 pub mod evm_types;
 pub mod geth_types;
 #[cfg(feature = "kanvas")]
+pub mod kanvas_l1_block;
+#[cfg(feature = "kanvas")]
 pub mod kanvas_params;
 pub mod sign_types;
 
