@@ -1,6 +1,13 @@
 //! Mock types and functions to generate Test enviroments for ZKEVM tests
 
 use crate::{eth, MockAccount, MockBlock, MockTransaction};
+#[cfg(feature = "kanvas")]
+use eth_types::{
+    geth_types::DEPOSIT_TX_TYPE,
+    kanvas_l1_block::BYTECODE,
+    kanvas_params::{BASE_FEE_RECIPIENT, L1_BLOCK, L1_FEE_RECIPIENT, SYSTEM_TX_CALLER},
+    Bytes,
+};
 use eth_types::{
     geth_types::{Account, BlockConstants, GethData},
     Block, Bytecode, Error, GethExecTrace, Transaction, Word,
@@ -91,6 +98,67 @@ pub struct TestContext<const NACC: usize, const NTX: usize> {
     pub geth_traces: [eth_types::GethExecTrace; NTX],
 }
 
+#[cfg(feature = "kanvas")]
+#[macro_export]
+macro_rules! tx_idx {
+    ($n: expr) => {
+        $n + 1
+    };
+}
+#[cfg(not(feature = "kanvas"))]
+#[macro_export]
+macro_rules! tx_idx {
+    ($n: expr) => {
+        $n
+    };
+}
+
+#[cfg(feature = "kanvas")]
+macro_rules! nonce {
+    ($n: expr) => {
+        $n - 1
+    };
+}
+#[cfg(not(feature = "kanvas"))]
+macro_rules! nonce {
+    ($n: expr) => {
+        $n
+    };
+}
+
+#[cfg(feature = "kanvas")]
+#[macro_export]
+// Following accounts are added.
+// - $NACC - 4: L1Block.sol
+// - $NACC - 3: SystemTxDepositor
+// - $NACC - 2: BaseFeeRecipient
+// - $NACC - 1: L1FeeRecipient
+// Following txs are added at the beginning.
+// - 0: SystemDepositTx.
+macro_rules! declare_test_context {
+    ($ty: ident, $NACC: expr, $NTX: expr) => {
+        type $ty = TestContext<{ $NACC + 4 }, { $NTX + 1 }>;
+    };
+}
+#[cfg(not(feature = "kanvas"))]
+#[macro_export]
+macro_rules! declare_test_context {
+    ($ty: ident, $NACC: expr, $NTX: expr) => {
+        type $ty = TestContext<$NACC, $NTX>;
+    };
+}
+
+declare_test_context!(TestContext2_1_, 2, 1);
+pub type TestContext2_1 = TestContext2_1_;
+
+declare_test_context!(TestContext3_1_, 3, 1);
+pub type TestContext3_1 = TestContext3_1_;
+
+declare_test_context!(TestContext3_2_, 3, 2);
+pub type TestContext3_2 = TestContext3_2_;
+
+pub type SimpleTestContext = TestContext2_1;
+
 impl<const NACC: usize, const NTX: usize> From<TestContext<NACC, NTX>> for GethData {
     fn from(ctx: TestContext<NACC, NTX>) -> GethData {
         GethData {
@@ -143,7 +211,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             .for_each(|(idx, tx)| {
                 tx.transaction_idx(u64::try_from(idx).expect("Unexpected idx conversion error"));
                 tx.nonce(Word::from(
-                    u64::try_from(idx).expect("Unexpected idx conversion error"),
+                    u64::try_from(nonce!(idx)).expect("Unexpected idx conversion error"),
                 ));
             });
         let tx_refs = transactions.iter_mut().collect();
@@ -216,7 +284,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
     /// addresses are the ones used in [`TestContext::
     /// account_0_code_account_1_no_code`]. Extra accounts, txs and/or block
     /// configs are set as [`Default`].
-    pub fn simple_ctx_with_bytecode(bytecode: Bytecode) -> Result<TestContext<2, 1>, Error> {
+    pub fn simple_ctx_with_bytecode(bytecode: Bytecode) -> Result<SimpleTestContext, Error> {
         TestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
@@ -266,19 +334,94 @@ pub mod helpers {
     /// - 0x000000000000000000000000000000000cafe111
     /// - 0x000000000000000000000000000000000cafe222
     /// And injects the provided bytecode into the first one.
+    fn do_account_0_code_account_1_no_code(accs: &mut [&mut MockAccount], code: Bytecode) {
+        accs[0]
+            .address(MOCK_ACCOUNTS[0])
+            .balance(eth(10))
+            .code(code);
+        accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Generate existing accounts in Kanvas.
+    /// - L1_BLOCK
+    /// - SYSTEM_TX_CALLER
+    /// - BASE_FEE_RECIPIENT
+    /// - L1_FEE_RECIPIENT
+    pub fn setup_kanvas_required_accounts(accs: &mut [&mut MockAccount], n: usize) {
+        accs[n].address(*L1_BLOCK).code(BYTECODE.clone());
+        accs[n + 1].address(*SYSTEM_TX_CALLER);
+        accs[n + 2].address(*BASE_FEE_RECIPIENT);
+        accs[n + 3].address(*L1_FEE_RECIPIENT);
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Intercept account_0_code_account_1_no_code and setup accounts for Kanvas
+    /// unittest.
+    pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 6]) {
+        |mut accs| {
+            do_account_0_code_account_1_no_code(accs.as_mut_slice(), code);
+            setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
+        }
+    }
+
+    #[cfg(not(feature = "kanvas"))]
+    /// Do the exactly same with PSE existing account_0_code_account_1_no_code.
     pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 2]) {
-        |accs| {
-            accs[0]
-                .address(MOCK_ACCOUNTS[0])
-                .balance(eth(10))
-                .code(code);
-            accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+        |mut accs| {
+            do_account_0_code_account_1_no_code(accs.as_mut_slice(), code);
         }
     }
 
     /// Generate a single transaction from the second account of the list to the
     /// first one.
+    fn do_tx_from_1_to_0(tx: &mut MockTransaction, accs: &[MockAccount]) {
+        tx.from(accs[1].address).to(accs[0].address);
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Generate a system deposit transaction.
+    pub fn system_deposit_tx(tx: &mut MockTransaction) {
+        macro_rules! padding {
+            ($vec:expr) => {{
+                let mut v = $vec;
+                let len = v.len();
+                for _ in 0..(32 - len) {
+                    v.insert(0, 0);
+                }
+                v
+            }};
+        }
+
+        let mut calldata = Vec::with_capacity(4 + 32 * 8);
+        calldata.extend(vec![0x01, 0x5d, 0x8e, 0xb9]); // setL1BlockValues
+        calldata.extend(vec![0; 32]); // l1 blocknumber
+        calldata.extend(vec![0; 32]); // l1 timestamp
+        calldata.extend(padding!(vec![0x08])); // l1 basefee
+        calldata.extend(vec![0; 32]); // l1 hash
+        calldata.extend(vec![0; 32]); // sequenceNumber
+        calldata.extend(vec![0; 32]); // batcherHash
+        calldata.extend(padding!(vec![0x08, 0x34])); // l1 fee overhead
+        calldata.extend(padding!(vec![0x0f, 0x42, 0x40])); // l1 fee scalar
+
+        tx.transaction_type(DEPOSIT_TX_TYPE)
+            .from(*SYSTEM_TX_CALLER)
+            .to(*L1_BLOCK)
+            .gas(Word::from(150000000))
+            .gas_price(Word::zero())
+            .input(Bytes::from(calldata));
+    }
+
+    #[cfg(feature = "kanvas")]
+    /// Intercept tx_from_1_to_0 and add a system deposit transaction at the
+    /// front.
+    pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 6]) {
+        system_deposit_tx(txs[0]);
+        do_tx_from_1_to_0(txs[1], accs.as_slice());
+    }
+
+    #[cfg(not(feature = "kanvas"))]
     pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 2]) {
-        txs[0].from(accs[1].address).to(accs[0].address);
+        do_tx_from_1_to_0(txs[0], accs.as_slice());
     }
 }

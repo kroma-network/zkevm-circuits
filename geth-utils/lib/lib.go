@@ -27,8 +27,9 @@ func CreateTrace(configStr *C.char) *C.char {
 	}
 
 	bytes, err := json.MarshalIndent(executionResults, "", "  ")
-	if len(bytes) > 10000000 {
-		return C.CString(fmt.Sprintf("Failed to process trace, err: bigger than 10MB (%v)",len(bytes)))
+	// NOTE(chokobole): Slightly give more space to limit because we insert a system deposit at the front.
+	if len(bytes) > 11000000 {
+		return C.CString(fmt.Sprintf("Failed to process trace, err: bigger than 11MB (%v)", len(bytes)))
 	}
 
 	if err != nil {

@@ -849,7 +849,9 @@ mod tests {
     use bus_mapping::{circuit_input_builder::CircuitInputBuilder, mock::BlockData};
     use eth_types::{bytecode, geth_types::GethData, Word};
     use mock::test_ctx::helpers::account_0_code_account_1_no_code;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{tx_idx, SimpleTestContext};
 
     use crate::evm_circuit::test::rand_bytes;
     use crate::evm_circuit::witness::block_convert;
@@ -864,11 +866,13 @@ mod tests {
             STOP
         };
         let calldata = rand_bytes(length);
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .input(calldata.into());
@@ -892,7 +896,7 @@ mod tests {
             CODECOPY
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -903,7 +907,7 @@ mod tests {
 
     fn gen_sha3_data() -> CircuitInputBuilder {
         let (code, _) = gen_sha3_code(0x20, 0x200, MemoryKind::EqualToSize);
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -923,7 +927,11 @@ mod tests {
     fn copy_circuit_valid_codecopy() {
         let builder = gen_codecopy_data();
         let block = block_convert(&builder.block, &builder.code_db);
-        assert_eq!(test_copy_circuit(10, block), Ok(()));
+        #[cfg(feature = "kanvas")]
+        let k = 12;
+        #[cfg(not(feature = "kanvas"))]
+        let k = 10;
+        assert_eq!(test_copy_circuit(k, block), Ok(()));
     }
 
     #[test]

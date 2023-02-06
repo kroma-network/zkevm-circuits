@@ -73,8 +73,11 @@ mod test {
     use crate::evm_circuit::{test::run_test_circuit, witness::block_convert};
     use bus_mapping::{evm::OpcodeId, mock::BlockData};
     use eth_types::{self, bytecode, evm_types::GasCost, geth_types::GethData, Word};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
-        eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS,
+        eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, tx_idx, SimpleTestContext,
+        MOCK_ACCOUNTS,
     };
 
     fn gas(call_data: &[u8]) -> Word {
@@ -103,11 +106,13 @@ mod test {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(tx.to.unwrap())
                     .from(tx.from)
                     .gas_price(tx.gas_price.unwrap())

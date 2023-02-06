@@ -104,17 +104,14 @@ pub struct StateDB {
 impl StateDB {
     /// Create an empty Self
     pub fn new() -> Self {
-        let mut _db = Self {
+        Self {
             state: HashMap::new(),
             access_list_account: HashSet::new(),
             access_list_account_storage: HashSet::new(),
             dirty_storage: HashMap::new(),
             destructed_account: HashSet::new(),
             refund: 0,
-        };
-        #[cfg(all(feature = "test", feature = "kanvas"))]
-        _db.add_recipients_for_testing();
-        _db
+        }
     }
 
     #[cfg(all(feature = "test", feature = "kanvas"))]

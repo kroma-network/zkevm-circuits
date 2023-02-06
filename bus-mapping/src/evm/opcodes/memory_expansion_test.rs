@@ -2,7 +2,7 @@ use eth_types::geth_types::GethData;
 use eth_types::{bytecode, word, Bytecode, GethExecStep};
 use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
 use mock::test_ctx::LoggerConfig;
-use mock::TestContext;
+use mock::SimpleTestContext;
 
 fn might_neg_index(index: isize, len: usize) -> usize {
     if index < 0 {
@@ -26,7 +26,7 @@ fn trace_and_assert<FN>(code: Bytecode, before: isize, after: isize, assert_fn: 
 where
     FN: Fn(&[GethExecStep], isize, isize),
 {
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,

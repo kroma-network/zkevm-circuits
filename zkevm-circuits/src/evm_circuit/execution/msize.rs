@@ -81,7 +81,7 @@ impl<F: Field> ExecutionGadget<F> for MsizeGadget<F> {
 mod test {
     use crate::test_util::run_test_circuits;
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     #[test]
     fn msize_gadget() {
@@ -97,7 +97,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())
