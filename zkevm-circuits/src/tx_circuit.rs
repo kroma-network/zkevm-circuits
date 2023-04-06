@@ -15,7 +15,7 @@ use crate::tx_circuit::sign_verify::pub_key_hash_to_address;
 use crate::util::{random_linear_combine_word as rlc, Challenges, SubCircuit, SubCircuitConfig};
 use crate::witness;
 use crate::witness::{RlpDataType, RlpTxTag, Transaction};
-use bus_mapping::circuit_input_builder::{keccak_inputs_sign_verify, keccak_inputs_tx_circuit};
+use bus_mapping::circuit_input_builder::keccak_inputs_sign_verify;
 #[cfg(not(feature = "enable-sign-verify"))]
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness};
 use eth_types::{
@@ -64,9 +64,10 @@ use halo2_proofs::plonk::SecondPhase;
 
 #[cfg(feature = "kanvas")]
 // This contains followings:
-// - transaction type
+// - type
 // - mint
-const ADDITIONAL_KANVAS_TX_LEN: usize = 2;
+// - rollup data gas cost
+const ADDITIONAL_KANVAS_TX_LEN: usize = 3;
 #[cfg(not(feature = "kanvas"))]
 const ADDITIONAL_KANVAS_TX_LEN: usize = 0;
 
@@ -1348,6 +1349,7 @@ impl<F: Field> TxCircuit<F> {
 
                     for (tag, rlp_tag, value) in [
                         // need to be in same order as that tx table load function uses
+                        #[cfg(feature = "kanvas")]
                         (
                             Type,
                             RlpTxTag::TransactionType,
@@ -1362,7 +1364,6 @@ impl<F: Field> TxCircuit<F> {
                                 .evm_word()
                                 .map(|challenge| rlc(tx.gas_price.to_le_bytes(), challenge)),
                         ),
-                        // TODO(chokobole): To know why it's encoded using rlc.
                         (
                             CallerAddress,
                             RlpTxTag::Padding, // FIXME
@@ -1475,13 +1476,31 @@ impl<F: Field> TxCircuit<F> {
                         (
                             TxFieldTag::RollupDataGasCost,
                             RlpTxTag::RollupDataGasCost,
-                            challenges
-                                .evm_word()
-                                .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
+                            challenges.evm_word().map(|challenge| {
+                                RandomLinearCombination::random_linear_combine(
+                                    tx.rollup_data_gas_cost.to_le_bytes(),
+                                    challenge,
+                                )
+                            }),
                         ),
                     ] {
                         let tx_id_next = match tag {
+                            #[cfg(not(feature = "kanvas"))]
                             TxFieldTag::BlockNumber => {
+                                if i == sigs.len() - 1 {
+                                    self.txs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_i, tx)| !tx.call_data.is_empty())
+                                        .map(|(i, _tx)| i + 1)
+                                        .unwrap_or_else(|| 0)
+                                } else {
+                                    i + 2
+                                }
+                            }
+                            // NOTE(luke): last TxFieldTag of array above
+                            #[cfg(feature = "kanvas")]
+                            TxFieldTag::RollupDataGasCost => {
                                 if i == sigs.len() - 1 {
                                     self.txs
                                         .iter()

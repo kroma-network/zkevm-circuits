@@ -952,7 +952,7 @@ fn tracer_err_invalid_jump() {
                 .code(code.clone());
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
-                .balance(Word::from(1u64 << 20));
+                .balance(Word::from(3000000));
             #[cfg(feature = "kanvas")]
             setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
@@ -1064,7 +1064,7 @@ fn tracer_err_execution_reverted() {
                 .code(code.clone());
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
-                .balance(Word::from(1u64 << 20));
+                .balance(Word::from(3000000));
             #[cfg(feature = "kanvas")]
             setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
@@ -1326,7 +1326,7 @@ fn tracer_err_gas_uint_overflow() {
                 .code(code);
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
-                .balance(Word::from(1u64 << 20));
+                .balance(Word::from(3000000));
             #[cfg(feature = "kanvas")]
             setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },
@@ -1370,7 +1370,7 @@ fn tracer_err_invalid_opcode() {
                 .code(code);
             accs[1]
                 .address(address!("0x0000000000000000000000000000000000000000"))
-                .balance(Word::from(1u64 << 20));
+                .balance(Word::from(3000000));
             #[cfg(feature = "kanvas")]
             setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
         },

@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::N_BYTES_PROGRAM_COUNTER,
-        step::ExecutionState,
+        step::{ExecutionState, NEXT_EXECUTION_STATE},
         util::{
             common_gadget::RestoreContextGadget,
             constraint_builder::{
@@ -106,11 +106,12 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
         );
 
         // Go to EndTx only when is_root
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+        let to_next_state = cb.next.execution_state_selector([NEXT_EXECUTION_STATE]);
+
         cb.require_equal(
             "Go to EndTx only when is_root",
             cb.curr.state.is_root.expr(),
-            is_to_end_tx,
+            to_next_state,
         );
 
         // When it's a root call
@@ -262,7 +263,9 @@ mod test {
     use eth_types::geth_types::Account;
     use eth_types::{address, bytecode, Address, ToWord, Word};
     use halo2_proofs::halo2curves::bn256::Fr;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx, SimpleTestContext};
 
     fn test_invalid_jump(destination: usize, out_of_range: bool) {
         let mut bytecode = bytecode! {
@@ -281,7 +284,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())
@@ -440,9 +443,9 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account) {
-        let block = TestContext::<3, 1>::new(
+        let block = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -456,9 +459,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into());
@@ -494,7 +501,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())

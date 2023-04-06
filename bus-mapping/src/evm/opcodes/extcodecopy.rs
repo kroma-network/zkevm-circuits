@@ -208,15 +208,16 @@ mod extcodecopy_tests {
             TxAccessListAccountOp, RW,
         },
     };
-    use eth_types::{address, bytecode, word, Bytecode, Bytes, ToWord, Word};
+    use eth_types::{address, bytecode, Bytecode, Bytes, ToWord, Word};
     use eth_types::{
         evm_types::{MemoryAddress, OpcodeId, StackAddress},
         geth_types::GethData,
         H256, U256,
     };
     use ethers_core::utils::keccak256;
-    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
-    use mock::{declare_test_context, SimpleTestContext, TestContext};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{declare_test_context, tx_idx, TestContext};
 
     fn test_ok(
         code_ext: Bytes,
@@ -252,11 +253,9 @@ mod extcodecopy_tests {
         };
 
         // Get the execution steps from the external tracer
-        // let block: GethData = TestContext::<3, 1>::new(  scroll-dev-1220
-        // let block: GethData = SimpleTestContext::new(  ls-dev-0920
         let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x0000000000000000000000000000000000000010"))
                     .code(code.clone());
@@ -265,10 +264,14 @@ mod extcodecopy_tests {
 
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000cafe01"))
-                    .balance(Word::from(1u64 << 20));
+                    .balance(Word::from(3000000));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -282,7 +285,7 @@ mod extcodecopy_tests {
 
         assert!(builder.sdb.add_account_to_access_list(external_address));
 
-        let tx_id = 1;
+        let tx_id = tx_idx!(1);
         let transaction = &builder.block.txs()[tx_id - 1];
         let call_id = transaction.calls()[0].call_id;
 
@@ -432,9 +435,20 @@ mod extcodecopy_tests {
 
         let expected_call_id = transaction.calls()[step.call_index].call_id;
 
+        #[cfg(feature = "kanvas")]
+        let system_deposit_memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == expected_call_id)
+            .unwrap();
+        #[cfg(not(feature = "kanvas"))]
+        let system_deposit_memory_offset = 0;
+
         assert_eq!(
             (0..copy_size)
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[system_deposit_memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             (0..copy_size)

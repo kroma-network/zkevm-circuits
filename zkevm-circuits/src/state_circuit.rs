@@ -679,15 +679,9 @@ mod state_circuit_stats {
     use crate::evm_circuit::step::ExecutionState;
     use bus_mapping::{circuit_input_builder::ExecState, mock::BlockData};
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, Address};
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::{Circuit, ConstraintSystem};
     #[cfg(feature = "kanvas")]
     use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
-    use mock::{
-        eth,
-        test_ctx::{TestContext, TestContext3_1},
-        tx_idx, MOCK_ACCOUNTS,
-    };
+    use mock::{eth, test_ctx::TestContext3_1, tx_idx, MOCK_ACCOUNTS};
     use strum::IntoEnumIterator;
 
     /// This function prints to stdout a table with all the implemented states

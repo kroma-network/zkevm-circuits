@@ -31,7 +31,6 @@ use halo2_proofs::plonk::SecondPhase;
 use itertools::Itertools;
 use keccak256::plain::Keccak;
 use std::array;
-use strum::IntoEnumIterator;
 use strum_macros::{EnumCount, EnumIter};
 
 /// Trait used for dynamic tables.  Used to get an automatic implementation of
@@ -121,8 +120,6 @@ pub enum TxFieldTag {
     #[cfg(feature = "kanvas")]
     /// Mint
     Mint,
-
-    /// Kanvas Non-deposit Tx
     #[cfg(feature = "kanvas")]
     /// The gas cost that needs to be rolled up to L1.
     RollupDataGasCost,

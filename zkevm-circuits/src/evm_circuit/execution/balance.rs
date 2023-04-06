@@ -147,7 +147,12 @@ mod test {
     use eth_types::geth_types::Account;
     use eth_types::{address, bytecode, Address, Bytecode, ToWord, Word, U256};
     use lazy_static::lazy_static;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{
+        test_ctx::{TestContext3_1, TestContext4_1},
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     lazy_static! {
@@ -213,9 +218,9 @@ mod test {
             STOP
         });
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(1_u64 << 20))
@@ -230,10 +235,14 @@ mod test {
                 }
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000000020"))
-                    .balance(Word::from(1_u64 << 20));
+                    .balance(Word::from(3000000));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -285,9 +294,9 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<4, 1>::new(
+        let ctx = TestContext4_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 // Set balance if account exists.
@@ -300,10 +309,14 @@ mod test {
                 }
                 accs[3]
                     .address(mock::MOCK_ACCOUNTS[3])
-                    .balance(Word::from(1_u64 << 20));
+                    .balance(Word::from(3000000));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 4);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[3].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[3].address);
             },
             |block, _tx| block,
         )

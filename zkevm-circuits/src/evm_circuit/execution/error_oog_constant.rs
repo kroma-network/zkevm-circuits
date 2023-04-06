@@ -1,7 +1,7 @@
 use crate::evm_circuit::{
     execution::ExecutionGadget,
     param::N_BYTES_GAS,
-    step::ExecutionState,
+    step::{ExecutionState, NEXT_EXECUTION_STATE},
     util::{
         common_gadget::RestoreContextGadget,
         constraint_builder::{
@@ -62,7 +62,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGConstantGadget<F> {
         );
 
         // Go to EndTx only when is_root
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+        let is_to_end_tx = cb.next.execution_state_selector([NEXT_EXECUTION_STATE]);
         cb.require_equal(
             "Go to EndTx only when is_root",
             cb.curr.state.is_root.expr(),
@@ -155,17 +155,18 @@ mod test {
     use crate::evm_circuit::{
         test::run_test_circuit, test::run_test_circuit_geth_data_default, witness::block_convert,
     };
-    use bus_mapping::{evm::OpcodeId, mock::BlockData};
+    use bus_mapping::evm::OpcodeId;
     use eth_types::{
         self, address, bytecode, bytecode::Bytecode, evm_types::GasCost, geth_types::Account,
         geth_types::GethData, Address, ToWord, Word,
     };
     use halo2_proofs::halo2curves::bn256::Fr;
     #[cfg(feature = "kanvas")]
-    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
     use mock::{
-        eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, tx_idx, SimpleTestContext,
-        MOCK_ACCOUNTS,
+        eth, gwei,
+        test_ctx::{helpers::account_0_code_account_1_no_code, TestContext3_1},
+        tx_idx, SimpleTestContext, MOCK_ACCOUNTS,
     };
 
     fn gas(call_data: &[u8]) -> Word {
@@ -288,9 +289,9 @@ mod test {
     }
 
     fn oog_constant_internal_call(caller: Account, callee: Account) {
-        let block = TestContext::<3, 1>::new(
+        let block = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -304,9 +305,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(23800.into());

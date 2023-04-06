@@ -13,7 +13,7 @@ use crate::{
     table::{LookupTable, RwTableTag, TxReceiptFieldTag},
     util::{query_expression, Challenges, Expr},
 };
-use eth_types::{evm_types::rwc_util::end_tx_rwc, evm_unimplemented, Field};
+use eth_types::{evm_unimplemented, Field};
 use gadgets::util::not;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -996,26 +996,6 @@ impl<F: Field> ExecutionConfig<F> {
                     .unwrap_or_else(Call::default);
                 let end_block_not_last = &block.end_block_not_last;
                 let end_block_last = &block.end_block_last;
-                // [ls-dev-0920]
-                // handle EndBlock
-                // let dummy_call = Call::default();
-                // let dummy_tx = Transaction {
-                //     calls: vec![dummy_call],
-                //     ..Default::default()
-                // };
-                // let last_tx = block.txs.last().unwrap_or(&dummy_tx);
-                // let end_block_state = &ExecStep {
-                //     rw_counter: if block.txs.is_empty() {
-                //         0
-                //     } else {
-                //         last_tx.steps.last().unwrap().rw_counter
-                //             + end_tx_rwc(last_tx.transaction_type, last_tx.id == 1)
-                //     },
-                //     execution_state: ExecutionState::EndBlock,
-                //     block_num: last_tx.block_number,
-                //     ..Default::default()
-                // };
-
                 // Collect all steps
                 let mut steps = block
                     .txs
@@ -1041,9 +1021,7 @@ impl<F: Field> ExecutionConfig<F> {
                     let height = step.execution_state.get_step_height();
 
                     // Assign the step witness
-                    if step.execution_state == ExecutionState::EndTx {
-                        // [ls-dev-0920]
-                        // if step.execution_state.ends_tx() {
+                    if step.execution_state.ends_tx() {
                         let mut tx = transaction.clone();
                         tx.call_data.clear();
                         tx.calls.clear();

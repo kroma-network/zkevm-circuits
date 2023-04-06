@@ -906,13 +906,13 @@ pub mod dev {
 
 #[cfg(test)]
 mod tests {
-    use super::dev::{test_copy_circuit, test_copy_circuit_from_block};
+    use super::dev::test_copy_circuit_from_block;
     use bus_mapping::evm::{gen_sha3_code, MemoryKind};
     use eth_types::{bytecode, geth_types::GethData, ToWord, Word};
     use mock::test_ctx::helpers::account_0_code_account_1_no_code;
     #[cfg(feature = "kanvas")]
-    use mock::test_ctx::helpers::system_deposit_tx;
-    use mock::{tx_idx, SimpleTestContext, TestContext, MOCK_ACCOUNTS};
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx, SimpleTestContext, MOCK_ACCOUNTS};
 
     use crate::evm_circuit::test::rand_bytes;
     use crate::evm_circuit::witness::block_convert;
@@ -992,19 +992,23 @@ mod tests {
             STOP
         };
         let code_ext = rand_bytes(0x0fffusize);
-        let test_ctx = TestContext::<3, 1>::new(
+        let test_ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[1]).code(code.clone());
 
                 accs[1].address(external_address).code(code_ext.clone());
 
                 accs[2]
                     .address(MOCK_ACCOUNTS[2])
-                    .balance(Word::from(1u64 << 20));
+                    .balance(Word::from(3000000));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -1024,6 +1028,9 @@ mod tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
+                #[cfg(feature = "kanvas")]
+                max_rws: 3000,
+                #[cfg(not(feature = "kanvas"))]
                 max_rws: 2000,
                 max_copy_rows: 0x200 * 2 + 2,
                 ..Default::default()
@@ -1047,7 +1054,7 @@ mod tests {
             LOG1
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -1067,18 +1074,18 @@ mod tests {
     fn copy_circuit_valid_codecopy() {
         let builder = gen_codecopy_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(10, block), Ok(()));
+        #[cfg(feature = "kanvas")]
+        let k = 13;
+        #[cfg(not(feature = "kanvas"))]
+        let k = 11;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]
     fn copy_circuit_valid_extcodecopy() {
         let builder = gen_extcodecopy_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        #[cfg(feature = "kanvas")]
-        let k = 12;
-        #[cfg(not(feature = "kanvas"))]
-        let k = 10;
-        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
+        assert_eq!(test_copy_circuit_from_block(14, block), Ok(()));
     }
 
     #[test]
@@ -1092,7 +1099,11 @@ mod tests {
     fn copy_circuit_valid_tx_log() {
         let builder = gen_tx_log_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(10, block), Ok(()));
+        #[cfg(feature = "kanvas")]
+        let k = 13;
+        #[cfg(not(feature = "kanvas"))]
+        let k = 11;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]
@@ -1171,8 +1182,12 @@ mod tests {
 
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
 
+        #[cfg(feature = "kanvas")]
+        let k = 13;
+        #[cfg(not(feature = "kanvas"))]
+        let k = 11;
         assert_error_matches(
-            test_copy_circuit_from_block(10, block),
+            test_copy_circuit_from_block(k, block),
             vec!["Memory lookup", "TxLog lookup"],
         );
     }

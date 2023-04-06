@@ -105,7 +105,7 @@ mod test {
         let block = if is_root {
             SimpleTestContext::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x0000000000000000000000000000000000000123"))
                         .balance(Word::from(1u64 << 30));
@@ -113,6 +113,8 @@ mod test {
                         .address(address!("0x0000000000000000000000000000000000000010"))
                         .balance(Word::from(1u64 << 20))
                         .code(bytecode);
+                    #[cfg(feature = "kanvas")]
+                    setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
                 },
                 |mut txs, accs| {
                     #[cfg(feature = "kanvas")]
@@ -130,7 +132,7 @@ mod test {
         } else {
             TestContext3_1::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x0000000000000000000000000000000000000123"))
                         .balance(Word::from(1u64 << 30));

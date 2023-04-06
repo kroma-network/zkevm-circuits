@@ -271,7 +271,9 @@ mod test {
     use crate::test_util::run_test_circuits_with_params;
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{bytecode, ToWord, Word};
-    use mock::test_ctx::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
 
     fn test_ok_internal(
         return_data_offset: usize,
@@ -314,17 +316,21 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_a).code(code_a);
                 accs[1].address(addr_b).code(code_b);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -335,6 +341,9 @@ mod test {
                 ctx,
                 None,
                 CircuitsParams {
+                    #[cfg(feature = "kanvas")]
+                    max_rws: 4096,
+                    #[cfg(not(feature = "kanvas"))]
                     max_rws: 2048,
                     ..Default::default()
                 }

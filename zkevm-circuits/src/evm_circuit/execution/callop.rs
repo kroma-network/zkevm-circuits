@@ -738,7 +738,9 @@ mod test {
     use halo2_proofs::halo2curves::bn256::Fr;
     use itertools::Itertools;
     use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx, SimpleTestContext};
     use pretty_assertions::assert_eq;
     use rayon::prelude::{ParallelBridge, ParallelIterator};
     use std::default::Default;
@@ -824,7 +826,7 @@ mod test {
 
         for test in tests {
             // Get the execution steps from the external tracer
-            let block: GethData = TestContext::<2, 1>::new(
+            let block: GethData = SimpleTestContext::new(
                 None,
                 account_0_code_account_1_no_code(test),
                 tx_from_1_to_0,
@@ -1059,9 +1061,9 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account) {
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -1075,9 +1077,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into())
@@ -1092,6 +1098,9 @@ mod test {
             run_test_circuit_geth_data::<Fr>(
                 block,
                 CircuitsParams {
+                    #[cfg(feature = "kanvas")]
+                    max_rws: 6000,
+                    #[cfg(not(feature = "kanvas"))]
                     max_rws: 4500,
                     ..Default::default()
                 }

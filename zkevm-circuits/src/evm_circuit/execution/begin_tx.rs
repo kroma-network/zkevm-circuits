@@ -1,17 +1,18 @@
 #[cfg(feature = "kanvas")]
+use crate::evm_circuit::util::common_gadget::UpdateBalanceGadget;
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::N_BYTES_GAS,
-        step::ExecutionState,
+        step::{ExecutionState, NEXT_EXECUTION_STATE},
         util::{
-            common_gadget::{TransferWithGasFeeGadget, UpdateBalanceGadget},
+            common_gadget::TransferWithGasFeeGadget,
             constraint_builder::{
                 ConstraintBuilder, ReversionInfo, StepStateTransition,
                 Transition::{Delta, To},
             },
             math_gadget::{IsEqualGadget, IsZeroGadget, MulWordByU64Gadget, RangeCheckGadget},
-            not, CachedRegion, Cell, Word,
+            CachedRegion, Cell, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
@@ -22,13 +23,14 @@ use eth_types::{evm_types::rwc_util::begin_tx_rwc_offset, Field, ToLittleEndian,
 #[cfg(feature = "kanvas")]
 use eth_types::{evm_types::rwc_util::BEGIN_TX_MINT_RWC_OFFSET, geth_types::DEPOSIT_TX_TYPE};
 use ethers_core::utils::get_contract_address;
-use gadgets::util::or;
+use gadgets::util::{not, or};
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::Error;
 
 #[derive(Clone, Debug)]
 pub(crate) struct BeginTxGadget<F> {
     tx_id: Cell<F>,
+    #[cfg(feature = "kanvas")]
     tx_type: Cell<F>,
     tx_nonce: Cell<F>,
     tx_gas: Cell<F>,
@@ -42,7 +44,7 @@ pub(crate) struct BeginTxGadget<F> {
     call_callee_address: Cell<F>,
     tx_is_create: Cell<F>,
     tx_value: Word<F>,
-    tx_value_is_zero: IsZeroGadget<F>, // scroll-dev-1220
+    tx_value_is_zero: IsZeroGadget<F>,
     #[cfg(feature = "kanvas")]
     tx_mint: Word<F>,
     tx_call_data_length: Cell<F>,
@@ -51,10 +53,9 @@ pub(crate) struct BeginTxGadget<F> {
     intrinsic_gas_cost: Cell<F>,
     sufficient_gas_left: RangeCheckGadget<F, N_BYTES_GAS>,
     transfer_with_gas_fee: TransferWithGasFeeGadget<F>,
-    phase2_code_hash: Cell<F>,            // scroll-dev-1220
-    is_empty_code_hash: IsEqualGadget<F>, // scroll-dev-1220
-    is_zero_code_hash: IsZeroGadget<F>,   // scroll-dev-1220
-    // code_hash: Cell<F>,  ls-dev-0920
+    phase2_code_hash: Cell<F>,
+    is_empty_code_hash: IsEqualGadget<F>,
+    is_zero_code_hash: IsZeroGadget<F>,
     #[cfg(feature = "kanvas")]
     is_deposit_tx: IsEqualGadget<F>,
 }
@@ -83,9 +84,23 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             reversion_info.is_persistent(),
         );
 
+        #[cfg(feature = "kanvas")]
         let [tx_type, tx_nonce, tx_gas, tx_caller_address, tx_callee_address, tx_is_create, tx_call_data_length, tx_call_data_gas_cost] =
             [
                 TxContextFieldTag::Type,
+                TxContextFieldTag::Nonce,
+                TxContextFieldTag::Gas,
+                TxContextFieldTag::CallerAddress,
+                TxContextFieldTag::CalleeAddress,
+                TxContextFieldTag::IsCreate,
+                TxContextFieldTag::CallDataLength,
+                TxContextFieldTag::CallDataGasCost,
+            ]
+            .map(|field_tag| cb.tx_context(tx_id.expr(), field_tag, None));
+
+        #[cfg(not(feature = "kanvas"))]
+        let [tx_nonce, tx_gas, tx_caller_address, tx_callee_address, tx_is_create, tx_call_data_length, tx_call_data_gas_cost] =
+            [
                 TxContextFieldTag::Nonce,
                 TxContextFieldTag::Gas,
                 TxContextFieldTag::CallerAddress,
@@ -117,7 +132,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         );
         let [tx_gas_price, tx_value] = [TxContextFieldTag::GasPrice, TxContextFieldTag::Value]
             .map(|field_tag| cb.tx_context_as_word(tx_id.expr(), field_tag, None));
-        let tx_value_is_zero = IsZeroGadget::construct(cb, tx_value.expr()); // scroll-dev-1220
+        let tx_value_is_zero = IsZeroGadget::construct(cb, tx_value.expr());
         #[cfg(feature = "kanvas")]
         let tx_mint = cb.tx_context_as_word(tx_id.expr(), TxContextFieldTag::Mint, None);
 
@@ -236,24 +251,27 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             );
             cb.require_equal(
                 "Go to EndTx when Tx to account with empty code",
-                cb.next.execution_state_selector([ExecutionState::EndTx]),
+                cb.next.execution_state_selector([NEXT_EXECUTION_STATE]),
                 1.expr(),
             );
 
             cb.require_step_state_transition(StepStateTransition {
-                // 9 reads and writes +(1-tx_value_is_zero.expr()) + is_deposit_tx.expr():
+                // 10 reads and writes + is_deposit + !tx_value_is_zero:
                 //   - Write CallContext TxId
                 //   - Write CallContext RwCounterEndOfReversion
                 //   - Write CallContext IsPersistent
                 //   - Write CallContext IsSuccess
-                //   - Write Account Balance (If tx is a deposit tx, handle mint)
+                //   - Write Account Balance (is_deposit_tx, handle mint)
                 //   - Write Account Nonce
                 //   - Write TxAccessListAccount
                 //   - Write TxAccessListAccount
                 //   - Write Account Balance
                 //   - Write Account Balance
-                //   - Read Account CodeHash (if not tx_value_is_zero.expr())
-                rw_counter: Delta(10.expr() + not::expr(tx_value_is_zero.expr())),
+                //   - Read Account CodeHash
+                //   - Write Account CodeHash (!tx_value_is_zero)
+                rw_counter: Delta(
+                    10.expr() + is_deposit_tx.expr() + not::expr(tx_value_is_zero.expr()),
+                ),
                 call_id: To(call_id.expr()),
                 ..StepStateTransition::any()
             });
@@ -288,7 +306,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             }
 
             cb.require_step_state_transition(StepStateTransition {
-                // 22-23 reads and writes  + is_deposit_tx.expr():
+                // 22-23 reads and writes  + is_deposit_tx:
                 //   - Write CallContext TxId
                 //   - Write CallContext RwCounterEndOfReversion
                 //   - Write CallContext IsPersistent
@@ -327,6 +345,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
 
         Self {
             tx_id,
+            #[cfg(feature = "kanvas")]
             tx_type,
             tx_nonce,
             tx_gas,
@@ -376,19 +395,27 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 block.rws[step.rw_indices[BEGIN_TX_MINT_RWC_OFFSET]].account_value_pair();
         }
 
-        let [caller_balance_pair, callee_balance_pair] =
-            [step.rw_indices[8], step.rw_indices[9]].map(|idx| block.rws[idx].account_value_pair());
+        let [caller_balance_pair, callee_balance_pair] = [
+            step.rw_indices[begin_tx_rwc_offset(tx.transaction_type, 8)],
+            step.rw_indices[begin_tx_rwc_offset(tx.transaction_type, 9)],
+        ]
+        .map(|idx| block.rws[idx].account_value_pair());
 
         #[allow(clippy::if_same_then_else)]
         let callee_code_hash = if tx.is_create {
             //call.code_hash
-            block.rws[step.rw_indices[7]].account_value_pair().0
+            block.rws[step.rw_indices[begin_tx_rwc_offset(tx.transaction_type, 7)]]
+                .account_value_pair()
+                .0
         } else {
-            block.rws[step.rw_indices[7]].account_value_pair().0
+            block.rws[step.rw_indices[begin_tx_rwc_offset(tx.transaction_type, 7)]]
+                .account_value_pair()
+                .0
         };
 
         self.tx_id
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
+        #[cfg(feature = "kanvas")]
         self.tx_type
             .assign(region, offset, Value::known(F::from(tx.transaction_type)))?;
         self.tx_nonce
@@ -506,14 +533,12 @@ mod test {
         self, bytecode, evm_types::GasCost, geth_types::GethData, word, Bytecode, Word,
     };
     use halo2_proofs::halo2curves::bn256::Fr;
-    use mock::{
-        eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, tx_idx, SimpleTestContext,
-        MOCK_ACCOUNTS,
-    };
     #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
     use mock::{
-        test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx},
-        TestContext,
+        eth, gwei,
+        test_ctx::{helpers::account_0_code_account_1_no_code, TestContext1_1, TestContext2_2},
+        tx_idx, SimpleTestContext, MOCK_ACCOUNTS,
     };
 
     fn gas(call_data: &[u8]) -> Word {
@@ -547,12 +572,14 @@ mod test {
         // Get the execution steps from the external tracer
         let block: GethData = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(10));
                 if let Some(code) = code {
                     accs[0].code(code);
                 }
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, _accs| {
                 #[cfg(feature = "kanvas")]
@@ -668,14 +695,18 @@ mod test {
 
     #[test]
     fn begin_tx_no_code() {
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .to(MOCK_ACCOUNTS[1])
                     .gas_price(gwei(2))
@@ -692,13 +723,17 @@ mod test {
 
     #[test]
     fn begin_tx_no_account() {
-        let block: GethData = TestContext::<1, 1>::new(
+        let block: GethData = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .to(MOCK_ACCOUNTS[1])
                     .gas_price(gwei(2))
@@ -728,13 +763,17 @@ mod test {
             PUSH1(0)
             RETURN
         };
-        let block: GethData = TestContext::<1, 1>::new(
+        let block: GethData = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .gas_price(gwei(2))
                     .gas(Word::from(0x10000))
@@ -752,11 +791,8 @@ mod test {
     #[cfg(feature = "kanvas")]
     #[test]
     fn begin_tx_gadget_deposit() {
-        use mock::{declare_test_context, test_ctx::helpers::system_deposit_tx, tx_idx};
-        declare_test_context!(TestContext2_2, 2, 2);
         // Get the execution steps from the external tracer
         use eth_types::geth_types::DEPOSIT_TX_TYPE;
-        use mock::{declare_test_context, test_ctx::helpers::system_deposit_tx, tx_idx};
         let block: GethData = TestContext2_2::new(
             None,
             account_0_code_account_1_no_code(bytecode! { STOP }),
@@ -783,7 +819,7 @@ mod test {
         builder
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
-        let block = block_convert(&builder.block, &builder.code_db);
+        let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
         assert_eq!(run_test_circuit(block), Ok(()));
     }
 }

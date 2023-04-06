@@ -1,7 +1,7 @@
 use crate::evm_circuit::{
     execution::ExecutionGadget,
     param::N_BYTES_GAS,
-    step::ExecutionState,
+    step::{ExecutionState, NEXT_EXECUTION_STATE},
     util::{
         common_gadget::{CommonCallGadget, RestoreContextGadget},
         constraint_builder::{
@@ -82,7 +82,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGCallGadget<F> {
         );
 
         // Go to EndTx only when is_root
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+        let is_to_end_tx = cb.next.execution_state_selector([NEXT_EXECUTION_STATE]);
         cb.require_equal(
             "Go to EndTx only when is_root",
             cb.curr.state.is_root.expr(),
@@ -226,7 +226,9 @@ mod test {
     use eth_types::{Address, ToWord, Word};
     use halo2_proofs::halo2curves::bn256::Fr;
     use itertools::Itertools;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
     use pretty_assertions::assert_eq;
     use std::default::Default;
 
@@ -284,9 +286,9 @@ mod test {
 
     fn test_oog(caller: Account, callee: Account, is_root: bool) {
         let tx_gas = if is_root { 21100 } else { 25000 };
-        let block = TestContext::<3, 1>::new(
+        let block = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -300,9 +302,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(tx_gas.into());

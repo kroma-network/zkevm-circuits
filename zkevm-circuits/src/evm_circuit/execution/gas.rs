@@ -95,7 +95,6 @@ mod test {
     use halo2_proofs::halo2curves::bn256::Fr;
     #[cfg(feature = "kanvas")]
     use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
-    use mock::TestContext;
     use mock::{tx_idx, SimpleTestContext};
 
     fn test_ok() {
@@ -138,7 +137,7 @@ mod test {
                     .code(bytecode);
                 accs[1]
                     .address(address!("0x0000000000000000000000000000000000000000"))
-                    .balance(Word::from(1u64 << 20));
+                    .balance(Word::from(3000000));
                 #[cfg(feature = "kanvas")]
                 setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
             },

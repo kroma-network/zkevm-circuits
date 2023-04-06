@@ -20,7 +20,7 @@ use crate::evm_circuit::util::constraint_builder::BaseConstraintBuilder;
 use crate::state_circuit::StateCircuitExports;
 #[cfg(feature = "non-legacy-tx")]
 use crate::tx_circuit::TX_HASH_OFFSET;
-#[cfg(any(feature = "non-legacy-tx", feature = "kanvas"))]
+#[cfg(any(feature = "non-legacy-tx"))]
 use crate::tx_circuit::TX_LEN;
 use crate::util::{Challenges, SubCircuit, SubCircuitConfig};
 use crate::witness::{self, Block, BlockContext, BlockContexts, Transaction};

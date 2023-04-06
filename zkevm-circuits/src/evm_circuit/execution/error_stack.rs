@@ -1,6 +1,6 @@
 use crate::evm_circuit::{
     execution::ExecutionGadget,
-    step::ExecutionState,
+    step::{ExecutionState, NEXT_EXECUTION_STATE},
     util::{
         common_gadget::RestoreContextGadget,
         constraint_builder::{
@@ -81,7 +81,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorStackGadget<F> {
         );
 
         // Go to EndTx only when is_root
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+        let is_to_end_tx = cb.next.execution_state_selector([NEXT_EXECUTION_STATE]);
         cb.require_equal(
             "Go to EndTx if and only if is_root",
             cb.curr.state.is_root.expr(),
@@ -191,7 +191,9 @@ mod test {
     };
     use halo2_proofs::halo2curves::bn256::Fr;
 
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx, SimpleTestContext};
 
     fn test_stack_underflow(value: Word) {
         let bytecode = bytecode! {
@@ -203,7 +205,7 @@ mod test {
 
         assert_eq!(
             run_test_circuits(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None
             ),
             Ok(())
@@ -252,9 +254,12 @@ mod test {
 
         assert_eq!(
             run_test_circuits_with_params(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 None,
                 CircuitsParams {
+                    #[cfg(feature = "kanvas")]
+                    max_rws: 4096,
+                    #[cfg(not(feature = "kanvas"))]
                     max_rws: 2048,
                     ..Default::default()
                 }
@@ -313,9 +318,9 @@ mod test {
     }
 
     fn stack_error_internal_call(caller: Account, callee: Account) {
-        let block = TestContext::<3, 1>::new(
+        let block = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -329,9 +334,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(23800.into());

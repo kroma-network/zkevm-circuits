@@ -148,14 +148,23 @@ macro_rules! declare_test_context {
     };
 }
 
+declare_test_context!(TestContext1_1_, 1, 1);
+pub type TestContext1_1 = TestContext1_1_;
+
 declare_test_context!(TestContext2_1_, 2, 1);
 pub type TestContext2_1 = TestContext2_1_;
+
+declare_test_context!(TestContext2_2_, 2, 2);
+pub type TestContext2_2 = TestContext2_2_;
 
 declare_test_context!(TestContext3_1_, 3, 1);
 pub type TestContext3_1 = TestContext3_1_;
 
 declare_test_context!(TestContext3_2_, 3, 2);
 pub type TestContext3_2 = TestContext3_2_;
+
+declare_test_context!(TestContext4_1_, 4, 1);
+pub type TestContext4_1 = TestContext4_1_;
 
 pub type SimpleTestContext = TestContext2_1;
 
@@ -350,9 +359,11 @@ pub mod helpers {
     /// - L1_FEE_RECIPIENT
     pub fn setup_kanvas_required_accounts(accs: &mut [&mut MockAccount], n: usize) {
         accs[n].address(*L1_BLOCK).code(BYTECODE.clone());
-        accs[n + 1].address(*SYSTEM_TX_CALLER);
-        accs[n + 2].address(*BASE_FEE_RECIPIENT);
-        accs[n + 3].address(*L1_FEE_RECIPIENT);
+
+        // luke: temporarily add balance to avoid panic on check_update_sdb_account
+        accs[n + 1].address(*SYSTEM_TX_CALLER).balance(eth(10));
+        accs[n + 2].address(*BASE_FEE_RECIPIENT).balance(eth(10));
+        accs[n + 3].address(*L1_FEE_RECIPIENT).balance(eth(10));
     }
 
     #[cfg(feature = "kanvas")]

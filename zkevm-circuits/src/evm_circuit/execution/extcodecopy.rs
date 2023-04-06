@@ -236,7 +236,9 @@ mod test {
         address, bytecode, geth_types::Account, Address, Bytecode, Bytes, ToWord, Word,
     };
     use lazy_static::lazy_static;
-    use mock::TestContext;
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
 
     use crate::test_util::run_test_circuits;
 
@@ -276,15 +278,15 @@ mod test {
             STOP
         });
 
-        let test_ctx = TestContext::<3, 1>::new(
+        let test_ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .code(code);
                 accs[1]
                     .address(address!("0x0000000000000000000000000000000000000010"))
-                    .balance(Word::from(1u64 << 20));
+                    .balance(Word::from(3000000));
                 accs[2].address(external_address);
                 if let Some(external_account) = external_account {
                     accs[2]
@@ -292,9 +294,13 @@ mod test {
                         .nonce(external_account.nonce)
                         .code(external_account.code);
                 }
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(1_000_000.into());

@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::{N_BYTES_MEMORY_ADDRESS, N_BYTES_MEMORY_WORD_SIZE, STACK_CAPACITY},
-        step::ExecutionState,
+        step::{ExecutionState, NEXT_EXECUTION_STATE},
         util::{
             common_gadget::RestoreContextGadget,
             constraint_builder::{
@@ -133,7 +133,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
 
         // Case B in the specs.
         cb.condition(is_root.expr(), |cb| {
-            cb.require_next_state(ExecutionState::EndTx);
+            cb.require_next_state(NEXT_EXECUTION_STATE);
             cb.call_context_lookup(
                 false.expr(),
                 None,
@@ -148,6 +148,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                         + not::expr(is_success.expr())
                             * cb.curr.state.reversible_write_counter.expr(),
                 ),
+                #[cfg(not(feature = "kanvas"))]
                 gas_left: Delta(-memory_expansion.gas_cost()),
                 reversible_write_counter: To(0.expr()),
                 memory_word_size: To(0.expr()),
@@ -346,7 +347,13 @@ mod test {
         Word,
     };
     use itertools::Itertools;
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kanvas")]
+    use mock::test_ctx::helpers::{setup_kanvas_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{TestContext1_1, TestContext3_1},
+        tx_idx, SimpleTestContext, MOCK_ACCOUNTS,
+    };
 
     const CALLEE_ADDRESS: Address = Address::repeat_byte(0xff);
     const CALLER_ADDRESS: Address = Address::repeat_byte(0x34);
@@ -393,7 +400,7 @@ mod test {
             let code = callee_bytecode(*is_return, *offset, *length);
             assert_eq!(
                 run_test_circuits(
-                    TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
+                    SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
                     None
                 ),
                 Ok(()),
@@ -431,17 +438,21 @@ mod test {
                 ..Default::default()
             };
 
-            let test_context = TestContext::<3, 1>::new(
+            let test_context = TestContext3_1::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x000000000000000000000000000000000000cafe"))
                         .balance(Word::from(10u64.pow(19)));
                     accs[1].account(&caller);
                     accs[2].account(&callee);
+                    #[cfg(feature = "kanvas")]
+                    setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
                 },
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kanvas")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .from(accs[0].address)
                         .to(accs[1].address)
                         .gas(100000u64.into());
@@ -474,13 +485,17 @@ mod test {
             let tx_input = callee_bytecode(*is_return, *offset, *length).code();
             assert_eq!(
                 run_test_circuits(
-                    TestContext::<1, 1>::new(
+                    TestContext1_1::new(
                         None,
-                        |accs| {
+                        |mut accs| {
                             accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(10));
+                            #[cfg(feature = "kanvas")]
+                            setup_kanvas_required_accounts(accs.as_mut_slice(), 1);
                         },
                         |mut txs, accs| {
-                            txs[0].from(accs[0].address).input(tx_input.into());
+                            #[cfg(feature = "kanvas")]
+                            system_deposit_tx(txs[0]);
+                            txs[tx_idx!(0)].from(accs[0].address).input(tx_input.into());
                         },
                         |block, _| block,
                     )
@@ -522,16 +537,20 @@ mod test {
                 ..Default::default()
             };
 
-            let test_context = TestContext::<2, 1>::new(
+            let test_context = SimpleTestContext::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x000000000000000000000000000000000000cafe"))
                         .balance(eth(10));
                     accs[1].account(&caller);
+                    #[cfg(feature = "kanvas")]
+                    setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
                 },
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kanvas")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .from(accs[0].address)
                         .to(accs[1].address)
                         .gas(100000u64.into());
@@ -578,16 +597,20 @@ mod test {
             ..Default::default()
         };
 
-        let test_context = TestContext::<2, 1>::new(
+        let test_context = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(eth(10));
                 accs[1].account(&caller);
+                #[cfg(feature = "kanvas")]
+                setup_kanvas_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kanvas")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000u64.into());

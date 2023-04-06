@@ -171,6 +171,7 @@ impl Transaction {
         let tx_sign_hash_be_bytes = keccak256(&self.rlp_unsigned);
 
         let ret = vec![
+            #[cfg(feature = "kanvas")]
             [
                 Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::Type as u64)),
@@ -185,6 +186,12 @@ impl Transaction {
             ],
             [
                 Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Gas as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.gas)),
+            ],
+            [
+                Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::GasPrice as u64)),
                 Value::known(F::zero()),
                 challenges.evm_word().map(|evm_word| {
@@ -193,12 +200,6 @@ impl Transaction {
                         evm_word,
                     )
                 }),
-            ],
-            [
-                Value::known(F::from(self.id as u64)),
-                Value::known(F::from(TxContextFieldTag::Gas as u64)),
-                Value::known(F::zero()),
-                Value::known(F::from(self.gas)),
             ],
             [
                 Value::known(F::from(self.id as u64)),

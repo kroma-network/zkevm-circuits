@@ -768,10 +768,9 @@ pub fn gen_base_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecSte
         .unwrap()
         .clone();
 
+    let fee = block_info.base_fee * gas_used;
     let base_fee_recipient_balance_prev = base_fee_recipient_account.balance;
-    let base_fee_recipient_balance =
-        base_fee_recipient_balance_prev + block_info.base_fee * gas_used;
-    base_fee_recipient_account.balance = base_fee_recipient_balance;
+    let base_fee_recipient_balance = base_fee_recipient_balance_prev + fee;
     state.account_write(
         &mut exec_step,
         *BASE_FEE_RECIPIENT,
@@ -813,7 +812,6 @@ pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecS
     }
     let l1_fee_recipient_balance_prev = l1_fee_recipient_account.balance;
     let l1_fee_recipient_balance = l1_fee_recipient_balance_prev + l1_fee;
-    l1_fee_recipient_account.balance = l1_fee_recipient_balance;
     state.account_write(
         &mut exec_step,
         *L1_FEE_RECIPIENT,

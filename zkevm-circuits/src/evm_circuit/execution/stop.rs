@@ -104,7 +104,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
         let restore_context = cb.condition(1.expr() - cb.curr.state.is_root.expr(), |cb| {
             RestoreContextGadget::construct(
                 cb,
-                stop_rwc(false),
+                true.expr(),
                 0.expr(),
                 0.expr(),
                 0.expr(),
@@ -157,8 +157,12 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
             .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
 
         if !call.is_root {
+            #[cfg(feature = "kanvas")]
+            let rw_offset = 2;
+            #[cfg(not(feature = "kanvas"))]
+            let rw_offset = 1;
             self.restore_context
-                .assign(region, offset, block, call, step, 1)?;
+                .assign(region, offset, block, call, step, rw_offset)?;
         }
 
         #[cfg(feature = "kanvas")]
@@ -231,7 +235,7 @@ mod test {
         let block = if is_root {
             SimpleTestContext::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x0000000000000000000000000000000000000123"))
                         .balance(Word::from(1u64 << 30));
@@ -257,7 +261,7 @@ mod test {
         } else {
             TestContext3_1::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x0000000000000000000000000000000000000123"))
                         .balance(Word::from(1u64 << 30));

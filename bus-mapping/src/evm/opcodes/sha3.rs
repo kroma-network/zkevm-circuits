@@ -191,6 +191,9 @@ pub mod sha3_tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
+                #[cfg(feature = "kanvas")]
+                max_rws: 4096,
+                #[cfg(not(feature = "kanvas"))]
                 max_rws: 2048,
                 ..Default::default()
             },

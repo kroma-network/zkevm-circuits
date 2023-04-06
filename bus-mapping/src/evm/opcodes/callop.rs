@@ -435,8 +435,7 @@ mod call_tests {
     use eth_types::geth_types::GethData;
     use eth_types::{bytecode, word};
     use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
-    use mock::test_ctx::LoggerConfig;
-    use mock::TestContext;
+    use mock::{test_ctx::LoggerConfig, SimpleTestContext};
 
     #[test]
     fn test_precompiled_call_callcode() {
@@ -478,7 +477,7 @@ mod call_tests {
                 code.append(instruction);
 
                 // Get the execution steps from the external tracer
-                let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+                let block: GethData = SimpleTestContext::new_with_logger_config(
                     None,
                     account_0_code_account_1_no_code(code),
                     tx_from_1_to_0,
@@ -776,7 +775,7 @@ mod call_tests {
 
         for code in codes.into_iter() {
             // Get the execution steps from the external tracer
-            let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+            let block: GethData = SimpleTestContext::new_with_logger_config(
                 None,
                 account_0_code_account_1_no_code(code),
                 tx_from_1_to_0,

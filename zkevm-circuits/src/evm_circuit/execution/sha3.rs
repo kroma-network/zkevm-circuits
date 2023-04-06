@@ -173,6 +173,9 @@ mod tests {
                 SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
                 None,
                 CircuitsParams {
+                    #[cfg(feature = "kanvas")]
+                    max_rws: 6500,
+                    #[cfg(not(feature = "kanvas"))]
                     max_rws: 5500,
                     ..Default::default()
                 }

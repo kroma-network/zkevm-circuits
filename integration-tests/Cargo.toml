@@ -32,7 +32,7 @@ mock = { path = "../mock" }
 pretty_assertions = "1.0.0"
 
 [features]
-default = ["circuits"]
+default = ["circuits","kanvas"]
 kanvas = ["bus-mapping/kanvas", "eth-types/kanvas", "zkevm-circuits/kanvas"]
 rpc = []
 circuit_input_builder = []

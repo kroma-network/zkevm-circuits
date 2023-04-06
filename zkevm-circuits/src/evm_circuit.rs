@@ -501,7 +501,6 @@ mod evm_circuit_stats {
     use bus_mapping::{circuit_input_builder::CircuitsParams, mock::BlockData};
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData};
     use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::ConstraintSystem;
     use mock::{test_ctx::helpers::*, SimpleTestContext, TestContext};
     use strum::IntoEnumIterator;
 

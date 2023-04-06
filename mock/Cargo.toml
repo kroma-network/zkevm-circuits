@@ -16,5 +16,5 @@ rand_chacha = "0.3"
 rand = "0.8"
 
 [features]
-default = []
+default = ["kanvas"]
 kanvas = ["eth-types/kanvas"]

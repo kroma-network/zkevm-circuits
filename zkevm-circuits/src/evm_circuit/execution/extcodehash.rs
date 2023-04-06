@@ -178,7 +178,7 @@ mod test {
                 }
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000000010"))
-                    .balance(Word::from(1u64 << 20));
+                    .balance(Word::from(3000000));
                 #[cfg(feature = "kanvas")]
                 setup_kanvas_required_accounts(accs.as_mut_slice(), 3);
             },
