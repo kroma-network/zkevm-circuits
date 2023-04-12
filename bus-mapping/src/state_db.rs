@@ -13,8 +13,6 @@ use crate::Error;
 use eth_types::kroma_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
 };
-#[cfg(all(feature = "test", feature = "kroma"))]
-use eth_types::kroma_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
 
 lazy_static! {
     static ref ACCOUNT_ZERO: Account = Account::zero();

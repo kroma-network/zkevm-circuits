@@ -7,11 +7,11 @@ use crate::{address, Word};
 
 lazy_static! {
   /// The pre-deployed contract that stores the information to compute l1 rollup cost.
-  pub static ref L1_BLOCK: Address = address!("0x4200000000000000000000000000000000000015");
+  pub static ref L1_BLOCK: Address = address!("0x4200000000000000000000000000000000000002");
   /// The pre-deployed contract that accumulates base fee.
-  pub static ref BASE_FEE_RECIPIENT: Address = address!("0x4200000000000000000000000000000000000019");
+  pub static ref BASE_FEE_RECIPIENT: Address = address!("0x4200000000000000000000000000000000000006");
   /// The pre-deployed contract that accumulates l1 rollup cost.
-  pub static ref L1_FEE_RECIPIENT: Address = address!("0x420000000000000000000000000000000000001A");
+  pub static ref L1_FEE_RECIPIENT: Address = address!("0x4200000000000000000000000000000000000007");
 
   /// The slot for basefee at L1Block.sol.
   pub static ref BASE_FEE_KEY: Word = Word::from(1);
