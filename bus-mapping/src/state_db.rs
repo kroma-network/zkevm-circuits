@@ -13,9 +13,6 @@ use crate::Error;
 use eth_types::kanvas_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
 };
-#[cfg(all(feature = "test", feature = "kanvas"))]
-use eth_types::kanvas_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
-
 lazy_static! {
     static ref ACCOUNT_ZERO: Account = Account::zero();
     static ref VALUE_ZERO: Word = Word::zero();
@@ -161,26 +158,6 @@ impl StateDB {
             destructed_account: HashSet::new(),
             refund: 0,
         }
-    }
-
-    #[cfg(all(feature = "test", feature = "kanvas"))]
-    fn add_recipients_for_testing(&mut self) {
-        self.set_account(&BASE_FEE_RECIPIENT, Account::zero());
-        self.set_account(&L1_FEE_RECIPIENT, Account::zero());
-
-        let mut storage: HashMap<Word, Word> = HashMap::new();
-        storage.insert(*BASE_FEE_KEY, Word::from(8));
-        storage.insert(*L1_FEE_OVERHEAD_KEY, Word::from(2100));
-        storage.insert(*L1_FEE_SCALAR_KEY, Word::from(1000000));
-        self.set_account(
-            &L1_BLOCK,
-            Account {
-                nonce: Word::zero(),
-                balance: Word::zero(),
-                storage,
-                code_hash: Hash::random(),
-            },
-        );
     }
 
     /// Set an [`Account`] at `addr` in the StateDB.
