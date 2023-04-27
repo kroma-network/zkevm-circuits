@@ -26,5 +26,6 @@ strum_macros = "0.24"
 strum = "0.24"
 poseidon-circuit = { git = "https://github.com/kroma-network/poseidon-circuit.git", branch = "kroma-dev-0215"}
 [features]
-default = ["warn-unimplemented"]
+default = ["warn-unimplemented","kroma"]
 warn-unimplemented = []
+kroma = []

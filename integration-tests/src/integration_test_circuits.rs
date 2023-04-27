@@ -43,23 +43,34 @@ use zkevm_circuits::{
 /// TEST_MOCK_RANDOMNESS
 const TEST_MOCK_RANDOMNESS: u64 = 0x100;
 
-/// MAX_TXS
-const MAX_TXS: usize = 4;
-/// MAX_CALLDATA
-const MAX_CALLDATA: usize = 512;
 /// MAX_RWS
+#[cfg(not(feature = "kroma"))]
 const MAX_RWS: usize = 5888;
+#[cfg(feature = "kroma")]
+const MAX_RWS: usize = 16384;
+/// MAX_TXS
+#[cfg(not(feature = "kroma"))]
+const MAX_TXS: usize = 4;
+#[cfg(feature = "kroma")]
+const MAX_TXS: usize = 5;
+/// MAX_CALLDATA
+#[cfg(not(feature = "kroma"))]
+const MAX_CALLDATA: usize = 512;
+#[cfg(feature = "kroma")]
+const MAX_CALLDATA: usize = 4000;
+/// MAX_INNER_BLOCKS
+pub const MAX_INNER_BLOCKS: usize = 64;
 /// MAX_BYTECODE
 const MAX_BYTECODE: usize = 5000;
 /// MAX_COPY_ROWS
+#[cfg(not(feature = "kroma"))]
 const MAX_COPY_ROWS: usize = 5888;
+#[cfg(feature = "kroma")]
+const MAX_COPY_ROWS: usize = 16384;
 /// MAX_EVM_ROWS
 const MAX_EVM_ROWS: usize = 10000;
-/// MAX_INNER_BLOCKS
-pub const MAX_INNER_BLOCKS: usize = 64;
 /// MAX_EXP_STEPS
 const MAX_EXP_STEPS: usize = 1000;
-
 const MAX_KECCAK_ROWS: usize = 10000;
 
 const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {

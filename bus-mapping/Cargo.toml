@@ -47,5 +47,6 @@ mock = { path = "../mock" }
 rand = "0.8"
 
 [features]
-default = ["test"]
+default = ["test", "kroma"]
+kroma = ["eth-types/kroma", "mock/kroma"]
 test = ["mock", "rand"]

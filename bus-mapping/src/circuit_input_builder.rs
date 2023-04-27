@@ -23,6 +23,8 @@ pub use access::{Access, AccessSet, AccessValue, CodeSource};
 pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
+#[cfg(feature = "kroma")]
+use eth_types::kroma_params;
 use eth_types::{
     self,
     evm_types::OpcodeId,
@@ -34,6 +36,11 @@ use ethers_core::{
     k256::ecdsa::SigningKey,
     types::{Bytes, NameOrAddress, Signature, TransactionRequest},
 };
+// use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
+// use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
+// use eth_types::{geth_types, ToBigEndian};
+// use ethers_core::k256::ecdsa::SigningKey;
+// use ethers_core::types::{Bytes, NameOrAddress, Signature, TransactionRequest};
 use ethers_providers::JsonRpcClient;
 pub use execution::{
     CopyDataType, CopyEvent, CopyStep, ExecState, ExecStep, ExpEvent, ExpStep, NumberOrHash,
@@ -740,6 +747,25 @@ pub fn get_state_accesses(
         let geth_trace = &geth_traces[tx_index];
         let tx_access_trace = gen_state_access_trace(eth_block, tx, geth_trace)?;
         block_access_trace.extend(tx_access_trace);
+    }
+
+    #[cfg(feature = "kroma")]
+    // Assuming there are more than two transactions, rollup fees are collected.
+    if eth_block.transactions.len() > 1 {
+        block_access_trace.push(Access::new(
+            None,
+            RW::WRITE,
+            AccessValue::Account {
+                address: *kroma_params::BASE_FEE_RECIPIENT,
+            },
+        ));
+        block_access_trace.push(Access::new(
+            None,
+            RW::WRITE,
+            AccessValue::Account {
+                address: *kroma_params::L1_FEE_RECIPIENT,
+            },
+        ));
     }
 
     Ok(block_access_trace)

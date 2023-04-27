@@ -24,7 +24,7 @@ use std::{
 use url::Url;
 
 /// Geth dev chain ID
-pub const CHAIN_ID: u64 = 1337;
+pub const CHAIN_ID: u64 = 901;
 /// Path to the test contracts
 pub const CONTRACTS_PATH: &str = "contracts";
 /// List of contracts as (ContractName, ContractSolidityFile)
@@ -38,15 +38,15 @@ pub const CONTRACTS: &[(&str, &str)] = &[
 /// Path to gen_blockchain_data output file
 pub const GENDATA_OUTPUT_PATH: &str = "gendata_output.json";
 
-const GETH0_URL_DEFAULT: &str = "http://localhost:8545";
+const L2_RPC_DEFAULT: &str = "http://localhost:9545";
 
 lazy_static! {
-    /// URL of the integration test geth0 instance, which contains blocks for which proofs will be
+    /// URL of the integration test l2 geth instance, which contains blocks for which proofs will be
     /// generated.
-    pub static ref GETH0_URL: String = match env::var("GETH0_URL") {
+    pub static ref L2_GETH_URL: String = match env::var("L2_GETH_URL") {
         Ok(val) => val,
-        Err(VarError::NotPresent) => GETH0_URL_DEFAULT.to_string(),
-        Err(e) => panic!("Error in GETH0_URL env var: {:?}", e),
+        Err(VarError::NotPresent) => L2_RPC_DEFAULT.to_string(),
+        Err(e) => panic!("Error in L2_GETH_URL env var: {:?}", e),
     };
     /// ..
     pub static ref START_BLOCK: usize =  match env::var("START_BLOCK") {
@@ -86,13 +86,13 @@ pub fn log_init() {
 
 /// Get the integration test [`GethClient`]
 pub fn get_client() -> GethClient<Http> {
-    let transport = Http::new(Url::parse(&GETH0_URL).expect("invalid url"));
+    let transport = Http::new(Url::parse(&L2_GETH_URL).expect("invalid url"));
     GethClient::new(transport)
 }
 
 /// Get the integration test [`Provider`]
 pub fn get_provider() -> Provider<Http> {
-    let transport = Http::new(Url::parse(&GETH0_URL).expect("invalid url"));
+    let transport = Http::new(Url::parse(&L2_GETH_URL).expect("invalid url"));
     Provider::new(transport).interval(Duration::from_millis(100))
 }
 
@@ -102,8 +102,7 @@ pub async fn get_chain_id() -> u64 {
     client.get_chain_id().await.unwrap()
 }
 
-const PHRASE: &str =
-    "work man father plunge mystery proud hollow address reunion sauce theory bonus";
+const PHRASE: &str = "test test test test test test test test test test test junk";
 
 /// Get a wallet by index
 pub fn get_wallet(index: u32) -> Wallet<SigningKey> {

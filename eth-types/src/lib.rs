@@ -44,6 +44,9 @@ pub use ethers_core::{
 use serde::{de, Deserialize, Serialize};
 use std::{collections::HashMap, fmt, str::FromStr};
 
+#[cfg(feature = "kroma")]
+pub mod kroma_params;
+
 /// Trait used to reduce verbosity with the declaration of the [`FieldExt`]
 /// trait and its repr.
 pub trait Field:
@@ -302,6 +305,7 @@ pub struct GethExecStep {
     pub refund: Gas,
     pub depth: u16,
     pub error: Option<String>,
+    #[serde(default)]
     // stack is in hex 0x prefixed
     pub stack: Stack,
     // memory is in chunks of 32 bytes, in hex
