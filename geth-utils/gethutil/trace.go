@@ -162,14 +162,13 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 		}
 		if tx.Type == types.DepositTxType {
 			message, err := types.NewTx(&types.DepositTx{
-				SourceHash:          common.Hash{},
-				From:                tx.From,
-				To:                  tx.To,
-				Mint:                toBigInt(tx.Mint),
-				Value:               toBigInt(tx.Value),
-				Gas:                 uint64(tx.GasLimit),
-				IsSystemTransaction: i == 0,
-				Data:                tx.CallData,
+				SourceHash: common.Hash{},
+				From:       tx.From,
+				To:         tx.To,
+				Mint:       toBigInt(tx.Mint),
+				Value:      toBigInt(tx.Value),
+				Gas:        uint64(tx.GasLimit),
+				Data:       tx.CallData,
 			}).AsMessage(types.MakeSigner(&chainConfig, config.Block.Number.ToInt()), config.Block.BaseFee.ToInt())
 			if err != nil {
 				return nil, err
@@ -210,7 +209,7 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 		},
 		Coinbase:    config.Block.Coinbase,
 		BlockNumber: toBigInt(config.Block.Number),
-		Time:        toBigInt(config.Block.Timestamp),
+		Time:        toUint64(config.Block.Timestamp),
 		Difficulty:  toBigInt(config.Block.Difficulty),
 		BaseFee:     toBigInt(config.Block.BaseFee),
 		GasLimit:    blockGasLimit,
