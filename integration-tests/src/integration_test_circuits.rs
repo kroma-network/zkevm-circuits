@@ -35,7 +35,7 @@ use zkevm_circuits::witness::Block;
 
 const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_rws: 16384,
-    max_txs: 4,
+    max_txs: 5,
     max_calldata: 4000,
     max_inner_blocks: 64,
     max_bytecode: 4000,

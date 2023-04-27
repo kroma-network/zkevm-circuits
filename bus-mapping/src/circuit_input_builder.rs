@@ -24,6 +24,8 @@ pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
 use eth_types::evm_types::{GasCost, OpcodeId};
+#[cfg(feature = "kanvas")]
+use eth_types::kanvas_params;
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
 use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
 use eth_types::{geth_types, ToBigEndian};
@@ -47,7 +49,7 @@ pub use transaction::{Transaction, TransactionContext};
 #[derive(Debug, Clone)]
 pub struct CircuitsParams {
     /// Maximum number of rw operations in the state circuit (RwTable length /
-    /// nummber of rows). This must be at least the number of rw operations
+    /// number of rows). This must be at least the number of rw operations
     /// + 1, in order to allocate at least a Start row.
     pub max_rws: usize,
     // TODO: evm_rows: Maximum number of rows in the EVM Circuit
@@ -793,6 +795,24 @@ impl<P: JsonRpcClient> BuilderClient<P> {
             let geth_trace = &geth_traces[tx_index];
             let tx_access_trace = gen_state_access_trace(eth_block, tx, geth_trace)?;
             block_access_trace.extend(tx_access_trace);
+        }
+        #[cfg(feature = "kanvas")]
+        // Assuming there are more than two transactions, rollup fees are collected.
+        if eth_block.transactions.len() > 1 {
+            block_access_trace.push(Access::new(
+                None,
+                RW::WRITE,
+                AccessValue::Account {
+                    address: *kanvas_params::BASE_FEE_RECIPIENT,
+                },
+            ));
+            block_access_trace.push(Access::new(
+                None,
+                RW::WRITE,
+                AccessValue::Account {
+                    address: *kanvas_params::L1_FEE_RECIPIENT,
+                },
+            ));
         }
 
         Ok(block_access_trace)

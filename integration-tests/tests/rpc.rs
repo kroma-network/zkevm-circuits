@@ -19,25 +19,20 @@ async fn test_get_chain_id() {
 }
 
 #[tokio::test]
-async fn test_get_coinbase() {
-    let cli = get_client();
-    let coinbase = cli.get_coinbase().await.unwrap();
-    assert_eq!(GEN_DATA.coinbase, coinbase);
-}
-
-#[tokio::test]
 async fn test_get_block_by_number_by_hash() {
+    let block_num = GEN_DATA.blocks.get("Transfer 0").unwrap();
+
     let cli = get_client();
-    let block_by_num = cli.get_block_by_number(1.into()).await.unwrap();
+    let block_by_num = cli.get_block_by_number((*block_num).into()).await.unwrap();
     let block_by_hash = cli
         .get_block_by_hash(block_by_num.hash.unwrap())
         .await
         .unwrap();
     assert!(block_by_num == block_by_hash);
-    // Transaction 1 is a transfer from coinbase to wallet0
-    assert_eq!(block_by_num.transactions.len(), 1);
-    assert_eq!(block_by_num.transactions[0].from, GEN_DATA.coinbase);
-    assert_eq!(block_by_num.transactions[0].to, Some(GEN_DATA.wallets[0]));
+    // Transaction 2 is a transfer from wallet0 to wallet1
+    assert_eq!(block_by_num.transactions.len(), 2);
+    assert_eq!(block_by_num.transactions[1].from, GEN_DATA.wallets[0]);
+    assert_eq!(block_by_num.transactions[1].to, Some(GEN_DATA.wallets[1]));
 }
 
 #[tokio::test]
@@ -75,7 +70,10 @@ async fn test_get_proof() {
     let expected_storage_proof_json = r#"{
          "key": "0x0",
          "value": "0x2a",
-         "proof": ["0xe3a120290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e5632a"]
+         "proof": [
+            "0x012098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b6486401010000000000000000000000000000000000000000000000000000000000000000002a200000000000000000000000000000000000000000000000000000000000000000",
+            "0x5448495320495320534f4d45204d4147494320425954455320464f5220534d54206d3172525867503278704449"
+         ]
     }"#;
     let expected_storage_proof: StorageProof =
         serde_json::from_str(expected_storage_proof_json).unwrap();
