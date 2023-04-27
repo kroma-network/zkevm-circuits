@@ -83,3 +83,13 @@ func toBigInt(value *hexutil.Big) *big.Int {
 	}
 	return big.NewInt(0)
 }
+
+func toUint64(value *hexutil.Big) uint64 {
+	if value != nil {
+		valueInt := value.ToInt()
+		if valueInt.IsUint64() {
+			return valueInt.Uint64()
+		}
+	}
+	return 0
+}
