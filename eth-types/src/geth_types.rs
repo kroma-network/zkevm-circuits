@@ -13,7 +13,7 @@ use num_bigint::BigUint;
 use serde::{Serialize, Serializer};
 use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 #[cfg(feature = "kanvas")]
 /// Kanvas deposit transaction type
@@ -228,7 +228,7 @@ impl Transaction {
     pub fn get_mint(_tx: &crate::Transaction) -> Option<Word> {
         #[cfg(feature = "kanvas")]
         if let Some(v) = _tx.other.get("mint") {
-            return Some(Word::from_dec_str(v.as_str().unwrap()).unwrap());
+            return Some(Word::from_str(v.as_str().unwrap()).unwrap());
         }
         None
     }
