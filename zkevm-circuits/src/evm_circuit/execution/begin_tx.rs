@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::{N_BYTES_ACCOUNT_ADDRESS, N_BYTES_GAS, N_BYTES_WORD},
-        step::{ExecutionState, NEXT_EXECUTION_STATE},
+        step::ExecutionState,
         util::{
             and,
             common_gadget::{TransferWithGasFeeGadget, UpdateBalanceGadget},
@@ -392,9 +392,13 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             // reversion_info.is_persistent(),
             // 1.expr(),
             // );
+
             cb.require_equal(
-                "Go to EndTx when Tx to precompile",
-                cb.next.execution_state_selector([NEXT_EXECUTION_STATE]),
+                "Go to EndDepositTx or BaseFeeHook when Tx to precompile",
+                cb.next.execution_state_selector([
+                    ExecutionState::EndDepositTx,
+                    ExecutionState::BaseFeeHook,
+                ]),
                 1.expr(),
             );
 
@@ -440,9 +444,13 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                     reversion_info.is_persistent(),
                     1.expr(),
                 );
+
                 cb.require_equal(
-                    "Go to EndTx when Tx to account with empty code",
-                    cb.next.execution_state_selector([NEXT_EXECUTION_STATE]),
+                    "Go to EndDepositTx or BaseFeeHook when Tx to account with empty code",
+                    cb.next.execution_state_selector([
+                        ExecutionState::EndDepositTx,
+                        ExecutionState::BaseFeeHook,
+                    ]),
                     1.expr(),
                 );
 

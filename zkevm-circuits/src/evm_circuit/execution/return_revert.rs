@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::{N_BYTES_MEMORY_ADDRESS, N_BYTES_MEMORY_WORD_SIZE, STACK_CAPACITY},
-        step::{ExecutionState, NEXT_EXECUTION_STATE},
+        step::ExecutionState,
         util::{
             common_gadget::RestoreContextGadget,
             constraint_builder::{
@@ -136,7 +136,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
 
         // Case B in the specs.
         cb.condition(is_root.expr(), |cb| {
-            cb.require_next_state(NEXT_EXECUTION_STATE);
+            cb.end_deposit_tx_or_base_fee_hook();
             cb.call_context_lookup(
                 false.expr(),
                 None,
