@@ -128,11 +128,6 @@ impl Default for ExecutionState {
     }
 }
 
-#[cfg(not(feature = "kanvas"))]
-pub const NEXT_EXECUTION_STATE: ExecutionState = ExecutionState::EndTx;
-#[cfg(feature = "kanvas")]
-pub const NEXT_EXECUTION_STATE: ExecutionState = ExecutionState::BaseFeeHook;
-
 impl ExecutionState {
     pub(crate) const fn as_u64(&self) -> u64 {
         *self as u64

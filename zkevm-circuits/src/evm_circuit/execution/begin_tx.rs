@@ -4,7 +4,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::N_BYTES_GAS,
-        step::{ExecutionState, NEXT_EXECUTION_STATE},
+        step::ExecutionState,
         util::{
             common_gadget::TransferWithGasFeeGadget,
             constraint_builder::{
@@ -249,9 +249,19 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 reversion_info.is_persistent(),
                 1.expr(),
             );
+            #[cfg(feature = "kanvas")]
+            cb.require_equal(
+                "Go to EndDepositTx or BaseFeeHook when Tx to account with empty code",
+                cb.next.execution_state_selector([
+                    ExecutionState::EndDepositTx,
+                    ExecutionState::BaseFeeHook,
+                ]),
+                1.expr(),
+            );
+            #[cfg(not(feature = "kanvas"))]
             cb.require_equal(
                 "Go to EndTx when Tx to account with empty code",
-                cb.next.execution_state_selector([NEXT_EXECUTION_STATE]),
+                cb.next.execution_state_selector([ExecutionState::EndTx]),
                 1.expr(),
             );
 

@@ -1,7 +1,7 @@
 use crate::evm_circuit::{
     execution::ExecutionGadget,
     param::N_BYTES_GAS,
-    step::{ExecutionState, NEXT_EXECUTION_STATE},
+    step::ExecutionState,
     util::{
         common_gadget::{CommonCallGadget, RestoreContextGadget},
         constraint_builder::{
@@ -81,13 +81,28 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGCallGadget<F> {
             rw_counter_end_of_reversion.expr(),
         );
 
-        // Go to EndTx only when is_root
-        let is_to_end_tx = cb.next.execution_state_selector([NEXT_EXECUTION_STATE]);
-        cb.require_equal(
-            "Go to EndTx only when is_root",
-            cb.curr.state.is_root.expr(),
-            is_to_end_tx,
-        );
+        #[cfg(feature = "kanvas")]
+        {
+            // Go to EndDepositTx or BaseFeeHook only when is_root
+            let to_next_state = cb.next.execution_state_selector([ExecutionState::EndDepositTx, ExecutionState::BaseFeeHook]);
+
+            cb.require_equal(
+                "Go to EndDepositTx or BaseFeeHook only when is_root",
+                cb.curr.state.is_root.expr(),
+                to_next_state,
+            );
+        }
+        #[cfg(not(feature = "kanvas"))]
+        {
+            // Go to EndTx only when is_root
+            let to_next_state = cb.next.execution_state_selector([ExecutionState::EndTx]);
+
+            cb.require_equal(
+                "Go to EndTx only when is_root",
+                cb.curr.state.is_root.expr(),
+                to_next_state,
+            );
+        }
 
         // When it's a root call
         cb.condition(cb.curr.state.is_root.expr(), |cb| {
