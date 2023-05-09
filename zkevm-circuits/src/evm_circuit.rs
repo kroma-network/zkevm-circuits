@@ -477,7 +477,7 @@ pub mod test {
         k
     }
 
-    pub fn get_test_cicuit_from_block<F: Field>(block: Block<F>) -> EvmCircuit<F> {
+    pub fn get_test_circuit_from_block<F: Field>(block: Block<F>) -> EvmCircuit<F> {
         let fixed_table_tags = detect_fixed_table_tags(&block);
 
         EvmCircuit::<F>::new_dev(block, fixed_table_tags)
@@ -487,7 +487,7 @@ pub mod test {
         let k = get_test_degree(&block);
 
         let (active_gate_rows, active_lookup_rows) = EvmCircuit::<F>::get_active_rows(&block);
-        let circuit = get_test_cicuit_from_block(block);
+        let circuit = get_test_circuit_from_block(block);
         let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
         prover.verify_at_rows_par(active_gate_rows.into_iter(), active_lookup_rows.into_iter())
     }

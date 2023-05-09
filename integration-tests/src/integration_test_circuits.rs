@@ -26,7 +26,7 @@ use std::sync::Mutex;
 use zkevm_circuits::bytecode_circuit::bytecode_unroller::BytecodeCircuit;
 use zkevm_circuits::copy_circuit::CopyCircuit;
 use zkevm_circuits::evm_circuit::test::get_test_degree;
-use zkevm_circuits::evm_circuit::{test::get_test_cicuit_from_block, witness::block_convert};
+use zkevm_circuits::evm_circuit::{test::get_test_circuit_from_block, witness::block_convert};
 use zkevm_circuits::state_circuit::StateCircuit;
 use zkevm_circuits::super_circuit::SuperCircuit;
 use zkevm_circuits::tx_circuit::TxCircuit;
@@ -210,7 +210,7 @@ fn test_actual<C: Circuit<Fr>>(
 
     let transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
 
-    // change instace to slice
+    // change instance to slice
     let instance: Vec<&[Fr]> = instance.iter().map(|v| v.as_slice()).collect();
 
     let proof = test_gen_proof(
@@ -247,7 +247,7 @@ pub async fn test_evm_circuit_block(block_num: u64, actual: bool) {
     let block = block_convert(&builder.block, &builder.code_db).unwrap();
 
     let degree = get_test_degree(&block);
-    let circuit = get_test_cicuit_from_block(block);
+    let circuit = get_test_circuit_from_block(block);
 
     if actual {
         test_actual(degree, circuit, vec![], None);

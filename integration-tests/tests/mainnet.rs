@@ -8,7 +8,7 @@ use integration_tests::{get_client, log_init};
 use integration_tests::{CIRCUIT, END_BLOCK, START_BLOCK, TX_ID};
 use zkevm_circuits::evm_circuit::EvmCircuit;
 use zkevm_circuits::evm_circuit::{
-    test::get_test_cicuit_from_block, test::get_test_degree, test::run_test_circuit,
+    test::get_test_circuit_from_block, test::get_test_degree, test::run_test_circuit,
     witness::block_convert,
 };
 use zkevm_circuits::keccak_circuit::keccak_packed_multi::multi_keccak;
@@ -80,7 +80,7 @@ fn test_with<C: SubCircuit<Fr> + Circuit<Fr>>(
 fn test_witness_block(block: &witness::Block<Fr>) -> Vec<VerifyFailure> {
     let prover = if *CIRCUIT == "evm" {
         let k = get_test_degree(block);
-        let circuit = get_test_cicuit_from_block(block.clone());
+        let circuit = get_test_circuit_from_block(block.clone());
         let instance = vec![];
         MockProver::<Fr>::run(k, &circuit, instance).unwrap()
     } else if *CIRCUIT == "rlp" {
