@@ -15,7 +15,6 @@ use eth_types::{
 use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::Value;
-use halo2_proofs::halo2curves::group::cofactor::CofactorCurveAffine;
 use halo2_proofs::halo2curves::group::ff::PrimeField;
 use halo2_proofs::halo2curves::secp256k1;
 use mock::MockTransaction;
