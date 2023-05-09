@@ -1302,17 +1302,17 @@ impl<F: Field> TxCircuit<F> {
             .iter()
             .chain(iter::once(&padding_tx))
             .enumerate()
-            .filter(|(_, tx)| {
-                if tx.v == 0 && tx.r.is_zero() && tx.s.is_zero() {
-                    log::warn!(
-                        "tx {} is not signed, skipping tx circuit keccak input",
-                        tx.id
-                    );
-                    false
-                } else {
-                    true
-                }
-            })
+            // .filter(|(_, tx)| {
+            //     if tx.v == 0 && tx.r.is_zero() && tx.s.is_zero() {
+            //         log::warn!(
+            //             "tx {} is not signed, skipping tx circuit keccak input",
+            //             tx.id
+            //         );
+            //         false
+            //     } else {
+            //         true
+            //     }
+            // })
             .map(|(_, tx)| {
                 tx.sign_data().map_err(|e| {
                     error!("keccak_inputs_tx_circuit error: {:?}", e);

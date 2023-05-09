@@ -35,6 +35,7 @@ use halo2_ecc::{
         FieldChip,
     },
 };
+
 use halo2_proofs::{
     circuit::{Layouter, Value},
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
@@ -695,6 +696,25 @@ impl<F: Field> SignVerifyChip<F> {
                     )?;
                 }
                 Ok(())
+                // // HERE
+                // for (i, assigned_ecdsa) in assigned_ecdsas.iter().enumerate() {
+                //     let sign_data = if i < signatures.len()
+                //         && !signatures[i].signature.0.is_zero_vartime()
+                //         && !signatures[i].signature.1.is_zero_vartime()
+                //     {
+                //         Some(&signatures[i])
+                //     } else {
+                //         None
+                //     };
+                //     let assigned_sig_verif = self.assign_signature_verify(
+                //         config,
+                //         &mut ctx,
+                //         is_address_zero,
+                //         pk_rlc,
+                //         pk_hash_rlc,
+                //     )?;
+                // }
+                // Ok(())
             },
         )?;
 
