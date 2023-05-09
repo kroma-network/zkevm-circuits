@@ -120,6 +120,7 @@ impl<'a> CircuitInputStateRef<'a> {
             gas_left: prev_step.gas_left,
             gas_cost: prev_step.gas_cost,
             rwc: self.block_ctx.rwc,
+            log_id: self.tx_ctx.log_id,
             ..Default::default()
         }
     }
