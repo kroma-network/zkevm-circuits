@@ -14,7 +14,7 @@ use ecdsa::ecdsa::{AssignedEcdsaSig, AssignedPublicKey, EcdsaChip};
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
 use eth_types::{self, Field};
 use halo2_proofs::{
-    arithmetic::{CurveAffine, FieldExt},
+    arithmetic::{CurveAffine, Field as OtherField, FieldExt},
     circuit::{AssignedCell, Cell, Layouter, Value},
     halo2curves::secp256k1::Secp256k1Affine,
     halo2curves::{
@@ -673,7 +673,10 @@ impl<F: Field> SignVerifyChip<F> {
                 let mut assigned_ecdsas = Vec::new();
                 let mut ctx = RegionCtx::new(region, 0);
                 for i in 0..self.max_verif {
-                    let signature = if i < signatures.len() {
+                    let signature = if i < signatures.len()
+                        && !signatures[i].signature.0.is_zero_vartime()
+                        && !signatures[i].signature.1.is_zero_vartime()
+                    {
                         signatures[i].clone()
                     } else {
                         // padding (enabled when address == 0)
@@ -693,7 +696,14 @@ impl<F: Field> SignVerifyChip<F> {
                 let mut assigned_sig_verifs = Vec::new();
                 let mut ctx = RegionCtx::new(region, 0);
                 for (i, assigned_ecdsa) in assigned_ecdsas.iter().enumerate() {
-                    let sign_data = signatures.get(i); // None when padding (enabled when address == 0)
+                    let sign_data = if i < signatures.len()
+                        && !signatures[i].signature.0.is_zero_vartime()
+                        && !signatures[i].signature.1.is_zero_vartime()
+                    {
+                        Some(&signatures[i])
+                    } else {
+                        None
+                    };
                     let assigned_sig_verif = self.assign_signature_verify(
                         config,
                         &mut ctx,

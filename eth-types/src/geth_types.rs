@@ -255,14 +255,26 @@ impl Transaction {
     pub fn sign_data(&self, chain_id: u64) -> Result<SignData, Error> {
         let sig_r_le = self.r.to_le_bytes();
         let sig_s_le = self.s.to_le_bytes();
-        let sig_r = ct_option_ok_or(
-            secp256k1::Fq::from_repr(sig_r_le),
-            Error::Signature(libsecp256k1::Error::InvalidSignature),
-        )?;
-        let sig_s = ct_option_ok_or(
-            secp256k1::Fq::from_repr(sig_s_le),
-            Error::Signature(libsecp256k1::Error::InvalidSignature),
-        )?;
+        #[cfg(not(feature = "kanvas"))]
+        let zero_signature = false;
+        #[cfg(feature = "kanvas")]
+        let zero_signature = self.is_deposit();
+        let sig_r = if zero_signature {
+            secp256k1::Fq::zero()
+        } else {
+            ct_option_ok_or(
+                secp256k1::Fq::from_repr(sig_r_le),
+                Error::Signature(libsecp256k1::Error::InvalidSignature),
+            )?
+        };
+        let sig_s = if zero_signature {
+            secp256k1::Fq::zero()
+        } else {
+            ct_option_ok_or(
+                secp256k1::Fq::from_repr(sig_s_le),
+                Error::Signature(libsecp256k1::Error::InvalidSignature),
+            )?
+        };
         // msg = rlp([nonce, gasPrice, gas, to, value, data, chain_id, 0, 0])
         let mut req: TransactionRequest = self.into();
         if req.to.is_some() {
@@ -285,7 +297,11 @@ impl Transaction {
             .try_into()
             .expect("hash length isn't 32 bytes");
         let v = ((self.v + 1) % 2) as u8;
-        let pk = recover_pk(v, &self.r, &self.s, &msg_hash)?;
+        let pk = if zero_signature {
+            halo2_proofs::halo2curves::secp256k1::Secp256k1Affine::generator()
+        } else {
+            recover_pk(v, &self.r, &self.s, &msg_hash)?
+        };
         // msg_hash = msg_hash % q
         let msg_hash = BigUint::from_bytes_be(msg_hash.as_slice());
         let msg_hash = msg_hash.mod_floor(&*SECP256K1_Q);
