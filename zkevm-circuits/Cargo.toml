@@ -51,7 +51,7 @@ mock = { path = "../mock" }
 pretty_assertions = "1.0.0"
 
 [features]
-default = ["test","onephase","kanvas"]
+default = ["test","onephase","enable-sign-verify","kanvas"]
 test = ["ethers-signers", "mock"]
 onephase = []
 zktrie = []

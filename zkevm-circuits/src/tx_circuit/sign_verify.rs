@@ -61,7 +61,7 @@ impl<F: Field> SignVerifyChip<F> {
     /// Return a new SignVerifyChip
     pub fn new(max_verif: usize) -> Self {
         // TODO: Investigate if it is safe to use a random point as aux generator that
-        // is choosen by the prover.  If this is unsafe, we will need to update the
+        // is chosen by the prover.  If this is unsafe, we will need to update the
         // EccChip to calculate an aux generator using the challange API.
         // https://github.com/privacy-scaling-explorations/halo2wrong/issues/53
         let mut rng = ChaCha20Rng::seed_from_u64(0);
@@ -83,7 +83,7 @@ impl<F: Field> SignVerifyChip<F> {
         // the tx circuit with max_txs=1. For example:
         // `RUST_LOG=debug RUST_BACKTRACE=1 cargo test tx_circuit_1tx_1max_tx --release
         // --all-features -- --nocapture`
-        // The value rows_range_chip_table has been optained by patching the halo2
+        // The value rows_range_chip_table has been obtained by patching the halo2
         // library to report the number of rows used in the range chip table
         // region. TODO: Figure out a way to get these numbers automatically.
         let rows_range_chip_table = 295188;
@@ -174,7 +174,7 @@ impl SignVerifyConfig {
         let q_keccak = meta.complex_selector();
         meta.lookup_any("keccak", |meta| {
             // When address is 0, we disable the signature verification by using a dummy pk,
-            // msg_hash and signature which is not constrainted to match msg_hash_rlc nor
+            // msg_hash and signature which is not constrained to match msg_hash_rlc nor
             // the address.
             // Layout:
             // | q_keccak |        a        |     rlc     |
@@ -345,7 +345,7 @@ fn integer_to_bytes_le<F: Field, FE: FieldExt>(
 }
 
 /// Helper structure pass around references to all the chips required for an
-/// ECDSA veficication.
+/// ECDSA verification.
 struct ChipsRef<'a, F: Field, const NUMBER_OF_LIMBS: usize, const BIT_LEN_LIMB: usize> {
     main_gate: &'a MainGate<F>,
     range_chip: &'a RangeChip<F>,
@@ -414,9 +414,9 @@ impl<F: Field> SignVerifyChip<F> {
         // Ref. spec SignVerifyChip 4. Verify the ECDSA signature
         ecdsa_chip.verify(ctx, &sig, &pk_assigned, &msg_hash)?;
 
-        // TODO: Update once halo2wrong suports the following methods:
+        // TODO: Update once halo2wrong supports the following methods:
         // - `IntegerChip::assign_integer_from_bytes_le`
-        // - `GeneralEccChip::assing_point_from_bytes_le`
+        // - `GeneralEccChip::assign_point_from_bytes_le`
 
         Ok(AssignedECDSA {
             pk_x_le,
