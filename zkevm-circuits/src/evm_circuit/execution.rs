@@ -1120,7 +1120,6 @@ impl<F: Field> ExecutionConfig<F> {
                         let total_gas = {
                             let gas_used = eth_types::evm_types::gas_utils::gas_used(
                                 tx.transaction_type,
-                                tx.id == 1,
                                 tx.gas,
                                 step.gas_left,
                             );

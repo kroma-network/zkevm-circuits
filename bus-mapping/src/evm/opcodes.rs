@@ -473,7 +473,8 @@ pub fn gen_begin_tx_ops(
     let mut nonce_prev = state.sdb.get_account(&caller_address).1.nonce;
     debug_assert!(nonce_prev <= state.tx.nonce.into());
     while nonce_prev < state.tx.nonce.into() {
-        // NOTE: Since increase_nonce returns the previous nonce, you need to add 1 to get the new nonce.
+        // NOTE: Since increase_nonce returns the previous nonce, you need to add 1 to
+        // get the new nonce.
         nonce_prev = (state.sdb.increase_nonce(&caller_address) + 1).into();
         log::warn!("[debug] increase nonce to {}", nonce_prev);
     }
@@ -849,11 +850,7 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
         )?;
     }
 
-    state.block_ctx.cumulative_gas_used += if state.tx_ctx.id() == 1 {
-        0
-    } else {
-        state.tx.gas
-    };
+    state.block_ctx.cumulative_gas_used += state.tx.gas;
     state.tx_receipt_write(
         &mut exec_step,
         state.tx_ctx.id(),

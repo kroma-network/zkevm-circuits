@@ -50,7 +50,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
         );
 
         let is_first_tx = IsEqualGadget::construct(cb, tx_id.expr(), 1.expr());
-        let gas_used = (1.expr() - is_first_tx.expr()) * tx_gas.expr();
+        let gas_used = tx_gas.expr();
 
         // constrain tx receipt fields
         cb.tx_receipt_lookup(
