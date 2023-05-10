@@ -47,14 +47,10 @@ pub fn eip150_gas(gas_left: u64, gas_specified: Word) -> u64 {
 /// Calculate used gas during state transition.
 /// Normally, it's equivalent to the normal tx's.
 /// But for deposit tx, it needs to be computed differently.
-pub fn gas_used(_transaction_type: u64, _is_first: bool, gas: u64, gas_left: u64) -> u64 {
+pub fn gas_used(_transaction_type: u64, gas: u64, gas_left: u64) -> u64 {
     #[cfg(feature = "kanvas")]
     if _transaction_type == DEPOSIT_TX_TYPE {
-        if _is_first {
-            return 0;
-        } else {
-            return gas;
-        }
+        return gas;
     } else {
         return gas - gas_left;
     }
