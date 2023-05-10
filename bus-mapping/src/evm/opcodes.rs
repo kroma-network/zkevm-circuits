@@ -824,6 +824,32 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
         Word::from(call.is_persistent as u8),
     );
 
+    let refund = state.sdb.refund();
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        TxRefundOp {
+            tx_id: state.tx_ctx.id(),
+            value: refund,
+            value_prev: refund,
+        },
+    );
+
+    let effective_refund = refund.min(state.tx.gas / MAX_REFUND_QUOTIENT_OF_GAS_USED as u64);
+    let (found, caller_account) = state.sdb.get_account(&call.caller_address);
+    if !found {
+        return Err(Error::AccountNotFound(call.caller_address));
+    }
+    let caller_balance_prev = caller_account.balance;
+    let caller_balance = caller_balance_prev + state.tx.gas_price * effective_refund;
+    state.account_write(
+        &mut exec_step,
+        call.caller_address,
+        AccountField::Balance,
+        caller_balance,
+        caller_balance_prev,
+    )?;
+
     // handle tx receipt tag
     state.tx_receipt_write(
         &mut exec_step,

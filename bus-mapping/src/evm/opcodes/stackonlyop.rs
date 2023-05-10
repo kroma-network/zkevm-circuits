@@ -83,7 +83,7 @@ mod stackonlyop_tests {
     use std::ops::{BitOr, BitXor};
 
     #[cfg(feature = "kroma")]
-    const CALL_ID: usize = 1174;
+    const CALL_ID: usize = 1176;
     #[cfg(not(feature = "kroma"))]
     const CALL_ID: usize = 1;
 
