@@ -58,7 +58,7 @@ mod stackonlyop_tests {
     use std::ops::{BitOr, BitXor};
 
     #[cfg(feature = "kanvas")]
-    const CALL_ID: usize = 1176;
+    const CALL_ID: usize = 1178;
     #[cfg(not(feature = "kanvas"))]
     const CALL_ID: usize = 1;
 
