@@ -351,7 +351,13 @@ mod test {
         Address, Bytecode, ToWord, Word, U256, U64,
     };
     use itertools::Itertools;
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{SimpleTestContext, TestContext1_1, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
+    };
 
     const CALLEE_ADDRESS: Address = Address::repeat_byte(0xff);
     const CALLER_ADDRESS: Address = Address::repeat_byte(0x34);
@@ -397,7 +403,7 @@ mod test {
         {
             let code = callee_bytecode(*is_return, *offset, *length);
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
             )
             .run();
         }
@@ -431,17 +437,21 @@ mod test {
                 ..Default::default()
             };
 
-            let ctx = TestContext::<3, 1>::new(
+            let ctx = TestContext3_1::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x000000000000000000000000000000000000cafe"))
                         .balance(Word::from(10u64.pow(19)));
                     accs[1].account(&caller);
                     accs[2].account(&callee);
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 3);
                 },
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .from(accs[0].address)
                         .to(accs[1].address)
                         .gas(100000u64.into());
@@ -461,13 +471,17 @@ mod test {
             test_parameters.iter().cartesian_product(&[true, false])
         {
             let tx_input = callee_bytecode(*is_return, *offset, *length).code();
-            let ctx = TestContext::<1, 1>::new(
+            let ctx = TestContext1_1::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(10));
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 1);
                 },
                 |mut txs, accs| {
-                    txs[0].from(accs[0].address).input(tx_input.into());
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)].from(accs[0].address).input(tx_input.into());
                 },
                 |block, _| block,
             )
@@ -505,16 +519,20 @@ mod test {
                 ..Default::default()
             };
 
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x000000000000000000000000000000000000cafe"))
                         .balance(eth(10));
                     accs[1].account(&caller);
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 2);
                 },
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .from(accs[0].address)
                         .to(accs[1].address)
                         .gas(100000u64.into());
@@ -556,16 +574,20 @@ mod test {
             ..Default::default()
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(eth(10));
                 accs[1].account(&caller);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000u64.into());
@@ -622,18 +644,18 @@ mod test {
             RETURNDATACOPY
         });
 
-        let block: GethData = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode.clone())
+        let block: GethData = SimpleTestContext::simple_ctx_with_bytecode(bytecode.clone())
             .unwrap()
             .into();
 
         // collect return opcode, retrieve next step, assure both contract create
         // successfully
-        let created_contract_addr = block.geth_traces[0]
+        let created_contract_addr = block.geth_traces[tx_idx!(0)]
             .struct_logs
             .iter()
             .enumerate()
             .filter(|(_, s)| s.op == OpcodeId::RETURN)
-            .flat_map(|(index, _)| block.geth_traces[0].struct_logs.get(index + 1))
+            .flat_map(|(index, _)| block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1))
             .flat_map(|s| s.stack.nth_last(0)) // contract addr on stack top
             .collect_vec();
         assert!(created_contract_addr.len() == 2); // both contract addr exist
@@ -642,12 +664,12 @@ mod test {
             .for_each(|addr| assert!(addr > &U256::zero()));
 
         // collect return opcode, retrieve next step, assure both returndata size is 0
-        let return_data_size = block.geth_traces[0]
+        let return_data_size = block.geth_traces[tx_idx!(0)]
             .struct_logs
             .iter()
             .enumerate()
             .filter(|(_, s)| s.op == OpcodeId::RETURNDATASIZE)
-            .flat_map(|(index, _)| block.geth_traces[0].struct_logs.get(index + 1))
+            .flat_map(|(index, _)| block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1))
             .flat_map(|s| s.stack.nth_last(0)) // returndata size on stack top
             .collect_vec();
         assert!(return_data_size.len() == 2);
@@ -655,7 +677,7 @@ mod test {
             .iter()
             .for_each(|size| assert_eq!(size, &Word::zero()));
 
-        let text_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap();
+        let text_ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
         CircuitTestBuilder::new_from_test_ctx(text_ctx).run();
     }
 
@@ -664,7 +686,7 @@ mod test {
         for is_return in [true, false] {
             let code = callee_bytecode(is_return, u128::MAX, 0);
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
             )
             .run();
         }

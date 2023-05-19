@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{utils::MainnetFork, Compiler};
 use anyhow::{bail, Context, Result};
-use eth_types::{geth_types::Account, Address, Bytes, H256, U256};
+use eth_types::{geth_types::Account, Address, Bytes, H256, U256, U64};
 use ethers_core::{k256::ecdsa::SigningKey, utils::secret_key_to_address};
 use std::{collections::HashMap, convert::TryInto, str::FromStr};
 use yaml_rust::Yaml;
@@ -111,6 +111,8 @@ impl<'a> YamlStateTestBuilder<'a> {
             let secret_key = Self::parse_bytes(&yaml_transaction["secretKey"])?;
             let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
 
+            let transaction_type = Self::parse_u64(&yaml_transaction["transaction_type"])?;
+
             // parse expects (account states before executing the transaction)
             let mut expects = Vec::new();
             for expect in yaml_test["expect"].as_vec().context("as_vec")?.iter() {
@@ -189,6 +191,7 @@ impl<'a> YamlStateTestBuilder<'a> {
                                 gas_price,
                                 nonce,
                                 value: *value,
+                                transaction_type: Some(U64::from(transaction_type)),
                                 data: data.0.clone(),
                                 exception: *exception,
                             });
@@ -622,6 +625,7 @@ arith:
             gas_price: U256::from(10u64),
             nonce: U256::zero(),
             value: U256::one(),
+            transaction_type: Some(U64::one()),
             data: Bytes::from(&[0]),
             pre: HashMap::from([
                 (

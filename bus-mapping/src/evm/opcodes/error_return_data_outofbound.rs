@@ -82,8 +82,11 @@ mod tests {
     use crate::{circuit_input_builder::ExecState, mock::BlockData, operation::RW};
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, word};
     use mock::{
-        test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
     };
 
     #[test]
@@ -116,7 +119,7 @@ mod tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -130,7 +133,7 @@ mod tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let tx_id = 1;
+        let tx_id = tx_idx!(1);
         let transaction = &builder.block.txs()[tx_id - 1];
         let step = transaction
             .steps()

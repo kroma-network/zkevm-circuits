@@ -507,10 +507,12 @@ mod evm_circuit_stats {
         plonk::{Circuit, ConstraintSystem},
     };
     use itertools::Itertools;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
         test_ctx::{
             helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-            TestContext,
+            SimpleTestContext, TestContext, TestContext0_0,
         },
         MOCK_ACCOUNTS,
     };
@@ -658,9 +660,20 @@ mod evm_circuit_stats {
             ..Default::default()
         };
         // Empty
-        let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
-            .unwrap()
-            .into();
+        let block: GethData = TestContext0_0::new(
+            None,
+            |mut accs| {
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 0);
+            },
+            |mut txs, _| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+            },
+            |b, _| b,
+        )
+        .unwrap()
+        .into();
         let mut builder = BlockData::new_from_geth_data_with_params(block.clone(), params)
             .new_circuit_input_builder();
         builder
@@ -675,7 +688,7 @@ mod evm_circuit_stats {
         let code = bytecode! {
             STOP
         };
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,

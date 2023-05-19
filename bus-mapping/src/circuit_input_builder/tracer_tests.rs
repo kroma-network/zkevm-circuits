@@ -17,8 +17,8 @@ use eth_types::{
 };
 use lazy_static::lazy_static;
 use mock::{
-    test_ctx::{helpers::*, LoggerConfig, TestContext},
-    MOCK_COINBASE,
+    test_ctx::{helpers::*, LoggerConfig, SimpleTestContext, TestContext},
+    tx_idx, MOCK_COINBASE,
 };
 use pretty_assertions::assert_eq;
 use std::collections::HashSet;
@@ -1532,11 +1532,13 @@ fn tracer_err_out_of_gas() {
         PUSH1(0x2)
     };
     // Create a custom tx setting Gas to
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         |mut txs, accs| {
-            txs[0]
+            #[cfg(feature = "kroma")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)]
                 .to(accs[0].address)
                 .from(accs[1].address)
                 .gas(Word::from(21004u64));
@@ -1546,7 +1548,7 @@ fn tracer_err_out_of_gas() {
     )
     .unwrap()
     .into();
-    let struct_logs = &block.geth_traces[0].struct_logs;
+    let struct_logs = &block.geth_traces[tx_idx!(0)].struct_logs;
 
     assert_eq!(struct_logs[1].error, Some(GETH_ERR_OUT_OF_GAS.to_string()));
 }
@@ -1558,7 +1560,7 @@ fn tracer_err_stack_overflow() {
     for i in 0u64..1025 {
         code.push(2, Word::from(i));
     }
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
@@ -1568,9 +1570,9 @@ fn tracer_err_stack_overflow() {
     .unwrap()
     .into();
 
-    let index = block.geth_traces[0].struct_logs.len() - 1; // PUSH2
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let index = block.geth_traces[tx_idx!(0)].struct_logs.len() - 1; // PUSH2
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(
         step.error,
         Some(format!("{} 1024 (1023)", GETH_ERR_STACK_OVERFLOW))
@@ -1589,7 +1591,7 @@ fn tracer_err_stack_underflow() {
     let code = bytecode! {
         SWAP5
     };
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
@@ -1600,8 +1602,8 @@ fn tracer_err_stack_underflow() {
     .into();
 
     let index = 0; // SWAP5
-    let step = &block.geth_traces[0].struct_logs[index];
-    let next_step = block.geth_traces[0].struct_logs.get(index + 1);
+    let step = &block.geth_traces[tx_idx!(0)].struct_logs[index];
+    let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(
         step.error,
         Some(format!("{} (0 <=> 6)", GETH_ERR_STACK_UNDERFLOW))
@@ -1953,11 +1955,14 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
     };
 
     // Get the execution steps from the external tracer
-    let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+    let block: GethData = SimpleTestContext::new_with_logger_config(
         None,
-        |accs| {
+        #[allow(unused_mut)]
+        |mut accs| {
             accs[0].address(*MOCK_COINBASE).code(code);
             accs[1].address(*ADDR_B).balance(Word::from(1u64 << 30));
+            #[cfg(feature = "kroma")]
+            setup_kroma_required_accounts(accs.as_mut_slice(), 2);
         },
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
@@ -1968,8 +1973,8 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
 
     let access_trace = gen_state_access_trace(
         &block.eth_block,
-        &block.eth_block.transactions[0],
-        &block.geth_traces[0],
+        &block.eth_block.transactions[tx_idx!(0)],
+        &block.geth_traces[tx_idx!(0)],
     )
     .unwrap();
 

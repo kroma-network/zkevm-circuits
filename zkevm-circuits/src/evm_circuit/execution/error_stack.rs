@@ -77,7 +77,7 @@ mod test {
         self, address, bytecode, bytecode::Bytecode, geth_types::Account, Address, ToWord, Word,
     };
 
-    use mock::TestContext;
+    use mock::{test_ctx::SimpleTestContext, TestContext};
 
     fn test_stack_underflow(value: Word) {
         let bytecode = bytecode! {
@@ -134,10 +134,10 @@ mod test {
         bytecode.write_op(OpcodeId::STOP);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .params(CircuitsParams {
-            max_rws: 2048,
+            max_rws: 2272,
             ..Default::default()
         })
         .run();

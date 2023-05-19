@@ -258,7 +258,13 @@ mod test {
         evm_types::{GasCost, OpcodeId},
         Bytecode, ToWord, U256,
     };
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{SimpleTestContext, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
+    };
     use std::cmp::max;
 
     const TESTING_STORAGE_KEY: U256 = U256([0, 0, 0, 0x030201]);
@@ -460,19 +466,23 @@ mod test {
     }
 
     fn test_root(testing_data: &TestingData) {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(MOCK_ACCOUNTS[0])
                     .balance(eth(10))
                     .code(testing_data.bytecode.clone())
                     .storage([(testing_data.key, testing_data.original_value)].into_iter());
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
                 // Decrease expected gas cost (by 1) to trigger out of gas error.
-                txs[0]
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());
@@ -510,18 +520,22 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(addr_b)
                     .code(code_b)
                     .storage([(testing_data.key, testing_data.original_value)].into_iter());
                 accs[1].address(addr_a).code(code_a);
                 accs[2].address(mock::MOCK_ACCOUNTS[2]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].from(accs[2].address).to(accs[1].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
         )

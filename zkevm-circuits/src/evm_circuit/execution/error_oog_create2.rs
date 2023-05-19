@@ -215,10 +215,12 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGCreate2Gadget<F> {
 mod tests {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, word, Bytecode, ToWord, Word};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
         eth,
-        test_ctx::{helpers::account_0_code_account_1_no_code, LoggerConfig},
-        TestContext, MOCK_ACCOUNTS,
+        test_ctx::{helpers::account_0_code_account_1_no_code, LoggerConfig, SimpleTestContext},
+        tx_idx, TestContext, MOCK_ACCOUNTS,
     };
 
     struct TestCase {
@@ -261,11 +263,13 @@ mod tests {
     }
 
     fn test_root(case: &TestCase) {
-        let ctx = TestContext::<2, 1>::new_with_logger_config(
+        let ctx = SimpleTestContext::new_with_logger_config(
             None,
             account_0_code_account_1_no_code(case.bytecode.clone()),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(case.gas);

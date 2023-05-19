@@ -136,8 +136,12 @@ mod tests {
         evm_types::{GasCost, OpcodeId},
         Bytecode, ToWord, U256,
     };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
-        eth, test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS,
+        eth,
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
+        tx_idx, TestContext, MOCK_ACCOUNTS,
     };
 
     #[test]
@@ -180,12 +184,14 @@ mod tests {
     }
 
     fn test_root(testing_data: &TestingData) {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(testing_data.bytecode.clone()),
             |mut txs, accs| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
                 // Decrease expected gas cost (by 1) to trigger out of gas error.
-                txs[0]
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());

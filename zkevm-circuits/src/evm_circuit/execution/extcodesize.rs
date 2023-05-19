@@ -147,7 +147,9 @@ impl<F: Field> ExecutionGadget<F> for ExtcodesizeGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, geth_types::Account, Bytecode, ToWord, Word};
-    use mock::{TestContext, MOCK_1_ETH, MOCK_ACCOUNTS, MOCK_CODES};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext4_1, tx_idx, MOCK_1_ETH, MOCK_ACCOUNTS, MOCK_CODES};
 
     #[test]
     fn test_extcodesize_gadget_simple() {
@@ -218,9 +220,9 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<4, 1>::new(
+        let ctx = TestContext4_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(bytecode_b);
                 accs[1].address(addr_a).code(bytecode_a);
                 // Set code if account exists.
@@ -230,9 +232,13 @@ mod test {
                     accs[2].address(mock::MOCK_ACCOUNTS[2]).balance(*MOCK_1_ETH);
                 }
                 accs[3].address(mock::MOCK_ACCOUNTS[3]).balance(*MOCK_1_ETH);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 4);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[3].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[3].address);
             },
             |block, _tx| block,
         )

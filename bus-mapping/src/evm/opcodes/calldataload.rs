@@ -112,7 +112,12 @@ mod calldataload_tests {
         geth_types::GethData,
         ToWord, Word,
     };
-    use mock::{test_ctx::helpers::account_0_code_account_1_no_code, TestContext};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
+        tx_idx, TestContext,
+    };
     use rand::random;
 
     use crate::{circuit_input_builder::ExecState, mock::BlockData, operation::StackOp};
@@ -278,11 +283,13 @@ mod calldataload_tests {
             STOP
         };
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .input(calldata.clone().into());
@@ -297,13 +304,13 @@ mod calldataload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATALOAD))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         // 1 stack read, 2 call context reads and 1 stack write.
         assert_eq!(step.bus_mapping_instance.len(), 4);
@@ -337,7 +344,7 @@ mod calldataload_tests {
                     &CallContextOp {
                         call_id,
                         field: CallContextField::TxId,
-                        value: Word::from(1),
+                        value: Word::from(tx_idx!(1)),
                     }
                 ),
                 (

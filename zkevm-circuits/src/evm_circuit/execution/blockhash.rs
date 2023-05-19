@@ -141,7 +141,7 @@ impl<F: Field> ExecutionGadget<F> for BlockHashGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, U256};
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::test_ctx::{helpers::*, SimpleTestContext};
 
     fn test_ok(block_number: U256, current_block_number: u64) {
         let code = bytecode! {
@@ -160,7 +160,7 @@ mod test {
         for i in range {
             history_hashes.push(U256::from(0xbeefcafeu64 + i));
         }
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             Some(history_hashes),
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,

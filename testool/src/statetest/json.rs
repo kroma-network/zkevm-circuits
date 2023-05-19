@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{abi, compiler::Compiler, utils::MainnetFork};
 use anyhow::{bail, Context, Result};
-use eth_types::{evm_types::OpcodeId, geth_types::Account, Address, Bytes, H256, U256};
+use eth_types::{evm_types::OpcodeId, geth_types::Account, Address, Bytes, H256, U256, U64};
 use ethers_core::{k256::ecdsa::SigningKey, utils::secret_key_to_address};
 use serde::Deserialize;
 use std::{collections::HashMap, convert::TryInto, ops::RangeBounds, str::FromStr};
@@ -78,6 +78,7 @@ struct Transaction {
     secret_key: String,
     to: String,
     value: Vec<String>,
+    transaction_type: String,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +121,7 @@ impl<'a> JsonStateTestBuilder<'a> {
             let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
             let nonce = parse::parse_u256(&test.transaction.nonce)?;
             let gas_price = parse::parse_u256(&test.transaction.gas_price)?;
+            let transaction_type = parse::parse_u64(&test.transaction.transaction_type)?;
 
             let data_s: Vec<_> = test
                 .transaction
@@ -186,6 +188,7 @@ impl<'a> JsonStateTestBuilder<'a> {
                                 gas_price,
                                 gas_limit: *gas_limit,
                                 value: *value,
+                                transaction_type: Some(U64::from(transaction_type)),
                                 data: data.0.clone(),
                                 exception: false,
                             });
@@ -403,6 +406,7 @@ mod test {
             gas_price: U256::from(10u64),
             nonce: U256::from(0u64),
             value: U256::from(100000u64),
+            transaction_type: Some(U64::one()),
             data: Bytes::from(hex::decode("6001")?),
             pre: HashMap::from([(
                 acc095e,

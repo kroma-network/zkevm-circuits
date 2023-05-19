@@ -3,6 +3,8 @@ use eth_types::{geth_types::Account, Address, Bytes, Word, H256, U256, U64};
 use ethers_core::{k256::ecdsa::SigningKey, utils::secret_key_to_address};
 use std::{collections::HashMap, str::FromStr};
 
+use super::parse::parse_u64;
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Env {
     pub current_base_fee: U256,
@@ -50,6 +52,7 @@ pub struct StateTest {
     pub gas_price: U256,
     pub nonce: U256,
     pub value: U256,
+    pub transaction_type: Option<U64>,
     pub data: Bytes,
     pub pre: HashMap<Address, Account>,
     pub result: StateTestResult,
@@ -195,6 +198,7 @@ impl StateTest {
         };
         let data = hex::decode(tx.next().unwrap_or(""))?;
         let value = parse_u256(tx.next().unwrap_or("0"))?;
+        let transaction_type = Some(U64::from(parse_u64(tx.next().unwrap_or("1")).unwrap()));
         let gas_limit = u64::from_str(tx.next().unwrap_or("10000000"))?;
         let secret_key = Bytes::from(&[1u8; 32]);
         let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
@@ -268,6 +272,7 @@ impl StateTest {
             gas_price: U256::one(),
             nonce: U256::zero(),
             value,
+            transaction_type: transaction_type,
             data: data.into(),
             pre,
             result: HashMap::new(),

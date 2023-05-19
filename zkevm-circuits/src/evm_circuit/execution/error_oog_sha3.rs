@@ -141,11 +141,18 @@ mod tests {
     use eth_types::{
         bytecode, evm_types::gas_utils::memory_copier_gas_cost, Bytecode, ToWord, U256,
     };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
-        eth, test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS,
+        eth,
+        test_ctx::{
+            helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1,
+            DEPOSIT_TX_GAS,
+        },
+        tx_idx, MOCK_ACCOUNTS,
     };
 
-    const BLOCK_GAS_LIMIT: u64 = 10_000_000_000_000_000;
+    const BLOCK_GAS_LIMIT: u64 = 10_000_000_000_000_000 - DEPOSIT_TX_GAS;
 
     #[test]
     fn test_oog_sha3_less_than_constant_gas() {
@@ -236,11 +243,13 @@ mod tests {
             gas_cost
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(testing_data.bytecode.clone()),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(gas_cost.into());
@@ -278,15 +287,19 @@ mod tests {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].from(accs[2].address).to(accs[1].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
         )

@@ -145,7 +145,7 @@ mod test {
 
     use eth_types::bytecode;
 
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_circuit(evm_circuit_pad_to: usize) {
         let bytecode = bytecode! {
@@ -153,10 +153,10 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap();
+        let ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
 
         // finish required tests using this witness block
-        CircuitTestBuilder::<2, 1>::new_from_test_ctx(ctx)
+        CircuitTestBuilder::<6, 2>::new_from_test_ctx(ctx)
             .block_modifier(Box::new(move |block| {
                 block.circuits_params.max_evm_rows = evm_circuit_pad_to
             }))
@@ -174,6 +174,10 @@ mod test {
     // EndBlocks at the end after the trace steps
     #[test]
     fn end_block_padding() {
-        test_circuit(50);
+        #[cfg(not(feature = "kroma"))]
+        let evm_circuit_pad_to = 50;
+        #[cfg(feature = "kroma")]
+        let evm_circuit_pad_to = 1150;
+        test_circuit(evm_circuit_pad_to);
     }
 }

@@ -929,7 +929,12 @@ mod tests {
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
     };
-    use mock::{test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
+        tx_idx, TestContext, MOCK_ACCOUNTS,
+    };
     use pretty_assertions::assert_eq;
 
     fn gen_calldatacopy_data() -> CircuitInputBuilder {
@@ -942,11 +947,13 @@ mod tests {
             STOP
         };
         let calldata = rand_bytes(length);
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .input(calldata.into());
@@ -1031,7 +1038,7 @@ mod tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
-                max_rws: 2000,
+                max_rws: 2500,
                 max_copy_rows: 0x200 * 2 + 2,
                 ..Default::default()
             },
@@ -1054,7 +1061,7 @@ mod tests {
             LOG1
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -1074,7 +1081,11 @@ mod tests {
     fn copy_circuit_valid_codecopy() {
         let builder = gen_codecopy_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(10, block), Ok(()));
+        #[cfg(feature = "kroma")]
+        let k = 13;
+        #[cfg(not(feature = "kroma"))]
+        let k = 10;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]
@@ -1095,7 +1106,11 @@ mod tests {
     fn copy_circuit_valid_tx_log() {
         let builder = gen_tx_log_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(10, block), Ok(()));
+        #[cfg(feature = "kroma")]
+        let k = 13;
+        #[cfg(not(feature = "kroma"))]
+        let k = 10;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]
@@ -1173,9 +1188,13 @@ mod tests {
             builder.block.copy_events[0].bytes[0].0.wrapping_add(1);
 
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
+        #[cfg(feature = "kroma")]
+        let k = 14;
+        #[cfg(not(feature = "kroma"))]
+        let k = 10;
 
         assert_error_matches(
-            test_copy_circuit_from_block(10, block),
+            test_copy_circuit_from_block(k, block),
             vec!["Memory lookup", "TxLog lookup"],
         );
     }

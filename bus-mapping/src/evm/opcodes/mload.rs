@@ -73,7 +73,10 @@ mod mload_tests {
         Word,
     };
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -87,7 +90,7 @@ mod mload_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -101,11 +104,12 @@ mod mload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::MLOAD))
             .unwrap();
+        let call_id = builder.block.txs()[tx_idx!(0)].calls[0].call_id;
 
         assert_eq!(
             [0, 1]
@@ -114,11 +118,11 @@ mod mload_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(0x40))
+                    &StackOp::new(call_id, StackAddress::from(1023), Word::from(0x40))
                 ),
                 (
                     RW::WRITE,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(0x80))
+                    &StackOp::new(call_id, StackAddress::from(1023), Word::from(0x80))
                 )
             ]
         );
@@ -133,7 +137,10 @@ mod mload_tests {
                 .to_be_bytes()
                 .into_iter()
                 .enumerate()
-                .map(|(idx, byte)| (RW::READ, MemoryOp::new(1, MemoryAddress(idx + 0x40), byte)))
+                .map(|(idx, byte)| (
+                    RW::READ,
+                    MemoryOp::new(call_id, MemoryAddress(idx + 0x40), byte)
+                ))
                 .collect_vec()
         )
     }

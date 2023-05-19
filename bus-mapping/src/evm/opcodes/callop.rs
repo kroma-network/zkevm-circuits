@@ -441,12 +441,9 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
 mod call_tests {
     use crate::mock::BlockData;
     use eth_types::{bytecode, geth_types::GethData, word};
-    use mock::{
-        test_ctx::{
-            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-            LoggerConfig,
-        },
-        TestContext,
+    use mock::test_ctx::{
+        helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+        LoggerConfig, SimpleTestContext,
     };
 
     #[test]
@@ -489,7 +486,7 @@ mod call_tests {
                 code.append(instruction);
 
                 // Get the execution steps from the external tracer
-                let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+                let block: GethData = SimpleTestContext::new_with_logger_config(
                     None,
                     account_0_code_account_1_no_code(code),
                     tx_from_1_to_0,
@@ -787,7 +784,7 @@ mod call_tests {
 
         for code in codes.into_iter() {
             // Get the execution steps from the external tracer
-            let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+            let block: GethData = SimpleTestContext::new_with_logger_config(
                 None,
                 account_0_code_account_1_no_code(code),
                 tx_from_1_to_0,

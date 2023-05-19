@@ -279,8 +279,12 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGDynamicMemoryGadget<F> {
 mod tests {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, word, Bytecode, ToWord};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
-        eth, test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS,
+        eth,
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
+        tx_idx, TestContext, MOCK_ACCOUNTS,
     };
 
     #[test]
@@ -312,11 +316,13 @@ mod tests {
     }
 
     fn test_root(code: Bytecode) {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(word!("0xFFFF"));

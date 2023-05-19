@@ -45,6 +45,8 @@ use serde::{de, Deserialize, Serialize};
 use std::{collections::HashMap, fmt, str::FromStr};
 
 #[cfg(feature = "kroma")]
+pub mod kroma_l1_block;
+#[cfg(feature = "kroma")]
 pub mod kroma_params;
 
 /// Trait used to reduce verbosity with the declaration of the [`FieldExt`]

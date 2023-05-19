@@ -1,6 +1,10 @@
 //! Mock Block definition and builder related methods.
 
-use crate::{MockTransaction, MOCK_BASEFEE, MOCK_CHAIN_ID, MOCK_DIFFICULTY, MOCK_GASLIMIT};
+#[cfg(feature = "kroma")]
+use crate::KROMA_MOCK_GASLIMIT;
+#[cfg(not(feature = "kroma"))]
+use crate::MOCK_GASLIMIT;
+use crate::{MockTransaction, MOCK_BASEFEE, MOCK_CHAIN_ID, MOCK_DIFFICULTY};
 use eth_types::{Address, Block, Bytes, Hash, Transaction, Word, H64, U64};
 use ethers_core::types::{Bloom, OtherFields};
 
@@ -39,6 +43,10 @@ pub struct MockBlock {
 
 impl Default for MockBlock {
     fn default() -> Self {
+        #[cfg(feature = "kroma")]
+        let mock_gas_limit = *KROMA_MOCK_GASLIMIT;
+        #[cfg(not(feature = "kroma"))]
+        let mock_gas_limit = *MOCK_GASLIMIT;
         MockBlock {
             hash: Some(Hash::zero()),
             parent_hash: Hash::zero(),
@@ -49,7 +57,7 @@ impl Default for MockBlock {
             receipts_root: Hash::zero(),
             number: U64([0u64]),
             gas_used: Word::zero(),
-            gas_limit: *MOCK_GASLIMIT,
+            gas_limit: mock_gas_limit,
             base_fee_per_gas: *MOCK_BASEFEE,
             extra_data: Bytes::default(),
             logs_bloom: None,

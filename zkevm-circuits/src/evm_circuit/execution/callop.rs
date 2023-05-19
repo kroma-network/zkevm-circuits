@@ -756,9 +756,14 @@ mod test {
     };
 
     use itertools::Itertools;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
-        test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx, TestContext,
     };
 
     use rayon::prelude::{ParallelBridge, ParallelIterator};
@@ -845,7 +850,7 @@ mod test {
 
         for test in tests {
             // Get the execution steps from the external tracer
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
                 account_0_code_account_1_no_code(test),
                 tx_from_1_to_0,
@@ -1217,11 +1222,13 @@ mod test {
             SUB
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(callee_code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(word!("0x2386F26FC10000"));

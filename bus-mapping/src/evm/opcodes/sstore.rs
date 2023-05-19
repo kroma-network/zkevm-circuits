@@ -124,7 +124,13 @@ mod sstore_tests {
         geth_types::GethData,
         Word,
     };
-    use mock::{test_ctx::helpers::tx_from_1_to_0, TestContext, MOCK_ACCOUNTS};
+    use mock::{
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx, MOCK_ACCOUNTS,
+    };
     use pretty_assertions::assert_eq;
 
     fn test_ok(is_warm: bool) {
@@ -152,9 +158,9 @@ mod sstore_tests {
         let expected_prev_value = if !is_warm { 0x6fu64 } else { 0x00u64 };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(MOCK_ACCOUNTS[0])
                     .balance(Word::from(10u64.pow(19)))
@@ -163,6 +169,8 @@ mod sstore_tests {
                 accs[1]
                     .address(MOCK_ACCOUNTS[1])
                     .balance(Word::from(10u64.pow(19)));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
@@ -175,12 +183,14 @@ mod sstore_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .rev() // find last sstore
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::SSTORE))
             .unwrap();
+
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         assert_eq!(
             [0, 1, 2, 3, 4]
@@ -190,28 +200,28 @@ mod sstore_tests {
             [
                 (
                     RW::READ,
-                    &CallContextOp::new(1, CallContextField::TxId, Word::from(0x01)),
+                    &CallContextOp::new(call_id, CallContextField::TxId, Word::from(tx_idx!(1))),
                 ),
                 (
                     RW::READ,
-                    &CallContextOp::new(1, CallContextField::IsStatic, Word::from(0x00)),
+                    &CallContextOp::new(call_id, CallContextField::IsStatic, Word::from(0x00)),
                 ),
                 (
                     RW::READ,
                     &CallContextOp::new(
-                        1,
+                        call_id,
                         CallContextField::RwCounterEndOfReversion,
                         Word::from(0x00)
                     ),
                 ),
                 (
                     RW::READ,
-                    &CallContextOp::new(1, CallContextField::IsPersistent, Word::from(0x01)),
+                    &CallContextOp::new(call_id, CallContextField::IsPersistent, Word::from(0x01)),
                 ),
                 (
                     RW::READ,
                     &CallContextOp::new(
-                        1,
+                        call_id,
                         CallContextField::CalleeAddress,
                         MOCK_ACCOUNTS[0].to_word(),
                     ),
@@ -226,11 +236,11 @@ mod sstore_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022), Word::from(0x0u32))
+                    &StackOp::new(call_id, StackAddress::from(1022), Word::from(0x0u32))
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(0x6fu32))
+                    &StackOp::new(call_id, StackAddress::from(1023), Word::from(0x6fu32))
                 ),
             ]
         );
@@ -245,7 +255,7 @@ mod sstore_tests {
                     Word::from(0x0u32),
                     Word::from(0x6fu32),
                     Word::from(expected_prev_value),
-                    1,
+                    tx_idx!(1),
                     Word::from(0x6fu32),
                 )
             )
@@ -256,7 +266,7 @@ mod sstore_tests {
             (
                 RW::WRITE,
                 &TxRefundOp {
-                    tx_id: 1,
+                    tx_id: tx_idx!(1),
                     value_prev: if is_warm { 0x12c0 } else { 0 },
                     value: if is_warm { 0xaf0 } else { 0 }
                 }

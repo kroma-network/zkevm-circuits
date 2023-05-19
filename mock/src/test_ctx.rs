@@ -11,6 +11,18 @@ use itertools::Itertools;
 
 pub use external_tracer::LoggerConfig;
 
+#[cfg(feature = "kroma")]
+use eth_types::{
+    geth_types::DEPOSIT_TX_TYPE,
+    kroma_l1_block::BYTECODE,
+    kroma_params::{BASE_FEE_RECIPIENT, L1_BLOCK, L1_FEE_RECIPIENT, SYSTEM_TX_CALLER},
+    Bytes,
+};
+
+#[cfg(feature = "kroma")]
+pub const DEPOSIT_TX_GAS: u64 = 150000000u64;
+#[cfg(not(feature = "kroma"))]
+pub const DEPOSIT_TX_GAS: u64 = 0u64;
 /// TestContext is a type that contains all the information from a block
 /// required to build the circuit inputs.
 ///
@@ -91,6 +103,68 @@ pub struct TestContext<const NACC: usize, const NTX: usize> {
     pub geth_traces: Vec<eth_types::GethExecTrace>,
 }
 
+#[cfg(feature = "kroma")]
+#[macro_export]
+macro_rules! tx_idx {
+    ($n: expr) => {
+        $n + 1
+    };
+}
+#[cfg(not(feature = "kroma"))]
+#[macro_export]
+macro_rules! tx_idx {
+    ($n: expr) => {
+        $n
+    };
+}
+
+#[cfg(feature = "kroma")]
+macro_rules! nonce {
+    ($n: expr) => {
+        $n - 1
+    };
+}
+#[cfg(not(feature = "kroma"))]
+macro_rules! nonce {
+    ($n: expr) => {
+        $n
+    };
+}
+
+#[macro_export]
+// Following accounts are added.
+// - $NACC - 4: L1Block.sol
+// - $NACC - 3: SystemTxDepositor
+// - $NACC - 2: BaseFeeRecipient
+// - $NACC - 1: L1FeeRecipient
+// Following txs are added at the beginning.
+// - 0: SystemDepositTx.
+macro_rules! declare_test_context {
+    ($ty: ident, $NACC: expr, $NTX: expr) => {
+        type $ty = TestContext<{ $NACC + 4 }, { $NTX + 1 }>;
+    };
+}
+
+declare_test_context!(TestContext0_0_, 0, 0);
+pub type TestContext0_0 = TestContext0_0_;
+
+declare_test_context!(TestContext1_1_, 1, 1);
+pub type TestContext1_1 = TestContext1_1_;
+
+declare_test_context!(TestContext2_1_, 2, 1);
+pub type TestContext2_1 = TestContext2_1_;
+
+declare_test_context!(TestContext2_3_, 2, 3);
+pub type TestContext2_3 = TestContext2_3_;
+
+declare_test_context!(TestContext3_1_, 3, 1);
+pub type TestContext3_1 = TestContext3_1_;
+
+declare_test_context!(TestContext4_1_, 4, 1);
+pub type TestContext4_1 = TestContext4_1_;
+
+pub type SimpleTestContext = TestContext2_1;
+
 impl<const NACC: usize, const NTX: usize> From<TestContext<NACC, NTX>> for GethData {
     fn from(ctx: TestContext<NACC, NTX>) -> GethData {
         GethData {
@@ -142,7 +216,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             .skip(1)
             .for_each(|(idx, tx)| {
                 tx.transaction_idx(u64::try_from(idx).expect("Unexpected idx conversion error"));
-                tx.nonce(u64::try_from(idx).expect("Unexpected idx conversion error"));
+                tx.nonce(u64::try_from(nonce!(idx)).expect("Unexpected idx conversion error"));
             });
         let tx_refs = transactions.iter_mut().collect();
 
@@ -219,7 +293,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
     /// addresses are the ones used in [`TestContext::
     /// account_0_code_account_1_no_code`]. Extra accounts, txs and/or block
     /// configs are set as [`Default`].
-    pub fn simple_ctx_with_bytecode(bytecode: Bytecode) -> Result<TestContext<2, 1>, Error> {
+    pub fn simple_ctx_with_bytecode(bytecode: Bytecode) -> Result<SimpleTestContext, Error> {
         TestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
@@ -268,19 +342,91 @@ pub mod helpers {
     /// - 0x000000000000000000000000000000000cafe111
     /// - 0x000000000000000000000000000000000cafe222
     /// And injects the provided bytecode into the first one.
+    fn do_account_0_code_account_1_no_code(accs: &mut [&mut MockAccount], code: Bytecode) {
+        accs[0]
+            .address(MOCK_ACCOUNTS[0])
+            .balance(eth(10))
+            .code(code);
+        accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+    }
+
+    #[cfg(not(feature = "kroma"))]
     pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 2]) {
-        |accs| {
-            accs[0]
-                .address(MOCK_ACCOUNTS[0])
-                .balance(eth(10))
-                .code(code);
-            accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+        |mut accs| {
+            do_account_0_code_account_1_no_code(accs.as_mut_slice(), code);
         }
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Intercept account_0_code_account_1_no_code and setup accounts for Kroma
+    /// unittest.
+    pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 6]) {
+        |mut accs| {
+            do_account_0_code_account_1_no_code(accs.as_mut_slice(), code);
+            setup_kroma_required_accounts(accs.as_mut_slice(), 2);
+        }
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Generate existing accounts in Kroma.
+    /// - L1_BLOCK
+    /// - SYSTEM_TX_CALLER
+    /// - BASE_FEE_RECIPIENT
+    /// - L1_FEE_RECIPIENT
+    pub fn setup_kroma_required_accounts(accs: &mut [&mut MockAccount], n: usize) {
+        accs[n].address(*L1_BLOCK).code(BYTECODE.clone());
+
+        // luke: temporarily add balance to avoid panic on check_update_sdb_account
+        accs[n + 1].address(*SYSTEM_TX_CALLER).balance(eth(10));
+        accs[n + 2].address(*BASE_FEE_RECIPIENT).balance(eth(10));
+        accs[n + 3].address(*L1_FEE_RECIPIENT).balance(eth(10));
     }
 
     /// Generate a single transaction from the second account of the list to the
     /// first one.
+    #[cfg(feature = "kroma")]
+    pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 6]) {
+        system_deposit_tx(txs[0]);
+        do_tx_from_1_to_0(txs[1], accs.as_slice());
+    }
+    #[cfg(not(feature = "kroma"))]
     pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 2]) {
-        txs[0].from(accs[1].address).to(accs[0].address);
+        do_tx_from_1_to_0(txs[0], accs.as_slice());
+    }
+    fn do_tx_from_1_to_0(tx: &mut MockTransaction, accs: &[MockAccount]) {
+        tx.from(accs[1].address).to(accs[0].address);
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Generate a system deposit transaction.
+    pub fn system_deposit_tx(tx: &mut MockTransaction) {
+        macro_rules! padding {
+            ($vec:expr) => {{
+                let mut v = $vec;
+                let len = v.len();
+                for _ in 0..(32 - len) {
+                    v.insert(0, 0);
+                }
+                v
+            }};
+        }
+
+        let mut calldata = Vec::with_capacity(4 + 32 * 8);
+        calldata.extend(vec![0x01, 0x5d, 0x8e, 0xb9]); // setL1BlockValues
+        calldata.extend(vec![0; 32]); // l1 blocknumber
+        calldata.extend(vec![0; 32]); // l1 timestamp
+        calldata.extend(padding!(vec![0x08])); // l1 basefee
+        calldata.extend(vec![0; 32]); // l1 hash
+        calldata.extend(vec![0; 32]); // sequenceNumber
+        calldata.extend(vec![0; 32]); // batcherHash
+        calldata.extend(padding!(vec![0x08, 0x34])); // l1 fee overhead
+        calldata.extend(padding!(vec![0x0f, 0x42, 0x40])); // l1 fee scalar
+
+        tx.transaction_type(DEPOSIT_TX_TYPE)
+            .from(*SYSTEM_TX_CALLER)
+            .to(*L1_BLOCK)
+            .gas(Word::from(DEPOSIT_TX_GAS))
+            .gas_price(Word::zero())
+            .input(Bytes::from(calldata));
     }
 }

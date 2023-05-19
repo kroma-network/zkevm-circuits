@@ -21,7 +21,7 @@ use crate::{
     util::{query_expression, Challenges, Expr},
 };
 use bus_mapping::util::read_env_var;
-use eth_types::{evm_types::rwc_util::end_tx_rwc, Field};
+use eth_types::Field;
 use gadgets::util::not;
 
 use halo2_proofs::{

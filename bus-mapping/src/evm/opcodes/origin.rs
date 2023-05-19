@@ -50,8 +50,8 @@ mod origin_tests {
     };
     use eth_types::{bytecode, evm_types::StackAddress, geth_types::GethData, ToWord, Word};
     use mock::{
-        test_ctx::{helpers::*, TestContext},
-        MOCK_ACCOUNTS,
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx, MOCK_ACCOUNTS,
     };
     use pretty_assertions::assert_eq;
 
@@ -64,7 +64,7 @@ mod origin_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -78,22 +78,22 @@ mod origin_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::ORIGIN))
             .unwrap();
+
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         let op_origin = &builder.block.container.stack[step.bus_mapping_instance[1].as_usize()];
         assert_eq!(
             (op_origin.rw(), op_origin.op()),
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress(1023usize), MOCK_ACCOUNTS[1].to_word())
+                &StackOp::new(call_id, StackAddress(1023usize), MOCK_ACCOUNTS[1].to_word())
             )
         );
-
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
 
         assert_eq!(
             {
@@ -106,7 +106,7 @@ mod origin_tests {
                 &CallContextOp {
                     call_id,
                     field: CallContextField::TxId,
-                    value: Word::one(),
+                    value: Word::from(tx_idx!(1)),
                 }
             )
         );

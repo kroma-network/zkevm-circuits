@@ -180,7 +180,10 @@ mod test {
         evm_types::{GasCost, OpcodeId},
         Word,
     };
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx,
+    };
     use std::iter;
 
     fn test_ok(opcode: OpcodeId, address: Word, value: Word, gas_cost: u64) {
@@ -194,11 +197,26 @@ mod test {
         let gas_limit =
             GasCost::TX.as_u64() + OpcodeId::PUSH32.as_u64() + OpcodeId::PUSH32.as_u64() + gas_cost;
 
-        let ctx = TestContext::<2, 1>::new(
+        // let ctx = TestContext::<2, 1>::new(
+        //     None,
+        //     account_0_code_account_1_no_code(bytecode),
+        //     |mut txs, accs| {
+        //         txs[0]
+        //             .to(accs[0].address)
+        //             .from(accs[1].address)
+        //             .gas(Word::from(gas_limit));
+        //     },
+        //     |block, _tx| block.number(0xcafeu64),
+        // )
+        // .unwrap();
+
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(Word::from(gas_limit));

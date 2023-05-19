@@ -59,7 +59,10 @@ mod returndatasize_tests {
         geth_types::GethData,
         word, Word,
     };
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -110,7 +113,7 @@ mod returndatasize_tests {
             STOP
         };
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -122,7 +125,7 @@ mod returndatasize_tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
-                max_rws: 512,
+                max_rws: 1580,
                 ..Default::default()
             },
         )
@@ -131,13 +134,13 @@ mod returndatasize_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::RETURNDATASIZE))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
         assert_eq!(
             {
                 let operation =
