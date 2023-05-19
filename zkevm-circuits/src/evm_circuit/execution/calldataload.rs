@@ -129,21 +129,21 @@ impl<F: Field> ExecutionGadget<F> for CallDataLoadGadget<F> {
         let mut calldata_word: Vec<_> = (0..N_BYTES_WORD)
             .map(|idx| {
                 // For a root call, the call data comes from tx's data field.
-                cb.condition(
-                    and::expr([
-                        data_offset.within_range(),
-                        buffer_reader.read_flag(idx),
-                        cb.curr.state.is_root.expr(),
-                    ]),
-                    |cb| {
-                        cb.tx_context_lookup(
-                            src_id.expr(),
-                            TxContextFieldTag::CallData,
-                            Some(src_addr.expr() + idx.expr()),
-                            buffer_reader.byte(idx),
-                        );
-                    },
-                );
+                // cb.condition(
+                //     and::expr([
+                //         data_offset.within_range(),
+                //         buffer_reader.read_flag(idx),
+                //         cb.curr.state.is_root.expr(),
+                //     ]),
+                //     |cb| {
+                //         cb.tx_context_lookup(
+                //             src_id.expr(),
+                //             TxContextFieldTag::CallData,
+                //             Some(src_addr.expr() + idx.expr()),
+                //             buffer_reader.byte(idx),
+                //         );
+                //     },
+                // );
                 // For an internal call, the call data comes from memory.
                 cb.condition(
                     and::expr([
