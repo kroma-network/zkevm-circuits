@@ -103,13 +103,6 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         );
 
         let effective_fee = cb.query_word_rlc();
-        // TODO: contraint l1 fee
-        #[cfg(not(feature = "scroll"))]
-        cb.require_equal(
-            "tx_fee == l1_fee + l2_fee, l1_fee == 0",
-            mul_effective_tip_by_gas_used.product().expr(),
-            effective_fee.expr(),
-        );
 
         let coinbase_reward =
             UpdateBalanceGadget::construct(cb, coinbase.expr(), vec![effective_fee.clone()], None);

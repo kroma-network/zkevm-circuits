@@ -44,7 +44,6 @@ impl CircuitInputBuilderTx {
         let tx_ctx = TransactionContext::new(
             &block.eth_block.transactions[0],
             &GethExecTrace {
-                l1_fee: 0,
                 gas: Gas(0),
                 failed: false,
                 return_value: "".to_owned(),
