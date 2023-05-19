@@ -66,7 +66,7 @@ pub use external_tracer::LoggerConfig;
 ///         txs[1]
 ///             .to(accs[1].address)
 ///             .from(accs[2].address)
-///             .nonce(Word::one());
+///             .nonce(1);
 ///     },
 ///     |block, _tx| block.number(0xcafeu64),
 /// )
@@ -142,9 +142,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             .skip(1)
             .for_each(|(idx, tx)| {
                 tx.transaction_idx(u64::try_from(idx).expect("Unexpected idx conversion error"));
-                tx.nonce(Word::from(
-                    u64::try_from(idx).expect("Unexpected idx conversion error"),
-                ));
+                tx.nonce(u64::try_from(idx).expect("Unexpected idx conversion error"));
             });
         let tx_refs = transactions.iter_mut().collect();
 

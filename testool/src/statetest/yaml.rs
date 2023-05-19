@@ -248,7 +248,7 @@ impl<'a> YamlStateTestBuilder<'a> {
                 nonce: if acc_nonce.is_badvalue() {
                     None
                 } else {
-                    Some(Self::parse_u256(acc_nonce)?)
+                    Some(Self::parse_u64(acc_nonce)?)
                 },
                 storage,
             };
@@ -434,7 +434,7 @@ mod test {
         config::TestSuite,
         statetest::{run_test, CircuitsConfig, StateTestError},
     };
-    use eth_types::address;
+    use eth_types::{address, U64};
 
     const TEMPLATE: &str = r#"
 arith:
@@ -630,7 +630,7 @@ arith:
                         address: ccccc,
                         balance: U256::from(1000000000000u64),
                         code: Bytes::from(&[0x60, 0x01, 0x00]),
-                        nonce: U256::zero(),
+                        nonce: U64::zero(),
 
                         storage: HashMap::from([(U256::zero(), U256::one())]),
                     },
@@ -641,7 +641,7 @@ arith:
                         address: a94f5,
                         balance: U256::from(1000000000000u64),
                         code: Bytes::default(),
-                        nonce: U256::zero(),
+                        nonce: U64::zero(),
 
                         storage: HashMap::new(),
                     },
@@ -652,7 +652,7 @@ arith:
                 AccountMatch {
                     address: ccccc,
                     balance: Some(U256::from(1000000000001u64)),
-                    nonce: Some(U256::from(0)),
+                    nonce: Some(0),
                     code: Some(Bytes::from(&[0x60, 0x01, 0x00])),
                     storage: HashMap::from([(U256::zero(), U256::one())]),
                 },
@@ -765,8 +765,8 @@ arith:
                 CircuitsConfig::default()
             ),
             Err(StateTestError::NonceMismatch {
-                expected: U256::from(2),
-                found: U256::from(0)
+                expected: 2,
+                found: 0
             })
         );
 

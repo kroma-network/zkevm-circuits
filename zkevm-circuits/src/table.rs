@@ -372,10 +372,6 @@ pub enum AccountFieldTag {
     Nonce,
     /// Balance field
     Balance,
-    /// Variant representing the keccak hash of an account's code.
-    KeccakCodeHash,
-    /// Variant representing the code size, i.e. length of account's code.
-    CodeSize,
     /// NonExisting field
     NonExisting,
 }
@@ -604,12 +600,8 @@ pub enum MPTProofType {
     NonceMod = AccountFieldTag::Nonce as isize,
     /// Balance updated
     BalanceMod = AccountFieldTag::Balance as isize,
-    /// Keccak Code hash exists
-    KeccakCodeHashExists = AccountFieldTag::KeccakCodeHash as isize,
-    /// Poseidon Code hash exits
-    PoseidonCodeHashExists = AccountFieldTag::CodeHash as isize,
-    /// Code size exists
-    CodeSizeExists = AccountFieldTag::CodeSize as isize,
+    /// CodeHash updated
+    CodeHashExists = AccountFieldTag::CodeHash as isize,
     /// Account does not exist
     NonExistingAccountProof = AccountFieldTag::NonExisting as isize,
     /// Storage updated
@@ -624,10 +616,8 @@ impl From<AccountFieldTag> for MPTProofType {
         match tag {
             AccountFieldTag::Nonce => Self::NonceMod,
             AccountFieldTag::Balance => Self::BalanceMod,
-            AccountFieldTag::KeccakCodeHash => Self::KeccakCodeHashExists,
-            AccountFieldTag::CodeHash => Self::PoseidonCodeHashExists,
+            AccountFieldTag::CodeHash => Self::CodeHashExists,
             AccountFieldTag::NonExisting => Self::NonExistingAccountProof,
-            AccountFieldTag::CodeSize => Self::CodeSizeExists,
         }
     }
 }

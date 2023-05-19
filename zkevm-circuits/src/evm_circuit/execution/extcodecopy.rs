@@ -292,7 +292,7 @@ mod test {
                 if let Some(external_account) = external_account {
                     accs[2]
                         .balance(external_account.balance)
-                        .nonce(external_account.nonce)
+                        .nonce(external_account.nonce.as_u64())
                         .code(external_account.code);
                 }
             },

@@ -107,7 +107,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidCreationCodeGadget<F> {
 mod test {
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{
-        address, bytecode, evm_types::OpcodeId, geth_types::Account, Address, Bytecode, Word,
+        address, bytecode, evm_types::OpcodeId, geth_types::Account, Address, Bytecode, Word, U64,
     };
 
     use lazy_static::lazy_static;
@@ -216,7 +216,7 @@ mod test {
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: root_code.into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 balance: eth(10),
                 ..Default::default()
             };

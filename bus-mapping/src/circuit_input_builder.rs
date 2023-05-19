@@ -759,12 +759,10 @@ pub fn build_state_code_db(
         sdb.set_account(
             &proof.address,
             state_db::Account {
-                nonce: proof.nonce,
+                nonce: proof.nonce.as_u64(),
                 balance: proof.balance,
                 storage,
-                code_hash: proof.poseidon_code_hash,
-                keccak_code_hash: proof.keccak_code_hash,
-                code_size: proof.code_size,
+                code_hash: proof.code_hash,
             },
         )
     }

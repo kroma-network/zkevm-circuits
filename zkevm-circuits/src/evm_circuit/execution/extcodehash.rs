@@ -52,7 +52,7 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
 
         let code_hash = cb.query_cell_phase2();
         // For non-existing accounts the code_hash must be 0 in the rw_table.
-        cb.account_read(address, AccountFieldTag::KeccakCodeHash, code_hash.expr());
+        cb.account_read(address, AccountFieldTag::CodeHash, code_hash.expr());
         cb.stack_push(code_hash.expr());
 
         let gas_cost = select::expr(
@@ -122,7 +122,7 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{
-        address, bytecode, geth_types::Account, Address, Bytecode, Bytes, ToWord, Word, U256,
+        address, bytecode, geth_types::Account, Address, Bytecode, Bytes, ToWord, Word, U256, U64,
     };
     use lazy_static::lazy_static;
     use mock::TestContext;
@@ -168,7 +168,7 @@ mod test {
                 if let Some(external_account) = external_account {
                     accs[1]
                         .balance(external_account.balance)
-                        .nonce(external_account.nonce)
+                        .nonce(external_account.nonce.as_u64())
                         .code(external_account.code);
                 }
                 accs[2]
@@ -200,7 +200,7 @@ mod test {
         test_ok(
             Some(Account {
                 address: *EXTERNAL_ADDRESS,
-                nonce: U256::from(259),
+                nonce: U64::from(259),
                 code: Bytes::from([3]),
                 ..Default::default()
             }),
@@ -227,7 +227,7 @@ mod test {
         // code = [].
         let nonce_only_account = Account {
             address: *EXTERNAL_ADDRESS,
-            nonce: U256::from(200),
+            nonce: U64::from(200),
             ..Default::default()
         };
         // This account state is possible if another account sends ETH to a previously

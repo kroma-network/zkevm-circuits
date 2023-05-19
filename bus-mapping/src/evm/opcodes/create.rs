@@ -66,10 +66,10 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             },
         )?;
 
-        let (initialization_code, keccak_code_hash, poseidon_code_hash) = if length > 0 {
+        let (initialization_code, code_hash) = if length > 0 {
             handle_copy(state, &mut exec_step, state.call()?.call_id, offset, length)?
         } else {
-            (vec![], H256(keccak256([])), CodeDB::empty_code_hash())
+            (vec![], CodeDB::empty_code_hash())
         };
 
         let tx_id = state.tx_ctx.id();
@@ -190,7 +190,7 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             (CallContextField::IsRoot, false.to_word()),
             (CallContextField::IsStatic, false.to_word()),
             (CallContextField::IsCreate, true.to_word()),
-            (CallContextField::CodeHash, poseidon_code_hash.to_word()),
+            (CallContextField::CodeHash, code_hash.to_word()),
             (CallContextField::Value, callee.value),
         ] {
             state.call_context_write(&mut exec_step, callee.call_id, field, value);
@@ -209,7 +209,7 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             std::iter::once(0xffu8)
                 .chain(caller.address.to_fixed_bytes())
                 .chain(salt.to_be_bytes())
-                .chain(keccak_code_hash.to_fixed_bytes())
+                .chain(code_hash.to_fixed_bytes())
                 .collect::<Vec<_>>()
         } else {
             let mut stream = rlp::RlpStream::new();
@@ -247,10 +247,9 @@ fn handle_copy(
     callee_id: usize,
     offset: usize,
     length: usize,
-) -> Result<(Vec<u8>, H256, H256), Error> {
+) -> Result<(Vec<u8>, H256), Error> {
     let initialization_bytes = state.call_ctx()?.memory.0[offset..offset + length].to_vec();
-    let keccak_code_hash = H256(keccak256(&initialization_bytes));
-    let poseidon_code_hash = CodeDB::hash(&initialization_bytes);
+    let code_hash = CodeDB::hash(&initialization_bytes);
     let bytes: Vec<_> = Bytecode::from(initialization_bytes.clone())
         .code
         .iter()
@@ -276,12 +275,12 @@ fn handle_copy(
             src_addr: offset.try_into().unwrap(),
             src_addr_end: (offset + length).try_into().unwrap(),
             dst_type: CopyDataType::Bytecode,
-            dst_id: NumberOrHash::Hash(poseidon_code_hash),
+            dst_id: NumberOrHash::Hash(code_hash),
             dst_addr: 0,
             log_id: None,
             bytes,
         },
     );
 
-    Ok((initialization_bytes, keccak_code_hash, poseidon_code_hash))
+    Ok((initialization_bytes, code_hash))
 }

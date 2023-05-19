@@ -6,7 +6,7 @@ use std::{
     io::{Error, ErrorKind, Read},
 };
 
-use bus_mapping::util::{KECCAK_CODE_HASH_ZERO, POSEIDON_CODE_HASH_ZERO};
+use bus_mapping::state_db::CodeDB;
 use halo2_proofs::{
     arithmetic::FieldExt,
     halo2curves::{bn256::Fr, group::ff::PrimeField},
@@ -64,9 +64,7 @@ const NODE_TYPE_EMPTY: u8 = 2;
 pub(crate) struct AccountData {
     pub nonce: u64,
     pub balance: U256,
-    pub keccak_code_hash: H256,
-    pub poseidon_code_hash: H256,
-    pub code_size: u64,
+    pub code_hash: H256,
     pub storage_root: H256,
 }
 
@@ -89,10 +87,8 @@ impl Default for AccountData {
         Self {
             nonce: 0,
             balance: Default::default(),
-            code_size: 0,
             storage_root: Default::default(),
-            keccak_code_hash: *KECCAK_CODE_HASH_ZERO,
-            poseidon_code_hash: *POSEIDON_CODE_HASH_ZERO,
+            code_hash: CodeDB::empty_code_hash(),
         }
     }
 }
@@ -101,8 +97,8 @@ impl CanRead for AccountData {
     fn try_parse(mut rd: impl Read) -> Result<Self, Error> {
         let mut uint_buf = [0; 4];
         rd.read_exact(&mut uint_buf)?;
-        // check it is 0x05080000
-        if uint_buf != [5, 8, 0, 0] {
+        // check it is 0x04040000
+        if uint_buf != [4, 4, 0, 0] {
             return Err(Error::new(ErrorKind::Other, "unexpected flags"));
         }
 
@@ -111,28 +107,20 @@ impl CanRead for AccountData {
         let mut byte32_buf = [0; 32];
         rd.read_exact(&mut byte16_buf)?;
         rd.read_exact(&mut byte8_buf)?;
-        let code_size = U64::from_big_endian(&byte8_buf);
         rd.read_exact(&mut byte8_buf)?;
         let nonce = U64::from_big_endian(&byte8_buf);
 
         rd.read_exact(&mut byte32_buf)?; // balance
         let balance = U256::from_big_endian(&byte32_buf);
+        rd.read_exact(&mut byte32_buf)?; // code hash
+        let code_hash = H256::from(&byte32_buf);
         rd.read_exact(&mut byte32_buf)?; // storage root
         let storage_root = H256::from(&byte32_buf);
-        rd.read_exact(&mut byte32_buf)?; // keccak hash of code
-        let keccak_code_hash = H256::from(&byte32_buf);
-        rd.read_exact(&mut byte32_buf)?; // poseidon hash of code
-        let poseidon_code_hash = H256::from(&byte32_buf);
-
-        // rd.read_exact(&mut byte32_buf)?; // code size
-        // let code_size = U64::from_big_endian(&byte32_buf[24..]);
 
         Ok(AccountData {
             nonce: nonce.as_u64(),
             balance,
-            keccak_code_hash,
-            poseidon_code_hash,
-            code_size: code_size.as_u64(),
+            code_hash,
             storage_root,
         })
     }

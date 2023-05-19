@@ -22,7 +22,8 @@ pub struct Account {
     /// Address
     pub address: Address,
     /// nonce
-    pub nonce: Word,
+    /// U64 type is required to serialize into proper hex with 0x prefix
+    pub nonce: U64,
     /// Balance
     pub balance: Word,
     /// EVM Code

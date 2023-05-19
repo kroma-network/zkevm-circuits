@@ -56,7 +56,7 @@ impl Opcode for Extcodehash {
         let account = state.sdb.get_account(&external_address).1;
         let exists = !account.is_empty();
         let code_hash = if exists {
-            account.keccak_code_hash
+            account.code_hash
         } else {
             H256::zero()
         };
@@ -65,7 +65,7 @@ impl Opcode for Extcodehash {
         state.account_read(
             &mut exec_step,
             external_address,
-            AccountField::KeccakCodeHash,
+            AccountField::CodeHash,
             code_hash.to_word(),
         );
         debug_assert_eq!(steps[1].stack.last()?, code_hash.to_word());
@@ -83,6 +83,7 @@ mod extcodehash_tests {
         circuit_input_builder::ExecState,
         mock::BlockData,
         operation::{AccountOp, CallContextOp, StackOp, RW},
+        state_db::CodeDB,
     };
     use eth_types::{
         address, bytecode,
@@ -90,7 +91,6 @@ mod extcodehash_tests {
         geth_types::GethData,
         Bytecode, Bytes, Word, U256,
     };
-    use ethers_core::utils::keccak256;
     use mock::TestContext;
     use pretty_assertions::assert_eq;
 
@@ -132,12 +132,12 @@ mod extcodehash_tests {
             EXTCODEHASH
             STOP
         });
-        let mut nonce = Word::from(300u64);
+        let mut nonce = 300u64;
         let mut balance = Word::from(800u64);
         let mut code_ext = Bytes::from([34, 54, 56]);
 
         if !exists {
-            nonce = Word::zero();
+            nonce = 0;
             balance = Word::zero();
             code_ext = Bytes::default();
         }
@@ -169,7 +169,7 @@ mod extcodehash_tests {
         .unwrap()
         .into();
 
-        let code_hash = Word::from(keccak256(code_ext));
+        let code_hash = CodeDB::hash(&code_ext).to_word();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -272,7 +272,7 @@ mod extcodehash_tests {
                 RW::READ,
                 &AccountOp {
                     address: external_address,
-                    field: AccountField::KeccakCodeHash,
+                    field: AccountField::CodeHash,
                     value: if exists { code_hash } else { U256::zero() },
                     value_prev: if exists { code_hash } else { U256::zero() },
                 }

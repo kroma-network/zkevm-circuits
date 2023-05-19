@@ -134,11 +134,6 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
         });
         cb.condition(not::expr(initialization_code.has_length()), |cb| {
             cb.require_equal(
-                "keccak hash of empty bytes",
-                keccak_code_hash.expr(),
-                cb.empty_keccak_hash_rlc(),
-            );
-            cb.require_equal(
                 "code hash of empty bytes",
                 code_hash.expr(),
                 cb.empty_code_hash_rlc(),
@@ -740,7 +735,7 @@ impl<F: Field> RlpU64Gadget<F> {
 mod test {
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{
-        address, bytecode, evm_types::OpcodeId, geth_types::Account, Address, Bytecode, Word,
+        address, bytecode, evm_types::OpcodeId, geth_types::Account, Address, Bytecode, Word, U64,
     };
 
     use itertools::Itertools;
@@ -849,7 +844,7 @@ mod test {
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: root_code.into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 balance: eth(10),
                 ..Default::default()
             };

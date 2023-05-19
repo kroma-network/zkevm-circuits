@@ -227,7 +227,7 @@ impl<'a> JsonStateTestBuilder<'a> {
             let account = Account {
                 address,
                 balance: parse::parse_u256(&acc.balance)?,
-                nonce: parse::parse_u256(&acc.nonce)?,
+                nonce: parse::parse_u64(&acc.nonce)?.into(),
                 code: parse::parse_code(self.compiler, &acc.code)?,
                 storage,
             };
@@ -265,7 +265,7 @@ impl<'a> JsonStateTestBuilder<'a> {
                 nonce: acc
                     .nonce
                     .as_ref()
-                    .map(|v| parse::parse_u256(v))
+                    .map(|v| parse::parse_u64(v))
                     .transpose()?,
                 storage,
             };
@@ -305,6 +305,8 @@ impl<'a> JsonStateTestBuilder<'a> {
 
 #[cfg(test)]
 mod test {
+    use eth_types::U64;
+
     use super::*;
 
     const JSON: &str = r#"
@@ -406,7 +408,7 @@ mod test {
                 acc095e,
                 Account {
                     address: acc095e,
-                    nonce: U256::from(0u64),
+                    nonce: U64::from(0u64),
                     balance: U256::from(1000000000000000000u64),
                     code: Bytes::from(hex::decode("600160010160005500")?),
                     storage: HashMap::new(),
@@ -416,7 +418,7 @@ mod test {
                 acc095e,
                 AccountMatch {
                     address: acc095e,
-                    nonce: Some(U256::from(1u64)),
+                    nonce: Some(1u64),
                     balance: None,
                     code: Some(Bytes::from(hex::decode("600160010160005500")?)),
                     storage: HashMap::from([(U256::zero(), U256::from(2u64))]),

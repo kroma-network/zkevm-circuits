@@ -471,8 +471,8 @@ pub fn gen_begin_tx_ops(
         &mut exec_step,
         caller_address,
         AccountField::Nonce,
-        nonce_prev + 1,
-        nonce_prev,
+        (nonce_prev + 1).to_word(),
+        nonce_prev.to_word(),
     )?;
 
     // Add caller and callee into access list
@@ -513,7 +513,7 @@ pub fn gen_begin_tx_ops(
     if state.tx.is_create()
         && ((!callee_account.code_hash.is_zero()
             && !callee_account.code_hash.eq(&CodeDB::empty_code_hash()))
-            || !callee_account.nonce.is_zero())
+            || !callee_account.nonce == 0)
     {
         unimplemented!("deployment collision");
     }
@@ -861,7 +861,7 @@ fn dummy_gen_selfdestruct_ops(
             address: sender,
             field: AccountField::Nonce,
             value: Word::zero(),
-            value_prev: sender_account.nonce,
+            value_prev: sender_account.nonce.to_word(),
         },
     )?;
     state.push_op_reversible(

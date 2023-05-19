@@ -377,7 +377,7 @@ impl From<MockTransaction> for Transaction {
             block_number: 1,
             id: mock_tx.transaction_index.as_usize(),
             hash: mock_tx.hash.unwrap_or_default(),
-            nonce: mock_tx.nonce.as_u64(),
+            nonce: mock_tx.nonce,
             gas: mock_tx.gas.as_u64(),
             gas_price: mock_tx.gas_price,
             caller_address: mock_tx.from.address(),

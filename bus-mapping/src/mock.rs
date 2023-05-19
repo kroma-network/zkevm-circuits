@@ -6,8 +6,7 @@ use crate::{
     },
     state_db::{self, CodeDB, StateDB},
 };
-use eth_types::{geth_types::GethData, ToWord, Word, H256};
-use ethers_core::utils::keccak256;
+use eth_types::{geth_types::GethData, Word};
 
 const MOCK_OLD_STATE_ROOT: u64 = 0xcafeu64;
 
@@ -22,7 +21,7 @@ pub struct BlockData {
     /// chain id
     pub chain_id: Word,
     /// history hashes contains most recent 256 block hashes in history, where
-    /// the lastest one is at history_hashes[history_hashes.len() - 1].
+    /// the latest one is at history_hashes[history_hashes.len() - 1].
     pub history_hashes: Vec<Word>,
     /// Block from geth
     pub eth_block: eth_types::Block<eth_types::Transaction>,
@@ -66,24 +65,8 @@ impl BlockData {
         }
 
         for account in geth_data.accounts {
-            let keccak_code_hash = H256(keccak256(account.code.to_vec()));
-            log::trace!(
-                "trace code {:?} {:?}",
-                keccak_code_hash,
-                hex::encode(account.code.to_vec())
-            );
-            let code_hash = code_db.insert(account.code.to_vec());
-            sdb.set_account(
-                &account.address,
-                state_db::Account {
-                    nonce: account.nonce,
-                    balance: account.balance,
-                    storage: account.storage,
-                    code_hash,
-                    keccak_code_hash,
-                    code_size: account.code.len().to_word(),
-                },
-            );
+            code_db.insert(account.code.to_vec());
+            sdb.set_account(&account.address, state_db::Account::from(account.clone()));
         }
 
         Self {

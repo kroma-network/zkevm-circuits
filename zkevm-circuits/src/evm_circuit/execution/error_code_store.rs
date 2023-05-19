@@ -131,6 +131,7 @@ mod test {
         Address,
         Bytecode,
         Word,
+        U64,
         // word,
     };
 
@@ -245,7 +246,7 @@ mod test {
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: root_code.into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 balance: eth(10),
                 ..Default::default()
             };
@@ -261,7 +262,7 @@ mod test {
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: root_code.into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 balance: eth(10),
                 ..Default::default()
             };

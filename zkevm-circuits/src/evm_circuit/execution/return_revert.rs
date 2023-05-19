@@ -20,7 +20,6 @@ use crate::{
 };
 use bus_mapping::{circuit_input_builder::CopyDataType, state_db::CodeDB};
 use eth_types::{evm_types::GasCost, Field, ToScalar, U256};
-use ethers_core::utils::keccak256;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
@@ -40,9 +39,7 @@ pub(crate) struct ReturnRevertGadget<F> {
     return_data_length: Cell<F>,
 
     memory_expansion: MemoryExpansionGadget<F, 1, N_BYTES_MEMORY_WORD_SIZE>,
-    keccak_code_hash: Cell<F>,
     code_hash: Cell<F>,
-    code_size: Cell<F>,
 
     caller_id: Cell<F>,
     address: Cell<F>,
@@ -101,10 +98,8 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
             * is_success.expr()
             * GasCost::CODE_DEPOSIT_BYTE_COST.expr()
             * range.length();
-        let (caller_id, address, reversion_info, code_hash, keccak_code_hash, code_size) = cb
-            .condition(is_contract_deployment.clone(), |cb| {
-                // poseidon hash of code.
-                //
+        let (caller_id, address, reversion_info, code_hash) =
+            cb.condition(is_contract_deployment.clone(), |cb| {
                 // We don't need to place any additional constraints on code_hash because the
                 // copy circuit enforces that it is the hash of the bytes in the copy lookup.
                 let code_hash = cb.query_cell_phase2();
@@ -128,18 +123,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 .map(|tag| cb.call_context(None, tag));
                 let mut reversion_info = cb.reversion_info_read(None);
 
-                // keccak hash of code.
-                //
-                // TODO(rohit): constraints on keccak hash of code.
-                // lookup to keccak table?
-                let keccak_code_hash = cb.query_cell_phase2();
-                cb.account_write(
-                    address.expr(),
-                    AccountFieldTag::KeccakCodeHash,
-                    keccak_code_hash.expr(),
-                    cb.empty_keccak_hash_rlc(),
-                    Some(&mut reversion_info),
-                );
                 cb.account_write(
                     address.expr(),
                     AccountFieldTag::CodeHash,
@@ -148,25 +131,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                     Some(&mut reversion_info),
                 );
 
-                // code size.
-                let code_size = cb.query_cell_phase2();
-                cb.require_equal("range == code size", range.length(), code_size.expr());
-                cb.account_write(
-                    address.expr(),
-                    AccountFieldTag::CodeSize,
-                    code_size.expr(),
-                    0.expr(),
-                    Some(&mut reversion_info),
-                );
-
-                (
-                    caller_id,
-                    address,
-                    reversion_info,
-                    code_hash,
-                    keccak_code_hash,
-                    code_size,
-                )
+                (caller_id, address, reversion_info, code_hash)
             });
 
         // Case B in the specs.
@@ -202,8 +167,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 range.offset(),
                 range.length(),
                 memory_expansion.gas_cost(),
-                3.expr() * is_contract_deployment, /* There are three reversible writes in this
-                                                    * case. */
+                is_contract_deployment, // There is one reversible write in this case.
             )
         });
 
@@ -267,8 +231,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
             restore_context,
             memory_expansion,
             code_hash,
-            keccak_code_hash,
-            code_size,
             address,
             caller_id,
             reversion_info,
@@ -318,16 +280,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
             let values: Vec<_> = (3..3 + length.as_usize())
                 .map(|i| block.rws[step.rw_indices[i]].memory_value())
                 .collect();
-
-            // keccak hash of code.
-            let keccak_code_hash = keccak256(&values);
-            self.keccak_code_hash.assign(
-                region,
-                offset,
-                region.word_rlc(U256::from_big_endian(&keccak_code_hash)),
-            )?;
-
-            // poseidon hash of code.
             let mut code_hash = CodeDB::hash(&values).to_fixed_bytes();
             code_hash.reverse();
             self.code_hash.assign(
@@ -335,10 +287,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 offset,
                 region.word_rlc(U256::from_little_endian(&code_hash)),
             )?;
-
-            // code size.
-            self.code_size
-                .assign(region, offset, Value::known(F::from(values.len() as u64)))?;
         }
 
         let copy_rw_increase = if call.is_create && call.is_success {
@@ -356,7 +304,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
         let is_contract_deployment = call.is_create && call.is_success && !length.is_zero();
         if !call.is_root {
             let rw_counter_offset = 3 + if is_contract_deployment {
-                7 + length.as_u64()
+                5 + length.as_u64()
             } else {
                 0
             };
@@ -400,7 +348,7 @@ mod test {
         address, bytecode,
         evm_types::OpcodeId,
         geth_types::{Account, GethData},
-        Address, Bytecode, ToWord, Word, U256,
+        Address, Bytecode, ToWord, Word, U256, U64,
     };
     use itertools::Itertools;
     use mock::{eth, TestContext, MOCK_ACCOUNTS};
@@ -473,13 +421,13 @@ mod test {
             let callee = Account {
                 address: CALLEE_ADDRESS,
                 code: callee_bytecode(*is_return, *callee_offset, *callee_length).into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 ..Default::default()
             };
             let caller = Account {
                 address: CALLER_ADDRESS,
                 code: caller_bytecode(*caller_offset, *caller_length).into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 ..Default::default()
             };
 
@@ -552,7 +500,7 @@ mod test {
             let caller = Account {
                 address: CALLER_ADDRESS,
                 code: root_code.into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 balance: eth(10),
                 ..Default::default()
             };
@@ -603,7 +551,7 @@ mod test {
         let caller = Account {
             address: CALLER_ADDRESS,
             code: root_code.into(),
-            nonce: Word::one(),
+            nonce: U64::one(),
             balance: eth(10),
             ..Default::default()
         };

@@ -313,12 +313,12 @@ mod test {
                 accs[1]
                     .address(caller.address)
                     .code(caller.code.clone())
-                    .nonce(caller.nonce)
+                    .nonce(caller.nonce.as_u64())
                     .balance(caller.balance);
                 accs[2]
                     .address(callee.address)
                     .code(callee.code.clone())
-                    .nonce(callee.nonce)
+                    .nonce(callee.nonce.as_u64())
                     .balance(callee.balance);
             },
             |mut txs, accs| {

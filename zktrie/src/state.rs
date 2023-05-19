@@ -15,14 +15,12 @@ use std::{cell::RefCell, fmt, rc::Rc};
 /// turn a integer (expressed by field) into MPTProofType
 pub fn as_proof_type(v: i32) -> MPTProofType {
     match v {
-        0 => MPTProofType::PoseidonCodeHashExists,
+        0 => MPTProofType::CodeHashExists,
         1 => MPTProofType::NonceChanged,
         2 => MPTProofType::BalanceChanged,
-        3 => MPTProofType::CodeHashExists,
-        4 => MPTProofType::CodeSizeExists,
-        5 => MPTProofType::AccountDoesNotExist,
-        6 => MPTProofType::StorageChanged,
-        7 => MPTProofType::StorageDoesNotExist,
+        3 => MPTProofType::AccountDoesNotExist,
+        4 => MPTProofType::StorageChanged,
+        5 => MPTProofType::StorageDoesNotExist,
         _ => unreachable!("unexpected proof type number {:?}", v),
     }
 }
@@ -142,10 +140,7 @@ impl ZktrieState {
                     Account {
                         nonce: acc_data.nonce.into(),
                         balance: acc_data.balance,
-                        code_hash: acc_data.poseidon_code_hash,
-                        keccak_code_hash: acc_data.keccak_code_hash,
-
-                        code_size: acc_data.code_size.into(),
+                        code_hash: acc_data.code_hash,
                         storage: Default::default(),
                     },
                 );
