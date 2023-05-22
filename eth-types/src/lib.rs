@@ -399,9 +399,6 @@ pub struct ResultGethExecTrace {
 /// before the step is executed.
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct GethExecTrace {
-    /// L1 fee
-    #[serde(default)]
-    pub l1_fee: u64,
     /// Used gas
     pub gas: Gas,
     /// True when the transaction has failed.
@@ -519,7 +516,6 @@ mod tests {
         assert_eq!(
             trace,
             GethExecTrace {
-                l1_fee: 0,
                 gas: Gas(26809),
                 failed: false,
                 return_value: "".to_owned(),

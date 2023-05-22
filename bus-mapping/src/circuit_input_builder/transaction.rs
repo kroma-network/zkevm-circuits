@@ -15,8 +15,6 @@ use super::{call::ReversionGroup, Call, CallContext, CallKind, CodeSource, ExecS
 #[derive(Debug, Default)]
 /// Context of a [`Transaction`] which can mutate in an [`ExecStep`].
 pub struct TransactionContext {
-    /// L1 fee
-    pub l1_fee: u64,
     /// Unique identifier of transaction of the block. The value is `index + 1`.
     id: usize,
     /// The index of logs made in the transaction.
@@ -80,7 +78,6 @@ impl TransactionContext {
             call_is_success,
             calls: Vec::new(),
             reversion_groups: Vec::new(),
-            l1_fee: geth_trace.l1_fee,
         };
         tx_ctx.push_call_ctx(0, eth_tx.input.to_vec());
 

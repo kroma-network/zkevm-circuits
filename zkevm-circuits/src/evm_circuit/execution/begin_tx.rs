@@ -36,7 +36,6 @@ pub(crate) struct BeginTxGadget<F> {
     tx_gas: Cell<F>,
     tx_gas_price: Word<F>,
     mul_gas_fee_by_gas: MulWordByU64Gadget<F>,
-    tx_fee: Word<F>,
     tx_caller_address: Cell<F>,
     tx_caller_address_is_zero: IsZeroGadget<F>,
     tx_callee_address: Cell<F>,
@@ -144,15 +143,6 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         // Calculate transaction gas fee
         let mul_gas_fee_by_gas =
             MulWordByU64Gadget::construct(cb, tx_gas_price.clone(), tx_gas.expr());
-        let tx_fee = cb.query_word_rlc();
-
-        // TODO: contraint l1 fee
-        #[cfg(not(feature = "scroll"))]
-        cb.require_equal(
-            "tx_fee == l1_fee + l2_fee, l1_fee == 0",
-            mul_gas_fee_by_gas.product().expr(),
-            tx_fee.expr(),
-        );
 
         // TODO: Take gas cost of access list (EIP 2930) into consideration.
         // Use intrinsic gas
@@ -228,7 +218,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             or::expr([not::expr(callee_not_exists.expr()), is_precompile.expr()]),
             tx_is_create.expr(),
             tx_value.clone(),
-            tx_fee.clone(),
+            mul_gas_fee_by_gas.product().clone(),
             &mut reversion_info,
         );
 
@@ -500,7 +490,6 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             tx_gas,
             tx_gas_price,
             mul_gas_fee_by_gas,
-            tx_fee,
             tx_caller_address,
             tx_caller_address_is_zero,
             tx_callee_address,
@@ -533,6 +522,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        let gas_fee = tx.gas_price * tx.gas;
         let zero = eth_types::Word::zero();
 
         let mut rws = StepRws::new(block, step);
@@ -570,7 +560,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             offset,
             tx.gas_price,
             tx.gas,
-            tx.gas_price * tx.gas,
+            gas_fee,
         )?;
         let caller_address = tx
             .caller_address
@@ -631,9 +621,6 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             .assign(region, offset, Value::known(F::from(step.gas_cost)))?;
         self.sufficient_gas_left
             .assign(region, offset, F::from(tx.gas - step.gas_cost))?;
-        let tx_fee = caller_balance_sub_fee_pair.1 - caller_balance_sub_fee_pair.0;
-        self.tx_fee
-            .assign(region, offset, Some(tx_fee.to_le_bytes()))?;
         self.transfer_with_gas_fee.assign(
             region,
             offset,
@@ -641,7 +628,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             caller_balance_sub_value_pair,
             callee_balance_pair,
             tx.value,
-            tx_fee,
+            gas_fee,
         )?;
         self.phase2_code_hash
             .assign(region, offset, region.word_rlc(callee_code_hash))?;
