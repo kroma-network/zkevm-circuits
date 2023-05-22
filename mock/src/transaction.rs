@@ -162,8 +162,8 @@ pub struct MockTransaction {
     pub max_fee_per_gas: Word,
     pub chain_id: Word,
 
-    /// Kanvas deposit tx.
-    #[cfg(feature = "kanvas")]
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
     pub mint: Word,
 }
 
@@ -189,7 +189,7 @@ impl Default for MockTransaction {
             max_priority_fee_per_gas: Word::zero(),
             max_fee_per_gas: Word::zero(),
             chain_id: *MOCK_CHAIN_ID,
-            #[cfg(feature = "kanvas")]
+            #[cfg(feature = "kroma")]
             mint: Word::zero(),
         }
     }
@@ -334,7 +334,7 @@ impl MockTransaction {
         self
     }
 
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Set mint field for the MockTransaction.
     pub fn mint(&mut self, mint: Word) -> &mut Self {
         self.mint = mint;

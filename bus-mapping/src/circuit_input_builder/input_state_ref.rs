@@ -508,7 +508,7 @@ impl<'a> CircuitInputStateRef<'a> {
         Ok(())
     }
 
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Push 1 [`AccountOp`] to update `sender` balance by `mint`.
     pub fn mint(&mut self, step: &mut ExecStep, addr: Address, mint: Word) -> Result<(), Error> {
         let (found, sender_account) = self.sdb.get_account(&addr);

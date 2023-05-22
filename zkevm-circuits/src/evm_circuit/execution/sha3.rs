@@ -173,7 +173,7 @@ mod tests {
             SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
         )
         .params(CircuitsParams {
-            max_rws: 6000,
+            max_rws: 7000,
             ..Default::default()
         })
         .run();

@@ -520,7 +520,19 @@ mod evm_circuit_stats {
     #[test]
     pub fn empty_evm_circuit_no_padding() {
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b).unwrap(),
+            TestContext0_0::new(
+                None,
+                |mut accs| {
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 0);
+                },
+                |mut txs, _| {
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                },
+                |b, _| b,
+            )
+            .unwrap(),
         )
         .run();
     }

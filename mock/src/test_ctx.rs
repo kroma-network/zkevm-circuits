@@ -154,6 +154,9 @@ pub type TestContext1_1 = TestContext1_1_;
 declare_test_context!(TestContext2_1_, 2, 1);
 pub type TestContext2_1 = TestContext2_1_;
 
+declare_test_context!(TestContext2_2_, 2, 2);
+pub type TestContext2_2 = TestContext2_2_;
+
 declare_test_context!(TestContext2_3_, 2, 3);
 pub type TestContext2_3 = TestContext2_3_;
 

@@ -461,7 +461,7 @@ pub fn gen_begin_tx_ops(
 
     // Add mint to caller's balance
     let caller_address = call.caller_address;
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     if state.tx.is_deposit() {
         state.mint(&mut exec_step, caller_address, state.tx.mint)?;
     }

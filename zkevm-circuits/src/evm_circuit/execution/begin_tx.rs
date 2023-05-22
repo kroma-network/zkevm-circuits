@@ -404,6 +404,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 //   - Write CallContext RwCounterEndOfReversion
                 //   - Write CallContext IsPersistent
                 //   - Write CallContext IsSuccess
+                //   - Write Account Balance (If tx is a deposit tx, handle mint)
                 //   - Write Account (Caller) Nonce
                 //   - Write TxAccessListAccount (Caller)
                 //   - Write TxAccessListAccount (Callee)
@@ -451,6 +452,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                     //   - Write CallContext RwCounterEndOfReversion
                     //   - Write CallContext IsPersistent
                     //   - Write CallContext IsSuccess
+                    //   - Write Account Balance (If tx is a deposit tx, handle mint)
                     //   - Write Account Nonce
                     //   - Write TxAccessListAccount
                     //   - Write TxAccessListAccount
@@ -500,6 +502,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                     //   - Write CallContext RwCounterEndOfReversion
                     //   - Write CallContext IsPersistent
                     //   - Write CallContext IsSuccess
+                    //   - Write Account Balance (If tx is a deposit tx, handle mint)
                     //   - Write Account Nonce
                     //   - Write TxAccessListAccount
                     //   - Write TxAccessListAccount
@@ -582,7 +585,11 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         let zero = eth_types::Word::zero();
 
         let mut rws = StepRws::new(block, step);
-        rws.offset_add(7);
+        let mut add = 0;
+        if tx.is_deposit() {
+            add += 1;
+        }
+        rws.offset_add(7 + add);
         let mut callee_code_hash = zero;
         if !tx.is_create && !is_precompiled(&tx.callee_address.unwrap_or_default()) {
             callee_code_hash = rws.next().account_codehash_pair().1;
@@ -621,8 +628,13 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             .assign(region, offset, Some(tx.gas_price.to_le_bytes()))?;
         self.tx_value
             .assign(region, offset, Some(tx.value.to_le_bytes()))?;
-        self.mul_gas_fee_by_gas
-            .assign(region, offset, tx.gas_price, tx.gas, gas_fee)?;
+        self.mul_gas_fee_by_gas.assign(
+            region,
+            offset,
+            tx.gas_price,
+            tx.gas,
+            tx.gas_price * tx.gas,
+        )?;
         #[cfg(feature = "kroma")]
         self.tx_mint
             .assign(region, offset, Some(tx.mint.to_le_bytes()))?;
@@ -772,7 +784,9 @@ mod test {
     use eth_types::{self, address, bytecode, evm_types::GasCost, word, Bytecode, Word};
     use ethers_core::types::Bytes;
 
-    use mock::{eth, gwei, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{eth, gwei, test_ctx::TestContext1_1, tx_idx, TestContext, MOCK_ACCOUNTS};
 
     fn gas(call_data: &[u8]) -> Word {
         Word::from(
@@ -1075,13 +1089,17 @@ mod test {
 
     #[test]
     fn begin_tx_precompile_with_value() {
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(address!("0x0000000000000000000000000000000000000004"))
                     .value(eth(1))
@@ -1091,27 +1109,43 @@ mod test {
         )
         .unwrap();
 
+        // let ctx = TestContext::<1, 1>::new(
+        //     None,
+        //     |accs| {
+        //         accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+        //     },
+        //     |mut txs, accs| {
+        //         txs[0]
+        //             .from(accs[0].address)
+        //             .to(address!("0x0000000000000000000000000000000000000004"))
+        //             .value(eth(1))
+        //             .input(Bytes::from(vec![0x01, 0x02, 0x03]));
+        //     },
+        //     |block, _tx| block.number(0xcafeu64),
+        // )
+        // .unwrap();
+
         CircuitTestBuilder::new_from_test_ctx(ctx).run();
     }
 
     #[cfg(feature = "kroma")]
     #[test]
     fn begin_tx_gadget_deposit() {
-        use bus_mapping::mock::BlockData;
         // Get the execution steps from the external tracer
-        use eth_types::geth_types::{GethData, DEPOSIT_TX_TYPE};
+        use eth_types::geth_types::DEPOSIT_TX_TYPE;
         use mock::test_ctx::{helpers::account_0_code_account_1_no_code, TestContext2_2};
 
-        use crate::witness::block_convert;
-        let block: GethData = TestContext2_2::new(
+        let ctx = TestContext2_2::new(
             None,
             account_0_code_account_1_no_code(bytecode! { STOP }),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .transaction_type(DEPOSIT_TX_TYPE);
-                txs[1]
+                txs[tx_idx!(1)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .transaction_type(DEPOSIT_TX_TYPE)
@@ -1122,12 +1156,15 @@ mod test {
         .unwrap()
         .into();
 
-        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        CircuitTestBuilder::new_from_test_ctx(ctx).run();
 
-        builder
-            .handle_block(&block.eth_block, &block.geth_traces)
-            .unwrap();
-        let block = block_convert(&builder.block, &builder.code_db);
-        assert_eq!(run_test_circuit(block), Ok(()));
+        // let mut builder =
+        // BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+
+        // builder
+        //     .handle_block(&block.eth_block, &block.geth_traces)
+        //     .unwrap();
+        // let block = block_convert(&builder.block, &builder.code_db);
+        // assert_eq!(run_test_circuit(block), Ok(()));
     }
 }
