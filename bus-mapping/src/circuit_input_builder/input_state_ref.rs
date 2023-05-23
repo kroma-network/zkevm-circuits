@@ -116,7 +116,7 @@ impl<'a> CircuitInputStateRef<'a> {
         exec_step
     }
 
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Create a new BaseFeeHook step
     pub fn new_base_fee_fee_hook_step(&self) -> ExecStep {
         let prev_step = self
@@ -135,7 +135,7 @@ impl<'a> CircuitInputStateRef<'a> {
         }
     }
 
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Create a new RollupFeeHook step
     pub fn new_rollup_fee_hook_step(&self) -> ExecStep {
         let prev_step = self

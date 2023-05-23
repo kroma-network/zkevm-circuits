@@ -241,7 +241,9 @@ mod test {
         address, bytecode, geth_types::Account, Address, Bytecode, Bytes, ToWord, Word,
     };
     use lazy_static::lazy_static;
-    use mock::TestContext;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
 
     lazy_static! {
         static ref EXTERNAL_ADDRESS: Address =
@@ -279,9 +281,9 @@ mod test {
             STOP
         });
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .code(code);
@@ -295,9 +297,13 @@ mod test {
                         .nonce(external_account.nonce.as_u64())
                         .code(external_account.code);
                 }
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(1_000_000.into());

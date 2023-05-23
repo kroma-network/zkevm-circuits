@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::{N_BYTES_ACCOUNT_ADDRESS, N_BYTES_GAS, N_BYTES_WORD},
-        step::ExecutionState,
+        step::{ExecutionState, NEXT_EXECUTION_STATE},
         util::{
             and,
             common_gadget::{TransferWithGasFeeGadget, UpdateBalanceGadget},
@@ -394,7 +394,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             // );
             cb.require_equal(
                 "Go to EndTx when Tx to precompile",
-                cb.next.execution_state_selector([ExecutionState::EndTx]),
+                cb.next.execution_state_selector([NEXT_EXECUTION_STATE]),
                 1.expr(),
             );
 
@@ -442,7 +442,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 );
                 cb.require_equal(
                     "Go to EndTx when Tx to account with empty code",
-                    cb.next.execution_state_selector([ExecutionState::EndTx]),
+                    cb.next.execution_state_selector([NEXT_EXECUTION_STATE]),
                     1.expr(),
                 );
 
@@ -786,7 +786,11 @@ mod test {
 
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
-    use mock::{eth, gwei, test_ctx::TestContext1_1, tx_idx, TestContext, MOCK_ACCOUNTS};
+    use mock::{
+        eth, gwei,
+        test_ctx::{SimpleTestContext, TestContext1_1, TestContext2_1},
+        tx_idx, TestContext, MOCK_ACCOUNTS,
+    };
 
     fn gas(call_data: &[u8]) -> Word {
         Word::from(
@@ -817,17 +821,21 @@ mod test {
 
     fn test_ok(tx: eth_types::Transaction, code: Option<Bytecode>) {
         // Get the execution steps from the external tracer
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(10));
                 if let Some(code) = code {
                     accs[0].code(code);
                 }
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(tx.to.unwrap())
                     .from(tx.from)
                     .gas_price(tx.gas_price.unwrap())
@@ -889,14 +897,18 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = TestContext2_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(to).balance(eth(1)).code(code);
                 accs[1].address(from).balance(eth(1)).nonce(multibyte_nonce);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, _| {
-                txs[0].to(to).from(from).nonce(multibyte_nonce);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(to).from(from).nonce(multibyte_nonce);
             },
             |block, _| block,
         )
@@ -932,14 +944,18 @@ mod test {
 
     #[test]
     fn begin_tx_no_code() {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = TestContext2_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .to(MOCK_ACCOUNTS[1])
                     .gas_price(gwei(2))
@@ -955,13 +971,17 @@ mod test {
 
     #[test]
     fn begin_tx_no_account() {
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .to(MOCK_ACCOUNTS[1])
                     .gas_price(gwei(2))
@@ -986,16 +1006,20 @@ mod test {
             PUSH1(0)
             RETURN
         };
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(MOCK_ACCOUNTS[0])
                     .balance(eth(20))
                     .nonce(nonce);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .nonce(nonce)
                     .gas_price(gwei(2))
@@ -1069,13 +1093,17 @@ mod test {
 
     #[test]
     fn begin_tx_precompile() {
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(address!("0x0000000000000000000000000000000000000004"))
                     .input(Bytes::from(vec![0x01, 0x02, 0x03]));

@@ -219,8 +219,11 @@ mod tests {
     use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
         eth,
-        test_ctx::{helpers::account_0_code_account_1_no_code, LoggerConfig, SimpleTestContext},
-        tx_idx, TestContext, MOCK_ACCOUNTS,
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, setup_kroma_required_accounts},
+            LoggerConfig, SimpleTestContext, TestContext3_1,
+        },
+        tx_idx, MOCK_ACCOUNTS,
     };
 
     struct TestCase {
@@ -300,17 +303,21 @@ mod tests {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new_with_logger_config(
+        let ctx = TestContext3_1::new_with_logger_config(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).code(code_a);
                 accs[1]
                     .address(MOCK_ACCOUNTS[1])
                     .code(case.bytecode.clone());
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(eth(1));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[2].address)
                     .to(accs[0].address)
                     .gas(word!("0xFFFFF"));

@@ -154,8 +154,8 @@ pub struct Transaction {
     /// Mint
     pub mint: Word,
 
-    /// Kanvas Non-deposit tx
-    #[cfg(feature = "kanvas")]
+    /// Kroma Non-deposit tx
+    #[cfg(feature = "kroma")]
     /// Rollup data gas
     pub rollup_data_gas: u64,
 }
@@ -203,7 +203,7 @@ impl From<&crate::Transaction> for Transaction {
             hash: tx.hash,
             #[cfg(feature = "kroma")]
             mint: Transaction::get_mint(tx).unwrap_or_default(),
-            #[cfg(feature = "kanvas")]
+            #[cfg(feature = "kroma")]
             rollup_data_gas: Transaction::compute_rollup_data_gas(tx),
         }
     }

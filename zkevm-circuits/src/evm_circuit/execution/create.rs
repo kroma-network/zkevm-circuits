@@ -740,7 +740,9 @@ mod test {
 
     use itertools::Itertools;
     use lazy_static::lazy_static;
-    use mock::{eth, TestContext};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{eth, test_ctx::SimpleTestContext, tx_idx};
 
     use crate::test_util::CircuitTestBuilder;
 
@@ -749,7 +751,7 @@ mod test {
         static ref CALLER_ADDRESS: Address = address!("0x00bbccddee000000000000000000000000002400");
     }
 
-    fn run_test_circuits(ctx: TestContext<2, 1>) {
+    fn run_test_circuits(ctx: SimpleTestContext) {
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
                 max_rws: 4500,
@@ -812,17 +814,21 @@ mod test {
         code
     }
 
-    fn test_context(caller: Account) -> TestContext<2, 1> {
-        TestContext::new(
+    fn test_context(caller: Account) -> SimpleTestContext {
+        SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(eth(10));
                 accs[1].account(&caller);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000u64.into());

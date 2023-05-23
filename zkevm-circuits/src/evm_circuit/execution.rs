@@ -263,16 +263,16 @@ pub(crate) struct ExecutionConfig<F> {
     stored_expressions_map: HashMap<ExecutionState, Vec<StoredExpression<F>>>,
     instrument: Instrument,
     // internal state gadgets
-    begin_tx_gadget: BeginTxGadget<F>,
-    end_block_gadget: EndBlockGadget<F>,
-    end_inner_block_gadget: EndInnerBlockGadget<F>,
-    end_tx_gadget: EndTxGadget<F>,
+    begin_tx_gadget: Box<BeginTxGadget<F>>,
+    end_block_gadget: Box<EndBlockGadget<F>>,
+    end_inner_block_gadget: Box<EndInnerBlockGadget<F>>,
+    end_tx_gadget: Box<EndTxGadget<F>>,
     #[cfg(feature = "kroma")]
-    end_deposit_tx_gadget: EndDepositTxGadget<F>,
+    end_deposit_tx_gadget: Box<EndDepositTxGadget<F>>,
     #[cfg(feature = "kroma")]
-    base_fee_hook: BaseFeeHookGadget<F>,
+    base_fee_hook: Box<BaseFeeHookGadget<F>>,
     #[cfg(feature = "kroma")]
-    rollup_fee_hook: RollupFeeHookGadget<F>,
+    rollup_fee_hook: Box<RollupFeeHookGadget<F>>,
     // opcode gadgets
     add_sub_gadget: Box<AddSubGadget<F>>,
     addmod_gadget: Box<AddModGadget<F>>,

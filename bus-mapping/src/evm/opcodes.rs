@@ -19,8 +19,8 @@ use ethers_core::utils::get_contract_address;
 
 use crate::util::CHECK_MEM_STRICT;
 
-#[cfg(feature = "kanvas")]
-use eth_types::kanvas_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
+#[cfg(feature = "kroma")]
+use eth_types::kroma_params::{BASE_FEE_RECIPIENT, L1_FEE_RECIPIENT};
 
 #[cfg(any(feature = "test", test))]
 pub use self::sha3::sha3_tests::{gen_sha3_code, MemoryKind};
@@ -871,7 +871,7 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
     Ok(exec_step)
 }
 
-#[cfg(feature = "kanvas")]
+#[cfg(feature = "kroma")]
 pub fn gen_base_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     debug_assert!(!state.tx.is_deposit());
     let mut exec_step = state.new_base_fee_fee_hook_step();
@@ -913,7 +913,7 @@ pub fn gen_base_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecSte
     Ok(exec_step)
 }
 
-#[cfg(feature = "kanvas")]
+#[cfg(feature = "kroma")]
 pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     debug_assert!(!state.tx.is_deposit());
     let mut exec_step = state.new_rollup_fee_hook_step();
@@ -925,7 +925,7 @@ pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecS
     }
     let l1_fee_recipient_balance_prev = l1_fee_recipient_account.balance;
     let l1_fee_recipient_balance = l1_fee_recipient_balance_prev + l1_fee;
-    l1_fee_recipient_account.balance = l1_fee_recipient_balance;
+    // l1_fee_recipient_account.balance = l1_fee_recipient_balance;
     state.account_write(
         &mut exec_step,
         *L1_FEE_RECIPIENT,
@@ -937,7 +937,7 @@ pub fn gen_rollup_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecS
     Ok(exec_step)
 }
 
-#[cfg(feature = "kanvas")]
+#[cfg(feature = "kroma")]
 pub fn gen_fee_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
     let base_fee_hook_step = gen_base_fee_hook_ops(state)?;
     let rollup_fee_hook_step = gen_rollup_fee_hook_ops(state)?;

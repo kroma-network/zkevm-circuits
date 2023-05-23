@@ -88,7 +88,13 @@ impl<F: Field> ExecutionGadget<F> for GasGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{address, bytecode, Word};
-    use mock::TestContext;
+    use mock::{
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            SimpleTestContext,
+        },
+        tx_idx, TestContext,
+    };
 
     fn test_ok() {
         let bytecode = bytecode! {
@@ -115,9 +121,9 @@ mod test {
         };
 
         // Create a custom tx setting Gas to
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x0000000000000000000000000000000000000010"))
                     .balance(Word::from(1u64 << 20))
@@ -125,9 +131,13 @@ mod test {
                 accs[1]
                     .address(address!("0x0000000000000000000000000000000000000000"))
                     .balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(Word::from(1_000_000u64));
@@ -136,15 +146,20 @@ mod test {
         )
         .unwrap();
 
-        CircuitTestBuilder::<2, 1>::new_from_test_ctx(ctx)
+        CircuitTestBuilder::<6, 2>::new_from_test_ctx(ctx)
             .block_modifier(Box::new(|block| {
                 // The above block has 2 steps (GAS and STOP). We forcefully assign a
                 // wrong `gas_left` value for the second step, to assert that
                 // the circuit verification fails for this scenario.
-                assert_eq!(block.txs.len(), 1);
+                assert_eq!(block.txs.len(), 2);
+                // BeginTx, Gas, Stop, (BaseFeeHook, RollUpFeeHook,) EndTx, EndInnerBlock, EndBlock
+                #[cfg(feature = "kroma")]
+                let n_steps_in_tx = 7;
                 // BeginTx, Gas, Stop, EndTx, EndInnerBlock, EndBlock
-                assert_eq!(block.txs[0].steps.len(), 5);
-                block.txs[0].steps[2].gas_left -= 1;
+                #[cfg(not(feature = "kroma"))]
+                let n_steps_in_tx = 5;
+                assert_eq!(block.txs[tx_idx!(0)].steps.len(), n_steps_in_tx);
+                block.txs[tx_idx!(0)].steps[2].gas_left -= 1;
             }))
             .evm_checks(Box::new(|prover, gate_rows, lookup_rows| {
                 assert!(prover

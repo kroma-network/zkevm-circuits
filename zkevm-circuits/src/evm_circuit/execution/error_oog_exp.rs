@@ -137,11 +137,11 @@ mod tests {
         Bytecode, ToWord, U256,
     };
     #[cfg(feature = "kroma")]
-    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
         eth,
-        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
-        tx_idx, TestContext, MOCK_ACCOUNTS,
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
     };
 
     #[test]
@@ -229,15 +229,19 @@ mod tests {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].from(accs[2].address).to(accs[1].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
         )

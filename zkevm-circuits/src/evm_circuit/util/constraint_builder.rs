@@ -512,6 +512,18 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         );
     }
 
+    #[cfg(feature = "kroma")]
+    pub(crate) fn end_deposit_tx_or_base_fee_hook(&mut self) {
+        let next_state = self
+            .next
+            .execution_state_selector([ExecutionState::EndDepositTx, ExecutionState::BaseFeeHook]);
+
+        self.add_constraint(
+            "Constrain next execution state",
+            1.expr() - next_state.expr(),
+        );
+    }
+
     pub(crate) fn require_next_state_not(&mut self, execution_state: ExecutionState) {
         let next_state = self.next.execution_state_selector([execution_state]);
         self.add_constraint("Constrain next execution state not", next_state.expr());

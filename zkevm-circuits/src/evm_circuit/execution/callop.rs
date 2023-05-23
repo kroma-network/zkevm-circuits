@@ -760,8 +760,10 @@ mod test {
     use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
         test_ctx::{
-            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-            SimpleTestContext,
+            helpers::{
+                account_0_code_account_1_no_code, setup_kroma_required_accounts, tx_from_1_to_0,
+            },
+            SimpleTestContext, TestContext3_1,
         },
         tx_idx, TestContext,
     };
@@ -1098,9 +1100,9 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account) {
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -1114,9 +1116,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce.as_u64())
                     .balance(callee.balance);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into())
@@ -1129,7 +1135,7 @@ mod test {
 
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
-                max_rws: 500,
+                max_rws: 1500,
                 ..Default::default()
             })
             .run();

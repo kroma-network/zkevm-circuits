@@ -125,6 +125,11 @@ impl Default for ExecutionState {
     }
 }
 
+#[cfg(not(feature = "kroma"))]
+pub const NEXT_EXECUTION_STATE: ExecutionState = ExecutionState::EndTx;
+#[cfg(feature = "kroma")]
+pub const NEXT_EXECUTION_STATE: ExecutionState = ExecutionState::BaseFeeHook;
+
 impl Display for ExecutionState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)

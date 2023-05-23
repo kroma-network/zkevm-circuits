@@ -7,7 +7,7 @@ use super::{
 use crate::{
     evm_circuit::{
         param::{N_BYTES_ACCOUNT_ADDRESS, N_BYTES_GAS, N_BYTES_MEMORY_WORD_SIZE},
-        step::ExecutionState,
+        step::{ExecutionState, NEXT_EXECUTION_STATE},
         table::{FixedTableTag, Lookup},
         util::{
             constraint_builder::{
@@ -1041,8 +1041,8 @@ impl<F: Field> CommonErrorGadget<F> {
             rw_counter_end_of_reversion.expr(),
         );
 
-        // Go to EndTx only when is_root
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
+        // Go to BaseFeeHook only when is_root
+        let is_to_end_tx = cb.next.execution_state_selector([NEXT_EXECUTION_STATE]);
         cb.require_equal(
             "Go to EndTx only when is_root",
             cb.curr.state.is_root.expr(),

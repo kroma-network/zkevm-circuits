@@ -111,7 +111,14 @@ mod test {
     };
 
     use lazy_static::lazy_static;
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    use mock::{
+        eth,
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            SimpleTestContext, TestContext1_1,
+        },
+        tx_idx, MOCK_ACCOUNTS,
+    };
 
     use crate::test_util::CircuitTestBuilder;
 
@@ -122,7 +129,7 @@ mod test {
 
     const MAXCODESIZE: u64 = 0x6000u64;
 
-    fn run_test_circuits(ctx: TestContext<2, 1>) {
+    fn run_test_circuits(ctx: SimpleTestContext) {
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
                 max_rws: 4500,
@@ -188,17 +195,21 @@ mod test {
         code
     }
 
-    fn test_context(caller: Account) -> TestContext<2, 1> {
-        TestContext::new(
+    fn test_context(caller: Account) -> SimpleTestContext {
+        SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(eth(10));
                 accs[1].account(&caller);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(103800u64.into());
@@ -229,13 +240,17 @@ mod test {
     fn test_tx_deploy_invalid_creation_code() {
         let code = initialization_bytecode();
 
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .gas(53446u64.into())
                     .value(eth(2))

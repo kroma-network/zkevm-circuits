@@ -13,7 +13,7 @@ use crate::{
     table::{BlockContextFieldTag, CallContextFieldTag, TxContextFieldTag},
     util::Expr,
 };
-use eth_types::{kanvas_params::BASE_FEE_RECIPIENT, Field, ToScalar};
+use eth_types::{kroma_params::BASE_FEE_RECIPIENT, Field, ToScalar};
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]

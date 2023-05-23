@@ -13,7 +13,7 @@ use crate::{
     util::Expr,
 };
 use eth_types::{
-    kanvas_params::{L1_COST_DENOMINATOR, L1_FEE_RECIPIENT},
+    kroma_params::{L1_COST_DENOMINATOR, L1_FEE_RECIPIENT},
     Field, ToScalar,
 };
 use halo2_proofs::{circuit::Value, plonk::Error};

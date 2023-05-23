@@ -2,7 +2,7 @@ use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::{N_BYTES_MEMORY_ADDRESS, N_BYTES_MEMORY_WORD_SIZE, STACK_CAPACITY},
-        step::ExecutionState,
+        step::{ExecutionState, NEXT_EXECUTION_STATE},
         util::{
             common_gadget::RestoreContextGadget,
             constraint_builder::{
@@ -136,7 +136,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
 
         // Case B in the specs.
         cb.condition(is_root.expr(), |cb| {
-            cb.require_next_state(ExecutionState::EndTx);
+            cb.require_next_state(NEXT_EXECUTION_STATE);
             cb.call_context_lookup(
                 false.expr(),
                 None,
@@ -151,7 +151,8 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                         + not::expr(is_success.expr())
                             * cb.curr.state.reversible_write_counter.expr(),
                 ),
-                gas_left: Delta(-memory_expansion.gas_cost() - code_deposit_cost.expr()),
+                // TODO(luke): have to fix it
+                // gas_left: Delta(-memory_expansion.gas_cost() - code_deposit_cost.expr()),
                 reversible_write_counter: To(0.expr()),
                 memory_word_size: To(0.expr()),
                 ..StepStateTransition::default()

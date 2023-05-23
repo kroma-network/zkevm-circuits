@@ -1,4 +1,4 @@
-//! Params for Kanvas Network
+//! Params for Kroma Network
 
 use ethers_core::types::Address;
 use lazy_static::lazy_static;

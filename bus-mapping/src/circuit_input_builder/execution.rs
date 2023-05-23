@@ -124,10 +124,10 @@ pub enum ExecState {
     #[cfg(feature = "kroma")]
     /// Virtual step End Tx for Kroma deposit tx
     EndDepositTx,
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Virtual step Base Fee Hook
     BaseFeeHook,
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Virtual step Rollup Fee Hook
     RollupFeeHook,
 }
@@ -169,7 +169,7 @@ impl ExecState {
         }
     }
 
-    #[cfg(feature = "kanvas")]
+    #[cfg(feature = "kroma")]
     /// Returns `true` if `ExecState` is `BaseFeeHook` or `RollupFeeHook`.
     pub fn is_fee_hook(&self) -> bool {
         *self == ExecState::BaseFeeHook || *self == ExecState::RollupFeeHook
