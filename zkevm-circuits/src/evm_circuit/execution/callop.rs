@@ -757,15 +757,13 @@ mod test {
 
     use itertools::Itertools;
     #[cfg(feature = "kroma")]
-    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
         test_ctx::{
-            helpers::{
-                account_0_code_account_1_no_code, setup_kroma_required_accounts, tx_from_1_to_0,
-            },
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
             SimpleTestContext, TestContext3_1,
         },
-        tx_idx, TestContext,
+        tx_idx,
     };
 
     use rayon::prelude::{ParallelBridge, ParallelIterator};

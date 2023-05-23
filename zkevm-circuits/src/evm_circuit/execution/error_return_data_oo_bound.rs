@@ -181,13 +181,9 @@ impl<F: Field> ExecutionGadget<F> for ErrorReturnDataOutOfBoundGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, ToWord, Word};
-    use mock::{
-        test_ctx::{
-            helpers::{setup_kroma_required_accounts, system_deposit_tx},
-            TestContext3_1,
-        },
-        tx_idx,
-    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
 
     fn test_ok(
         return_data_offset: usize,

@@ -88,13 +88,9 @@ impl<F: Field> ExecutionGadget<F> for GasGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{address, bytecode, Word};
-    use mock::{
-        test_ctx::{
-            helpers::{setup_kroma_required_accounts, system_deposit_tx},
-            SimpleTestContext,
-        },
-        tx_idx, TestContext,
-    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::SimpleTestContext, tx_idx, TestContext};
 
     fn test_ok() {
         let bytecode = bytecode! {

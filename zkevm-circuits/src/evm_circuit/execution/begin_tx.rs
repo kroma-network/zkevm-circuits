@@ -789,7 +789,7 @@ mod test {
     use mock::{
         eth, gwei,
         test_ctx::{SimpleTestContext, TestContext1_1, TestContext2_1},
-        tx_idx, TestContext, MOCK_ACCOUNTS,
+        tx_idx, MOCK_ACCOUNTS,
     };
 
     fn gas(call_data: &[u8]) -> Word {

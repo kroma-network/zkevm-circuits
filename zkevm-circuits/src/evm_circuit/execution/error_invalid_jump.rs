@@ -188,11 +188,10 @@ mod test {
         ToWord, Word,
     };
 
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
-        test_ctx::{
-            helpers::{setup_kroma_required_accounts, system_deposit_tx},
-            SimpleTestContext, TestContext3_1,
-        },
+        test_ctx::{SimpleTestContext, TestContext3_1},
         tx_idx,
     };
 

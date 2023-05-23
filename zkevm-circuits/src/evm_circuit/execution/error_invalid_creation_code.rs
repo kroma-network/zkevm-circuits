@@ -111,12 +111,11 @@ mod test {
     };
 
     use lazy_static::lazy_static;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
         eth,
-        test_ctx::{
-            helpers::{setup_kroma_required_accounts, system_deposit_tx},
-            SimpleTestContext, TestContext1_1,
-        },
+        test_ctx::{SimpleTestContext, TestContext1_1},
         tx_idx, MOCK_ACCOUNTS,
     };
 
