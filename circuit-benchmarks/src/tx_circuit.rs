@@ -30,7 +30,7 @@ mod tests {
     use ethers::providers::Http;
     use url::Url;
     fn get_client() -> GethClient<Http> {
-        let geth_url = "http://52.37.45.56:30303";
+        let geth_url = "http://localhost:8545";
         let transport = Http::new(Url::parse(geth_url).expect("invalid url"));
         GethClient::new(transport)
     }
