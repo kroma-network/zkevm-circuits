@@ -1645,6 +1645,10 @@ impl<F: Field> TxCircuit<F> {
                             is_padding_tx,
                             cum_num_txs,
                         )?;
+                        #[cfg(feature = "enable-sign-verify")]
+                        if tx.is_deposit() {
+                            continue;
+                        }
                         // Ref. spec 0. Copy constraints using fixed offsets
                         // between the tx rows and the SignVerifyChip
                         match tag {
