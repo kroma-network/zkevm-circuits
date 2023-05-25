@@ -463,10 +463,10 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
                 Rotation::next(),
             );
             let is_calldata = meta.query_advice(is_calldata, Rotation::cur());
-            let tx_id_next_is_zero = q_enable * (1.expr() - tx_id_next.clone() * tx_id_inv_next);
+            let tx_id_next_is_zero = 1.expr() - tx_id_next.clone() * tx_id_inv_next;
 
             vec![(
-                is_calldata * not::expr(tx_id_next_is_zero) * (tx_id_next - tx_id),
+                q_enable * is_calldata * not::expr(tx_id_next_is_zero) * (tx_id_next - tx_id),
                 u16_table,
             )]
         });
