@@ -131,38 +131,7 @@ pub struct StateDB {
 impl StateDB {
     /// Create an empty Self
     pub fn new() -> Self {
-        // Self::default()
-        let mut _db = Self {
-            state: HashMap::new(),
-            access_list_account: HashSet::new(),
-            access_list_account_storage: HashSet::new(),
-            dirty_storage: HashMap::new(),
-            destructed_account: HashSet::new(),
-            refund: 0,
-        };
-        #[cfg(all(feature = "test", feature = "kroma"))]
-        _db.add_recipients_for_testing();
-        _db
-    }
-
-    #[cfg(all(feature = "test", feature = "kroma"))]
-    fn add_recipients_for_testing(&mut self) {
-        self.set_account(&BASE_FEE_RECIPIENT, Account::zero());
-        self.set_account(&L1_FEE_RECIPIENT, Account::zero());
-
-        let mut storage: HashMap<Word, Word> = HashMap::new();
-        storage.insert(*BASE_FEE_KEY, Word::from(8));
-        storage.insert(*L1_FEE_OVERHEAD_KEY, Word::from(2100));
-        storage.insert(*L1_FEE_SCALAR_KEY, Word::from(1000000));
-        self.set_account(
-            &L1_BLOCK,
-            Account {
-                nonce: 0u64,
-                balance: Word::zero(),
-                storage,
-                code_hash: Hash::random(),
-            },
-        );
+        Self::default()
     }
 
     /// Set an [`Account`] at `addr` in the StateDB.
