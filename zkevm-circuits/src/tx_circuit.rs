@@ -1702,6 +1702,23 @@ impl<F: Field> TxCircuit<F> {
 
                 debug_assert_eq!(offset, self.max_txs * TX_LEN + 1 + calldata_count);
 
+                for _ in calldata_count..self.max_calldata {
+                    config.assign_row(
+                        &mut region,
+                        &mut offset,
+                        0, // tx_id
+                        0, // tx_id_next
+                        CallData,
+                        RlpTxTag::Data,
+                        Value::known(F::zero()),
+                        true,
+                        None,
+                        None,
+                        false, // meaningless in calldata
+                        0,
+                    )?;
+                }
+
                 Ok(offset)
             },
         )?;
@@ -1713,23 +1730,7 @@ impl<F: Field> TxCircuit<F> {
                 self.size
             );
         }
-        layouter.assign_region(
-            || "tx table (calldata zeros and paddings)",
-            |mut region| {
-                config.assign_calldata_zeros(
-                    &mut region,
-                    0,
-                    self.max_calldata + self.max_txs * TX_LEN + 1 - last_off,
-                )?;
-                config.assign_paddings(
-                    &mut region,
-                    self.max_calldata + self.max_txs * TX_LEN + 1 - last_off,
-                    self.size - config.minimum_rows - last_off,
-                )?;
-
-                Ok(())
-            },
-        )
+        Ok(())
     }
 }
 
