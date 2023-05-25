@@ -512,7 +512,7 @@ mod evm_circuit_stats {
     use mock::{
         test_ctx::{
             helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-            SimpleTestContext, TestContext, TestContext0_0,
+            SimpleTestContext, TestContext0_0,
         },
         MOCK_ACCOUNTS,
     };
@@ -540,7 +540,19 @@ mod evm_circuit_stats {
     #[test]
     pub fn empty_evm_circuit_with_padding() {
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b).unwrap(),
+            TestContext0_0::new(
+                None,
+                |mut accs| {
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 0);
+                },
+                |mut txs, _| {
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                },
+                |b, _| b,
+            )
+            .unwrap(),
         )
         .block_modifier(Box::new(|block| {
             block.circuits_params.max_evm_rows = (1 << 18) - 100

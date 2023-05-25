@@ -113,10 +113,10 @@ mod calldataload_tests {
         ToWord, Word,
     };
     #[cfg(feature = "kroma")]
-    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
-        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
-        tx_idx, TestContext,
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1},
+        tx_idx,
     };
     use rand::random;
 
@@ -169,17 +169,21 @@ mod calldataload_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -191,14 +195,14 @@ mod calldataload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATALOAD))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[step.call_index].call_id;
-        let caller_id = builder.block.txs()[0].calls()[step.call_index].caller_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
+        let caller_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].caller_id;
 
         // 1 stack read, 3 call context reads, 32 memory reads and 1 stack write.
         assert_eq!(step.bus_mapping_instance.len(), 37);

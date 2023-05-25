@@ -105,20 +105,6 @@ mod test {
 
         let two_gwei = Word::from(2_000_000_000u64);
 
-        // Get the execution steps from the external tracer
-        // let ctx = TestContext::<2, 1>::new(
-        //     None,
-        //     account_0_code_account_1_no_code(bytecode),
-        //     |mut txs, accs| {
-        //         txs[0]
-        //             .from(accs[1].address)
-        //             .to(accs[0].address)
-        //             .gas_price(two_gwei);
-        //     },
-        //     |block, _tx| block.number(0xcafeu64),
-        // )
-        // .unwrap();
-
         let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),

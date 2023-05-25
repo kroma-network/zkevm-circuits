@@ -190,11 +190,11 @@ impl<F: Field> ExecutionGadget<F> for BlockCtxU256Gadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::bytecode;
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_ok(bytecode: bytecode::Bytecode) {
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run()
     }

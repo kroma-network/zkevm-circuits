@@ -221,32 +221,6 @@ mod test {
             STOP
         });
 
-        // let ctx = TestContext::<3, 1>::new(
-        //     None,
-        //     |accs| {
-        //         accs[0]
-        //             .address(address!("0x000000000000000000000000000000000000cafe"))
-        //             .balance(Word::from(1_u64 << 20))
-        //             .code(code);
-        //         // Set balance if account exists.
-        //         if let Some(account) = account {
-        //             accs[1].address(address).balance(account.balance);
-        //         } else {
-        //             accs[1]
-        //                 .address(address!("0x0000000000000000000000000000000000000010"))
-        //                 .balance(Word::from(1_u64 << 20));
-        //         }
-        //         accs[2]
-        //             .address(address!("0x0000000000000000000000000000000000000020"))
-        //             .balance(Word::from(1_u64 << 20));
-        //     },
-        //     |mut txs, accs| {
-        //         txs[0].to(accs[0].address).from(accs[2].address);
-        //     },
-        //     |block, _tx| block,
-        // )
-        // .unwrap();
-
         let ctx = TestContext3_1::new(
             None,
             |mut accs| {
@@ -322,30 +296,6 @@ mod test {
             CALL
             STOP
         };
-
-        // let ctx = TestContext::<4, 1>::new(
-        //     None,
-        //     |accs| {
-        //         accs[0].address(addr_b).code(code_b);
-        //         accs[1].address(addr_a).code(code_a);
-        //         // Set balance if account exists.
-        //         if let Some(account) = account {
-        //             accs[2].address(address).balance(account.balance);
-        //         } else {
-        //             accs[2]
-        //                 .address(mock::MOCK_ACCOUNTS[2])
-        //                 .balance(Word::from(1_u64 << 20));
-        //         }
-        //         accs[3]
-        //             .address(mock::MOCK_ACCOUNTS[3])
-        //             .balance(Word::from(1_u64 << 20));
-        //     },
-        //     |mut txs, accs| {
-        //         txs[0].to(accs[1].address).from(accs[3].address);
-        //     },
-        //     |block, _tx| block,
-        // )
-        // .unwrap();
 
         let ctx = TestContext4_1::new(
             None,

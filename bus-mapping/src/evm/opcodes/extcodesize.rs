@@ -97,7 +97,9 @@ mod extcodesize_tests {
         geth_types::{Account, GethData},
         Bytecode, U256,
     };
-    use mock::{TestContext, MOCK_1_ETH, MOCK_ACCOUNTS, MOCK_CODES};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx, MOCK_1_ETH, MOCK_ACCOUNTS, MOCK_CODES};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -134,9 +136,9 @@ mod extcodesize_tests {
         });
 
         // Get the execution steps from the external tracer.
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(MOCK_ACCOUNTS[0])
                     .balance(*MOCK_1_ETH)
@@ -147,9 +149,13 @@ mod extcodesize_tests {
                     accs[1].address(MOCK_ACCOUNTS[1]).balance(*MOCK_1_ETH);
                 }
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(*MOCK_1_ETH);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -164,7 +170,7 @@ mod extcodesize_tests {
         // Check if account address is in access list as a result of bus mapping.
         assert!(builder.sdb.add_account_to_access_list(account.address));
 
-        let tx_id = 1;
+        let tx_id = tx_idx!(1);
         let transaction = &builder.block.txs()[tx_id - 1];
         let call_id = transaction.calls()[0].call_id;
 

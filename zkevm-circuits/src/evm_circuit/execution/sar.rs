@@ -367,7 +367,7 @@ mod test {
     use eth_types::{bytecode, U256};
     use ethers_core::types::I256;
     use lazy_static::lazy_static;
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
     use rand::Rng;
 
     lazy_static! {
@@ -462,7 +462,7 @@ mod test {
             STOP
         };
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

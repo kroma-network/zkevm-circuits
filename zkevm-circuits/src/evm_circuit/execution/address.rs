@@ -94,7 +94,7 @@ mod test {
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
-        test_ctx::{TestContext, TestContext3_1},
+        test_ctx::{SimpleTestContext, TestContext3_1},
         tx_idx,
     };
 
@@ -105,7 +105,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -137,22 +137,6 @@ mod test {
             CALL
             STOP
         };
-
-        // let ctx = TestContext::<3, 1>::new(
-        //     None,
-        //     |accs| {
-        //         accs[0].address(addr_b).code(code_b);
-        //         accs[1].address(addr_a).code(code_a);
-        //         accs[2]
-        //             .address(mock::MOCK_ACCOUNTS[2])
-        //             .balance(Word::from(1u64 << 30));
-        //     },
-        //     |mut txs, accs| {
-        //         txs[0].to(accs[1].address).from(accs[2].address);
-        //     },
-        //     |block, _tx| block,
-        // )
-        // .unwrap();
 
         let ctx = TestContext3_1::new(
             None,

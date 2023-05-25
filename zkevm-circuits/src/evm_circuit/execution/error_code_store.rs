@@ -141,7 +141,7 @@ mod test {
     use mock::{
         eth,
         test_ctx::{SimpleTestContext, TestContext1_1},
-        tx_idx, TestContext, MOCK_ACCOUNTS,
+        tx_idx, MOCK_ACCOUNTS,
     };
     use snark_verifier::system;
 
@@ -285,13 +285,17 @@ mod test {
     fn tx_deploy_code_store_oog() {
         let code = initialization_bytecode(true);
 
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .gas(53446u64.into())
                     .value(eth(2))

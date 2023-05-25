@@ -8,10 +8,7 @@ use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "kroma")]
-use crate::{
-    circuit_input_builder::{Block, Transaction},
-    Error,
-};
+use crate::Error;
 #[cfg(feature = "kroma")]
 use eth_types::kroma_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,

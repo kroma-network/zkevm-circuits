@@ -1137,22 +1137,6 @@ mod test {
         )
         .unwrap();
 
-        // let ctx = TestContext::<1, 1>::new(
-        //     None,
-        //     |accs| {
-        //         accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
-        //     },
-        //     |mut txs, accs| {
-        //         txs[0]
-        //             .from(accs[0].address)
-        //             .to(address!("0x0000000000000000000000000000000000000004"))
-        //             .value(eth(1))
-        //             .input(Bytes::from(vec![0x01, 0x02, 0x03]));
-        //     },
-        //     |block, _tx| block.number(0xcafeu64),
-        // )
-        // .unwrap();
-
         CircuitTestBuilder::new_from_test_ctx(ctx).run();
     }
 

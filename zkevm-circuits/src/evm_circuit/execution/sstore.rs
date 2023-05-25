@@ -525,23 +525,6 @@ mod test {
             REVERT
         };
         for bytecode in [bytecode_success, bytecode_failure] {
-            // let ctx = TestContext::<2, 1>::new(
-            //     None,
-            //     |accs| {
-            //         accs[0]
-            //             .address(MOCK_ACCOUNTS[0])
-            //             .balance(Word::from(10u64.pow(19)))
-            //             .code(bytecode)
-            //             .storage(vec![(key, original_value)].into_iter());
-            //         accs[1]
-            //             .address(MOCK_ACCOUNTS[1])
-            //             .balance(Word::from(10u64.pow(19)));
-            //     },
-            //     tx_from_1_to_0,
-            //     |block, _txs| block,
-            // )
-            // .unwrap();
-
             let ctx = SimpleTestContext::new(
                 None,
                 #[allow(unused_mut)]

@@ -161,7 +161,7 @@ mod calldatacopy_tests {
     };
 
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext, TestContext},
+        test_ctx::{helpers::*, SimpleTestContext, TestContext3_1},
         tx_idx,
     };
     use pretty_assertions::assert_eq;
@@ -208,17 +208,21 @@ mod calldatacopy_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -230,14 +234,14 @@ mod calldatacopy_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATACOPY))
             .unwrap();
 
-        let caller_id = builder.block.txs()[0].calls()[step.call_index].caller_id;
-        let expected_call_id = builder.block.txs()[0].calls()[step.call_index].call_id;
+        let caller_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].caller_id;
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
 
         // 3 stack reads + 3 call context reads.
         assert_eq!(step.bus_mapping_instance.len(), 6);
@@ -275,7 +279,7 @@ mod calldatacopy_tests {
                     &CallContextOp {
                         call_id: expected_call_id,
                         field: CallContextField::CallerId,
-                        value: Word::from(1),
+                        value: Word::from(caller_id),
                     }
                 ),
                 (
@@ -304,13 +308,20 @@ mod calldatacopy_tests {
         //
         // 2. Following that, we should have tuples of (RW::READ and RW::WRITE) where
         // the caller memory is read and the current call's memory is written to.
+        let memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == caller_id)
+            .unwrap();
         assert_eq!(
-            builder.block.container.memory.len(),
+            builder.block.container.memory.len() - memory_offset,
             call_data_length + 2 * copy_size
         );
         assert_eq!(
             (call_data_length..(call_data_length + (2 * copy_size)))
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             {
@@ -398,17 +409,21 @@ mod calldatacopy_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )

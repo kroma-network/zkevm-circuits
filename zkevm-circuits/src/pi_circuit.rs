@@ -1504,7 +1504,7 @@ mod pi_circuit_test {
     #[cfg(feature = "scroll")]
     #[test]
     fn serial_test_simple_pi() {
-        use mock::test_ctx::helpers::tx_from_1_to_0;
+        use mock::test_ctx::{helpers::tx_from_1_to_0, SimpleTestContext};
         use std::env::set_var;
 
         use crate::witness::block_convert;
@@ -1531,7 +1531,7 @@ mod pi_circuit_test {
         let bytecode = bytecode! {
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             Some(vec![Word::zero()]),
             account_0_code_account_1_no_code(bytecode),
             tx_from_1_to_0,

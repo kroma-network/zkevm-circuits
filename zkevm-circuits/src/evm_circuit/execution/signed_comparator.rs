@@ -219,7 +219,7 @@ impl<F: Field> ExecutionGadget<F> for SignedComparatorGadget<F> {
 #[cfg(test)]
 mod test {
     use eth_types::{bytecode, evm_types::OpcodeId, Word};
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
 
@@ -233,7 +233,7 @@ mod test {
         bytecode.write_op(OpcodeId::STOP);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

@@ -665,7 +665,13 @@ pub(crate) mod super_circuit_tests {
     use ethers_signers::{LocalWallet, Signer};
     use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
     use log::error;
-    use mock::{eth, TestContext, MOCK_CHAIN_ID, MOCK_DIFFICULTY};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{SimpleTestContext, TestContext2_2},
+        tx_idx, MOCK_CHAIN_ID, MOCK_DIFFICULTY,
+    };
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use std::{collections::HashMap, env::set_var};
@@ -742,13 +748,17 @@ pub(crate) mod super_circuit_tests {
         wallets.insert(wallet_a.address(), wallet_a);
 
         let tx_input = callee_bytecode(true, 300, 20).code();
-        let mut block: GethData = TestContext::<2, 1>::new(
+        let mut block: GethData = SimpleTestContext::new(
             Some(vec![Word::zero()]),
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_a).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0].from(accs[0].address).input(tx_input.into());
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[0].address).input(tx_input.into());
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -776,17 +786,21 @@ pub(crate) mod super_circuit_tests {
         let mut wallets = HashMap::new();
         wallets.insert(wallet_a.address(), wallet_a);
 
-        let mut block: GethData = TestContext::<2, 1>::new(
+        let mut block: GethData = SimpleTestContext::new(
             Some(vec![Word::zero()]),
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(addr_b)
                     .balance(Word::from(1u64 << 20))
                     .code(bytecode);
                 accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(Word::from(1_000_000u64));
@@ -817,17 +831,21 @@ pub(crate) mod super_circuit_tests {
         let mut wallets = HashMap::new();
         wallets.insert(wallet_a.address(), wallet_a);
 
-        let mut block: GethData = TestContext::<2, 2>::new(
+        let mut block: GethData = TestContext2_2::new(
             Some(vec![Word::zero()]),
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(addr_b)
                     .balance(Word::from(1u64 << 20))
                     .code(bytecode);
                 accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(Word::from(1_000_000u64));

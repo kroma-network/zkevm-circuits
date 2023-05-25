@@ -930,10 +930,13 @@ mod tests {
         halo2curves::bn256::Fr,
     };
     #[cfg(feature = "kroma")]
-    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
-        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
-        tx_idx, TestContext, MOCK_ACCOUNTS,
+        test_ctx::{
+            helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext0_0,
+            TestContext3_1,
+        },
+        tx_idx, MOCK_ACCOUNTS,
     };
     use pretty_assertions::assert_eq;
 
@@ -986,7 +989,7 @@ mod tests {
             CODECOPY
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -1006,9 +1009,9 @@ mod tests {
             STOP
         };
         let code_ext = rand_bytes(0x0fffusize);
-        let test_ctx = TestContext::<3, 1>::new(
+        let test_ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[1]).code(code.clone());
 
                 accs[1].address(external_address).code(code_ext.clone());
@@ -1016,9 +1019,13 @@ mod tests {
                 accs[2]
                     .address(MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -1033,7 +1040,7 @@ mod tests {
 
     fn gen_sha3_data() -> CircuitInputBuilder {
         let (code, _) = gen_sha3_code(0x20, 0x200, MemoryKind::EqualToSize);
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
@@ -1204,9 +1211,20 @@ mod tests {
         let builder = gen_tx_log_data();
         let block1 = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
 
-        let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
-            .unwrap()
-            .into();
+        let block: GethData = TestContext0_0::new(
+            None,
+            |mut accs| {
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 0);
+            },
+            |mut txs, _| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+            },
+            |b, _| b,
+        )
+        .unwrap()
+        .into();
         let mut builder =
             BlockData::new_from_geth_data_with_params(block.clone(), CircuitsParams::default())
                 .new_circuit_input_builder();

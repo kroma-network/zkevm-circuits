@@ -583,7 +583,9 @@ mod tests {
     };
     use eth_types::{bytecode, geth_types::GethData, Bytecode, Word};
     use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-    use mock::TestContext;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::test_ctx::{SimpleTestContext, TestContext0_0};
 
     use crate::{
         evm_circuit::witness::block_convert,
@@ -611,7 +613,7 @@ mod tests {
     }
 
     fn gen_data(code: Bytecode) -> CircuitInputBuilder {
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -672,9 +674,20 @@ mod tests {
     fn variadic_size_check() {
         let k = 20;
         // Empty
-        let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
-            .unwrap()
-            .into();
+        let block: GethData = TestContext0_0::new(
+            None,
+            |mut accs| {
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 0);
+            },
+            |mut txs, _| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+            },
+            |b, _| b,
+        )
+        .unwrap()
+        .into();
         let mut builder =
             BlockData::new_from_geth_data_with_params(block.clone(), CircuitsParams::default())
                 .new_circuit_input_builder();

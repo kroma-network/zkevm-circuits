@@ -152,7 +152,7 @@ impl<F: Field> ExecutionGadget<F> for MulDivModGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, evm_types::OpcodeId, Word};
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_ok(opcode: OpcodeId, a: Word, b: Word) {
         let bytecode = bytecode! {
@@ -164,7 +164,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

@@ -278,7 +278,10 @@ mod test {
     use eth_types::{bytecode, ToWord, Word};
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
-    use mock::{test_ctx::TestContext3_1, tx_idx, TestContext};
+    use mock::{
+        test_ctx::{SimpleTestContext, TestContext3_1},
+        tx_idx,
+    };
 
     fn test_root_ok(offset: Word) {
         let bytecode = bytecode! {
@@ -288,7 +291,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

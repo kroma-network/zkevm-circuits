@@ -146,7 +146,7 @@ impl<F: Field> ExecutionGadget<F> for PushGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, evm_types::OpcodeId, Bytecode};
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_ok(opcode: OpcodeId, bytes: &[u8]) {
         assert!(bytes.len() == opcode.data_len());
@@ -160,7 +160,7 @@ mod test {
         bytecode.write_op(OpcodeId::STOP);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -190,7 +190,7 @@ mod test {
     fn push_gadget_out_of_range() {
         let bytecode = Bytecode::from(vec![0x61, 0x00]);
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

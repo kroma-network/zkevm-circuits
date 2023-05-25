@@ -113,7 +113,7 @@ mod test {
         test_util::CircuitTestBuilder,
     };
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_ok(destination: usize, condition: Word) {
         assert!((68..(1 << 24) - 1).contains(&destination));
@@ -133,7 +133,7 @@ mod test {
         });
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -177,7 +177,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

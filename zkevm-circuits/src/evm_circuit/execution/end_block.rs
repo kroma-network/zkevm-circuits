@@ -177,7 +177,7 @@ mod test {
         #[cfg(not(feature = "kroma"))]
         let evm_circuit_pad_to = 50;
         #[cfg(feature = "kroma")]
-        let evm_circuit_pad_to = 1150;
+        let evm_circuit_pad_to = 1200;
         test_circuit(evm_circuit_pad_to);
     }
 }
