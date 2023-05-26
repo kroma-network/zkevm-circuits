@@ -285,6 +285,7 @@ struct GethExecStepInternal {
     gas_cost: GasCost,
     depth: u16,
     error: Option<String>,
+    #[serde(default)]
     // stack is in hex 0x prefixed
     stack: Vec<DebugU256>,
     // memory is in chunks of 32 bytes, in hex
@@ -307,7 +308,6 @@ pub struct GethExecStep {
     pub refund: Gas,
     pub depth: u16,
     pub error: Option<String>,
-    #[serde(default)]
     // stack is in hex 0x prefixed
     pub stack: Stack,
     // memory is in chunks of 32 bytes, in hex
