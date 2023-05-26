@@ -183,6 +183,7 @@ fn into_traceconfig(st: StateTest) -> (String, TraceConfig, StateTestResult) {
                 s: sig.s,
                 hash: tx_hash.into(),
                 transaction_type: st.transaction_type,
+                ..Default::default()
             }],
             accounts,
             logger_config: LoggerConfig {
