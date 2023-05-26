@@ -289,15 +289,15 @@ impl TxTable {
                     offset += 1;
                 }
                 // NOTE(chokobole): Do not have to assign rows of advice columns.
-                // for _ in sum_txs_calldata..max_calldata {
-                //     region.assign_fixed(
-                //         || format!("tx table {} row {}", "", offset),
-                //         self.tag,
-                //         offset,
-                //         || Value::known(F::from(TxContextFieldTag::CallData as u64)),
-                //     )?;
-                //     offset += 1;
-                // }
+                for _ in sum_txs_calldata..max_calldata {
+                    region.assign_fixed(
+                        || format!("tx table {} row {}", "", offset),
+                        self.tag,
+                        offset,
+                        || Value::known(F::from(TxContextFieldTag::CallData as u64)),
+                    )?;
+                    offset += 1;
+                }
                 Ok(())
             },
         )
