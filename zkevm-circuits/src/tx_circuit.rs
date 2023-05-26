@@ -150,6 +150,7 @@ pub struct TxCircuitConfig<F: Field> {
     /// We also use this column to reduce degree to less than 9.
     is_tag_block_num: Column<Advice>,
     is_padding_tx: Column<Advice>,
+    is_deposit_tx: Column<Advice>,
     /// Tx id must be no greater than cum_num_txs
     tx_id_cmp_cum_num_txs: ComparatorConfig<F, 2>,
     /// Cumulative number of txs up to a block
@@ -206,6 +207,7 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
         let is_tag_block_num = meta.advice_column();
         let cum_num_txs = meta.advice_column();
         let is_padding_tx = meta.advice_column();
+        let is_deposit_tx = meta.advice_column();
         let lookup_conditions = [
             LookupCondition::TxCalldata,
             LookupCondition::Tag,
@@ -384,7 +386,10 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
         meta.create_gate("calldata length lookup condition", |meta| {
             let mut cb = BaseConstraintBuilder::default();
 
-            let is_tag_sign_or_hash = sum::expr([is_sign_length(meta), is_hash_length(meta)]);
+            let is_tag_sign_or_hash = and::expr([
+                sum::expr([is_sign_length(meta), is_hash_length(meta)]),
+                not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
+            ]);
             cb.require_equal(
                 "condition",
                 is_tag_sign_or_hash,
@@ -668,6 +673,7 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             cum_num_txs,
             is_create,
             is_padding_tx,
+            is_deposit_tx,
             lookup_conditions,
             is_final,
             calldata_length,
@@ -725,6 +731,7 @@ impl<F: Field> TxCircuitConfig<F> {
         calldata_length: Option<u64>,
         calldata_gas_cost_acc: Option<u64>,
         is_padding_tx: bool,
+        is_deposit_tx: bool,
         cum_num_txs: usize,
     ) -> Result<(), Error> {
         region.assign_fixed(
@@ -854,7 +861,7 @@ impl<F: Field> TxCircuitConfig<F> {
         conditions.insert(LookupCondition::Keccak, {
             let set = [TxSignLength, TxHashLength];
             let is_tag_in_set = set.into_iter().filter(|_tag| tag == *_tag).count();
-            Value::known(F::from(is_tag_in_set as u64))
+            Value::known(F::from((is_tag_in_set > 0 && !is_deposit_tx) as u64))
         });
 
         let tx_id_cmp_cum_num_txs = ComparatorChip::construct(self.tx_id_cmp_cum_num_txs.clone());
@@ -875,6 +882,12 @@ impl<F: Field> TxCircuitConfig<F> {
             self.is_padding_tx,
             *offset,
             || Value::known(F::from(is_padding_tx as u64)),
+        )?;
+        region.assign_advice(
+            || "is_deposit_tx",
+            self.is_deposit_tx,
+            *offset,
+            || Value::known(F::from(is_deposit_tx as u64)),
         )?;
 
         for (condition, value) in conditions {
@@ -1302,17 +1315,17 @@ impl<F: Field> TxCircuit<F> {
             .iter()
             .chain(iter::once(&padding_tx))
             .enumerate()
-            // .filter(|(_, tx)| {
-            //     if tx.v == 0 && tx.r.is_zero() && tx.s.is_zero() {
-            //         log::warn!(
-            //             "tx {} is not signed, skipping tx circuit keccak input",
-            //             tx.id
-            //         );
-            //         false
-            //     } else {
-            //         true
-            //     }
-            // })
+            .filter(|(_, tx)| {
+                if tx.v == 0 && tx.r.is_zero() && tx.s.is_zero() {
+                    log::warn!(
+                        "tx {} is not signed, skipping tx circuit keccak input",
+                        tx.id
+                    );
+                    false
+                } else {
+                    true
+                }
+            })
             .map(|(_, tx)| {
                 tx.sign_data().map_err(|e| {
                     error!("keccak_inputs_tx_circuit error: {:?}", e);
@@ -1427,6 +1440,7 @@ impl<F: Field> TxCircuit<F> {
                     None,
                     None,
                     is_padding_tx,
+                    false,
                     cum_num_txs,
                 )?;
 
@@ -1643,6 +1657,7 @@ impl<F: Field> TxCircuit<F> {
                             None,
                             None,
                             is_padding_tx,
+                            tx.is_deposit(),
                             cum_num_txs,
                         )?;
                         #[cfg(feature = "enable-sign-verify")]
@@ -1747,6 +1762,7 @@ impl<F: Field> TxCircuit<F> {
                             Some(calldata_length as u64),
                             Some(calldata_gas_cost),
                             false, // meaningless in calldata
+                            false, // meaningless in calldata
                             0,
                         )?;
                     }
@@ -1766,6 +1782,7 @@ impl<F: Field> TxCircuit<F> {
                         true,
                         None,
                         None,
+                        false, // meaningless in calldata
                         false, // meaningless in calldata
                         0,
                     )?;
