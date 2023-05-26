@@ -37,6 +37,7 @@ use halo2_ecc::{
 };
 
 use halo2_proofs::{
+    arithmetic::Field as OtherField,
     circuit::{Layouter, Value},
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
     plonk::{ConstraintSystem, Error, Selector},
@@ -342,16 +343,17 @@ impl<F: Field> SignVerifyChip<F> {
         ctx: &mut Context<F>,
         ecdsa_chip: &FpChip<F>,
         sign_data: Option<&SignData>,
+        is_deposit_tx: bool,
     ) -> Result<SignDataDecomposed<F>, Error> {
         // build ecc chip from Fp chip
         let ecc_chip = EccChip::<F, FpChip<F>>::construct(ecdsa_chip);
 
         let zero = ecdsa_chip.range.gate.load_zero(ctx)?;
 
-        let (padding, sign_data) = match sign_data {
-            Some(sign_data) => (false, sign_data.clone()),
-            None => (true, SignData::default()),
-        };
+        let dummy_sign_data = SignData::default();
+        let padding = is_deposit_tx || sign_data.is_none();
+        let use_real_sign_data = !padding || is_deposit_tx;
+        let new_sign_data = sign_data.unwrap_or(&dummy_sign_data);
 
         // ================================================
         // step 0. powers of aux parameters
@@ -365,9 +367,9 @@ impl<F: Field> SignVerifyChip<F> {
         // ================================================
         // pk hash cells
         // ================================================
-        let pk_le = pk_bytes_le(&sign_data.pk);
+        let pk_le = pk_bytes_le(&new_sign_data.pk);
         let pk_be = pk_bytes_swap_endianness(&pk_le);
-        let pk_hash = (!padding)
+        let pk_hash = (use_real_sign_data)
             .then(|| {
                 let mut keccak = Keccak::default();
                 keccak.update(&pk_be);
@@ -401,8 +403,8 @@ impl<F: Field> SignVerifyChip<F> {
         // ================================================
         // message hash cells
         // ================================================
-        let assigned_msg_hash_le = (!padding)
-            .then(|| sign_data.msg_hash.to_bytes())
+        let assigned_msg_hash_le = (use_real_sign_data)
+            .then(|| sign_data.unwrap().msg_hash.to_bytes())
             .unwrap_or_default()
             .iter()
             .map(|&x| QuantumCell::Witness(Value::known(F::from_u128(x as u128))))
@@ -412,7 +414,11 @@ impl<F: Field> SignVerifyChip<F> {
         // msg_hash is an overflowing integer with 3 limbs, of sizes 88, 88, and 80
         let assigned_msg_hash = ecdsa_chip.load_private(
             ctx,
-            FqOverflowChip::<F>::fe_to_witness(&Value::known(sign_data.msg_hash)),
+            FqOverflowChip::<F>::fe_to_witness(&Value::known(if use_real_sign_data {
+                sign_data.unwrap().msg_hash
+            } else {
+                dummy_sign_data.msg_hash
+            })),
         )?;
 
         self.assert_crt_int_byte_repr(
@@ -427,7 +433,7 @@ impl<F: Field> SignVerifyChip<F> {
         // ================================================
         // pk cells
         // ================================================
-        let pk_x_le = sign_data
+        let pk_x_le = new_sign_data
             .pk
             .x
             .to_bytes()
@@ -435,7 +441,7 @@ impl<F: Field> SignVerifyChip<F> {
             .map(|&x| QuantumCell::Witness(Value::known(F::from_u128(x as u128))))
             .collect_vec();
 
-        let pk_y_le = sign_data
+        let pk_y_le = new_sign_data
             .pk
             .y
             .to_bytes()
@@ -444,7 +450,10 @@ impl<F: Field> SignVerifyChip<F> {
             .collect_vec();
         let pk_assigned = ecc_chip.load_private(
             ctx,
-            (Value::known(sign_data.pk.x), Value::known(sign_data.pk.y)),
+            (
+                Value::known(new_sign_data.pk.x),
+                Value::known(new_sign_data.pk.y),
+            ),
         )?;
 
         self.assert_crt_int_byte_repr(
@@ -598,7 +607,10 @@ impl<F: Field> SignVerifyChip<F> {
                 let mut assigned_ecdsas = Vec::new();
 
                 for i in 0..self.max_verif {
-                    let signature = if i < signatures.len() {
+                    let signature = if i < signatures.len()
+                        && !signatures[i].signature.0.is_zero_vartime()
+                        && !signatures[i].signature.1.is_zero_vartime()
+                    {
                         signatures[i].clone()
                     } else {
                         // padding (enabled when address == 0)
@@ -613,9 +625,23 @@ impl<F: Field> SignVerifyChip<F> {
                 // ================================================
                 let mut sign_data_decomposed_vec = Vec::new();
                 for i in 0..assigned_ecdsas.len() {
-                    let sign_data = signatures.get(i); // None when padding (enabled when address == 0)
-                    let sign_data_decomposed =
-                        self.sign_data_decomposition(&mut ctx, ecdsa_chip, sign_data)?;
+                    let (sign_data, is_deposit_tx) = if i < signatures.len() {
+                        if !signatures[i].signature.0.is_zero_vartime()
+                            && !signatures[i].signature.1.is_zero_vartime()
+                        {
+                            (Some(&signatures[i]), false)
+                        } else {
+                            (Some(&signatures[i]), true)
+                        }
+                    } else {
+                        (None, false)
+                    };
+                    let sign_data_decomposed = self.sign_data_decomposition(
+                        &mut ctx,
+                        ecdsa_chip,
+                        sign_data,
+                        is_deposit_tx,
+                    )?;
                     sign_data_decomposed_vec.push(sign_data_decomposed);
                 }
 

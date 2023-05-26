@@ -21,10 +21,10 @@ use super::{
 use crate::util::{Challenges, DEFAULT_RAND};
 
 /// max range of prev blocks allowed inside BLOCKHASH opcode
-#[cfg(feature = "scroll")]
+#[cfg(any(feature = "scroll", feature = "kroma"))]
 pub const NUM_PREV_BLOCK_ALLOWED: u64 = 1;
 /// max range of prev blocks allowed inside BLOCKHASH opcode
-#[cfg(not(feature = "scroll"))]
+#[cfg(all(not(feature = "kroma"), not(feature = "scroll")))]
 pub const NUM_PREV_BLOCK_ALLOWED: u64 = 256;
 
 // TODO: Remove fields that are duplicated in`eth_block`
@@ -275,9 +275,9 @@ impl BlockContext {
     fn block_hash_assignments<F: Field>(&self, randomness: Value<F>) -> Vec<[Value<F>; 3]> {
         use eth_types::ToWord;
 
-        #[cfg(not(feature = "scroll"))]
+        #[cfg(all(not(feature = "kroma"), not(feature = "scroll")))]
         let history_hashes: &[U256] = &self.history_hashes;
-        #[cfg(feature = "scroll")]
+        #[cfg(any(feature = "scroll", feature = "kroma"))]
         let history_hashes: &[U256] = &[self.eth_block.parent_hash.to_word()];
 
         let len_history = history_hashes.len();

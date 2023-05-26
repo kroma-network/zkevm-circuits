@@ -355,6 +355,7 @@ mod test {
             }
         },
         "transaction" : {
+            "transactionType": "0",
             "data" : [
                 "0x6001",
                 "0x6002"

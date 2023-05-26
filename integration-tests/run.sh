@@ -4,7 +4,7 @@ set -e
 ARG_KROMA_PATH=
 ARG_DEFAULT_SUDO=
 ARG_DEFAULT_STEPS="setup gendata tests cleanup"
-ARG_DEFAULT_TESTS="rpc circuit_input_builder circuits"
+ARG_DEFAULT_TESTS="rpc circuit_input_builder circuits::mock_prover circuits::real_prover"
 
 usage() {
     cat >&2 << EOF

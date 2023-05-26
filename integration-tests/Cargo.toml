@@ -32,9 +32,9 @@ mock = { path = "../mock" }
 pretty_assertions = "1.0.0"
 
 [features]
-default = ["circuits","kroma"]
+default = ["circuits", "kroma"]
 rpc = []
 circuit_input_builder = []
 circuits = []
 mock_prover = []
-kroma = ["bus-mapping/kroma", "eth-types/kroma", "zkevm-circuits/kroma"]
+kroma = ["bus-mapping/kroma", "eth-types/kroma", "zkevm-circuits/enable-sign-verify", "zkevm-circuits/kroma"]

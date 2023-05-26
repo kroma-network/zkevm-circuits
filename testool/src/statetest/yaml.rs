@@ -111,7 +111,7 @@ impl<'a> YamlStateTestBuilder<'a> {
             let secret_key = Self::parse_bytes(&yaml_transaction["secretKey"])?;
             let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
 
-            let transaction_type = Self::parse_u64(&yaml_transaction["transaction_type"])?;
+            let transaction_type = Self::parse_u64(&yaml_transaction["transactionType"])?;
 
             // parse expects (account states before executing the transaction)
             let mut expects = Vec::new();
@@ -461,6 +461,7 @@ arith:
       nonce: '0'
       storage: {}
   transaction:
+    transactionType: '0'
     data:
     - :raw 0x00
     - :label data1 :raw 0x01
