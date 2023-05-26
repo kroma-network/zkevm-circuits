@@ -53,7 +53,7 @@
 //! use eth_types::{
 //!     self, address, Address, Word, Hash, U64, GethExecTrace, GethExecStep, geth_types::GethData, bytecode
 //! };
-//! use mock::test_ctx::{TestContext, helpers::*};
+//! use mock::test_ctx::{SimpleTestContext, helpers::*};
 //! use eth_types::evm_types::Gas;
 //! use bus_mapping::circuit_input_builder::{Block, CircuitInputBuilder};
 //!
@@ -121,7 +121,7 @@
 //! };
 //!
 //! // Get the execution steps from the external tracer
-//! let block: GethData = TestContext::<2, 1>::new(
+//! let block: GethData = SimpleTestContext::new(
 //!     None,
 //!     account_0_code_account_1_no_code(code),
 //!     tx_from_1_to_0,
