@@ -61,7 +61,7 @@ const MAX_CALLDATA: usize = 4000;
 /// MAX_INNER_BLOCKS
 pub const MAX_INNER_BLOCKS: usize = 64;
 /// MAX_BYTECODE
-const MAX_BYTECODE: usize = 5000;
+const MAX_BYTECODE: usize = 10000;
 /// MAX_COPY_ROWS
 #[cfg(not(feature = "kroma"))]
 const MAX_COPY_ROWS: usize = 5888;
@@ -71,7 +71,7 @@ const MAX_COPY_ROWS: usize = 16384;
 const MAX_EVM_ROWS: usize = 10000;
 /// MAX_EXP_STEPS
 const MAX_EXP_STEPS: usize = 1000;
-const MAX_KECCAK_ROWS: usize = 10000;
+const MAX_KECCAK_ROWS: usize = 20000;
 
 const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_rws: MAX_RWS,
