@@ -607,7 +607,6 @@ fn keccak_inputs_pi_circuit(
                 .count() as u16;
             let parent_hash = block.eth_block.parent_hash;
             let block_hash = block.eth_block.hash.unwrap_or(H256::zero());
-            let num_l1_msgs = 0_u16; // 0 for now
 
             iter::empty()
                 // Block Values
@@ -618,7 +617,6 @@ fn keccak_inputs_pi_circuit(
                 .chain(block.base_fee.to_be_bytes())
                 .chain(block.gas_limit.to_be_bytes())
                 .chain(num_txs.to_be_bytes())
-                .chain(num_l1_msgs.to_be_bytes())
         }))
         // Tx Hashes
         .chain(transactions.iter().flat_map(|tx| tx.hash.to_fixed_bytes()))
