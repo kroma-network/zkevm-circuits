@@ -47,7 +47,7 @@ use itertools::Itertools;
 const BLOCK_LEN: usize = 10;
 const NUM_HISTORY_HASHES: usize = 1;
 const BYTE_POW_BASE: u64 = 256;
-const BLOCK_HEADER_BYTES_NUM: usize = 124;
+const BLOCK_HEADER_BYTES_NUM: usize = 122;
 // chain_id || coinbase || difficulty
 const BLOCK_HEADER_CONST_BYTES_NUM: usize = 84;
 const KECCAK_DIGEST_SIZE: usize = 32;
@@ -129,8 +129,6 @@ impl PublicData {
                     block.history_hashes.len(),
                     parent_hash
                 );
-                // TODO: use reasonable method to get this data
-                let num_l1_msgs = 0_u16; // 0 for now
 
                 iter::empty()
                     // Block Values
@@ -147,7 +145,6 @@ impl PublicData {
                     .chain(block.base_fee.to_be_bytes())
                     .chain(block.gas_limit.to_be_bytes())
                     .chain(num_txs.to_be_bytes())
-                    .chain(num_l1_msgs.to_be_bytes())
             }))
             // Tx Hashes
             .chain(
@@ -657,8 +654,6 @@ impl<F: Field> PiCircuitConfig<F> {
                 .iter()
                 .filter(|tx| tx.block_number == block.number.as_u64())
                 .count() as u16;
-            // FIXME: this should be assigned in the future
-            let num_l1_msgs = 0_u16;
 
             // Assign fields in pi columns and connect them to block table
             // block hash
@@ -775,19 +770,6 @@ impl<F: Field> PiCircuitConfig<F> {
                 cells[RPI_CELL_IDX].clone(),
                 block_table_offset + NUM_TXS_OFFSET,
             ));
-
-            // num_l1_msgs
-            self.assign_field_in_pi(
-                region,
-                &mut offset,
-                &num_l1_msgs.to_be_bytes(),
-                &mut rpi_rlc_acc,
-                &mut rpi_length_acc,
-                false,
-                is_rpi_padding,
-                challenges,
-                false,
-            )?;
 
             // chain_id
             let chain_id_cells = self.assign_field_in_pi(
