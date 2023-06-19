@@ -167,6 +167,9 @@ pub struct Block {
     #[cfg(feature = "kroma")]
     /// L1 fee scalar
     pub l1_fee_scalar: Word,
+    #[cfg(feature = "kroma")]
+    /// Validator Reward Ratio
+    pub validator_reward_ratio: Word,
 }
 
 impl Block {

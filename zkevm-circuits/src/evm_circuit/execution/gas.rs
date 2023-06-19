@@ -142,7 +142,7 @@ mod test {
         )
         .unwrap();
 
-        CircuitTestBuilder::<6, 2>::new_from_test_ctx(ctx)
+        CircuitTestBuilder::<7, 2>::new_from_test_ctx(ctx)
             .block_modifier(Box::new(|block| {
                 // The above block has 2 steps (GAS and STOP). We forcefully assign a
                 // wrong `gas_left` value for the second step, to assert that

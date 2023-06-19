@@ -156,7 +156,7 @@ mod test {
         let ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
 
         // finish required tests using this witness block
-        CircuitTestBuilder::<6, 2>::new_from_test_ctx(ctx)
+        CircuitTestBuilder::<7, 2>::new_from_test_ctx(ctx)
             .block_modifier(Box::new(move |block| {
                 block.circuits_params.max_evm_rows = evm_circuit_pad_to
             }))

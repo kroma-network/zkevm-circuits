@@ -80,6 +80,9 @@ pub struct Block<F> {
     #[cfg(feature = "kroma")]
     /// L1 fee scalar
     pub l1_fee_scalar: Word,
+    #[cfg(feature = "kroma")]
+    /// validator reward ration
+    pub validator_reward_ratio: Word,
 }
 
 /// ...
@@ -417,6 +420,8 @@ pub fn block_convert<F: Field>(
         l1_fee_overhead: block.l1_fee_overhead,
         #[cfg(feature = "kroma")]
         l1_fee_scalar: block.l1_fee_scalar,
+        #[cfg(feature = "kroma")]
+        validator_reward_ratio: block.validator_reward_ratio,
         ..Default::default()
     })
 }

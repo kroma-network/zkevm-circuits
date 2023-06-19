@@ -394,10 +394,10 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             // );
 
             cb.require_equal(
-                "Go to EndDepositTx or BaseFeeHook when Tx to precompile",
+                "Go to EndDepositTx or RewardHook when Tx to precompile",
                 cb.next.execution_state_selector([
                     ExecutionState::EndDepositTx,
-                    ExecutionState::BaseFeeHook,
+                    ExecutionState::VpRewardHook,
                 ]),
                 1.expr(),
             );
@@ -446,10 +446,10 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 );
 
                 cb.require_equal(
-                    "Go to EndDepositTx or BaseFeeHook when Tx to account with empty code",
+                    "Go to EndDepositTx or RewardHook when Tx to account with empty code",
                     cb.next.execution_state_selector([
                         ExecutionState::EndDepositTx,
-                        ExecutionState::BaseFeeHook,
+                        ExecutionState::VpRewardHook,
                     ]),
                     1.expr(),
                 );

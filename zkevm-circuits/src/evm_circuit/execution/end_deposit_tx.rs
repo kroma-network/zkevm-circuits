@@ -6,8 +6,9 @@ use crate::{
         util::{
             common_gadget::UpdateBalanceGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::IsEqualGadget,
-            math_gadget::{ConstantDivisionGadget, MinMaxGadget, MulWordByU64Gadget},
+            math_gadget::{
+                ConstantDivisionGadget, IsEqualGadget, MinMaxGadget, MulWordByU64Gadget,
+            },
             CachedRegion, Cell, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
@@ -35,6 +36,7 @@ pub(crate) struct EndDepositTxGadget<F> {
     l1_base_fee: Word<F>,
     l1_fee_overhead: Word<F>,
     l1_fee_scalar: Word<F>,
+    validator_reward_ratio: Word<F>,
     max_refund: ConstantDivisionGadget<F, N_BYTES_GAS>,
     refund: Cell<F>,
     effective_refund: MinMaxGadget<F, N_BYTES_GAS>,
@@ -131,6 +133,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
         let l1_base_fee = cb.query_word_rlc();
         let l1_fee_overhead = cb.query_word_rlc();
         let l1_fee_scalar = cb.query_word_rlc();
+        let validator_reward_ratio = cb.query_word_rlc();
         cb.condition(is_first_tx.expr(), |cb| {
             cb.l1_block_lookup(1.expr(), L1BlockFieldTag::L1BaseFee, l1_base_fee.expr());
             cb.l1_block_lookup(
@@ -139,6 +142,11 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
                 l1_fee_overhead.expr(),
             );
             cb.l1_block_lookup(1.expr(), L1BlockFieldTag::L1FeeScalar, l1_fee_scalar.expr());
+            cb.l1_block_lookup(
+                1.expr(),
+                L1BlockFieldTag::ValidatorRewardRatio,
+                validator_reward_ratio.expr(),
+            );
         });
 
         cb.condition(
@@ -152,7 +160,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
                 );
 
                 cb.require_step_state_transition(StepStateTransition {
-                    rw_counter: Delta(9.expr() + 2.expr() * is_first_tx.expr()),
+                    rw_counter: Delta(9.expr() + 3.expr() * is_first_tx.expr()),
                     ..StepStateTransition::any()
                 });
             },
@@ -162,7 +170,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             cb.next.execution_state_selector([ExecutionState::EndBlock]),
             |cb| {
                 cb.require_step_state_transition(StepStateTransition {
-                    rw_counter: Delta(8.expr() + 2.expr() * is_first_tx.expr()),
+                    rw_counter: Delta(8.expr() + 3.expr() * is_first_tx.expr()),
                     ..StepStateTransition::any()
                 });
             },
@@ -178,6 +186,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             l1_base_fee,
             l1_fee_overhead,
             l1_fee_scalar,
+            validator_reward_ratio,
             max_refund,
             refund,
             effective_refund,
@@ -241,6 +250,11 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             .assign(region, offset, Some(block.l1_fee_overhead.to_le_bytes()))?;
         self.l1_fee_scalar
             .assign(region, offset, Some(block.l1_fee_scalar.to_le_bytes()))?;
+        self.validator_reward_ratio.assign(
+            region,
+            offset,
+            Some(block.validator_reward_ratio.to_le_bytes()),
+        )?;
 
         let (max_refund, _) = self.max_refund.assign(region, offset, gas_used as u128)?;
         self.refund

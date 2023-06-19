@@ -1041,14 +1041,14 @@ impl<F: Field> CommonErrorGadget<F> {
             rw_counter_end_of_reversion.expr(),
         );
 
-        // Go to BaseFeeHook only when is_root
-        let is_to_end_tx = cb
+        // Go to VpRewardHook only when is_root
+        let is_to_vp_reward_hook_tx = cb
             .next
-            .execution_state_selector([ExecutionState::BaseFeeHook]);
+            .execution_state_selector([ExecutionState::VpRewardHook]);
         cb.require_equal(
-            "Go to EndTx only when is_root",
+            "Go to VpRewardHook only when is_root",
             cb.curr.state.is_root.expr(),
-            is_to_end_tx,
+            is_to_vp_reward_hook_tx,
         );
 
         // When it's a root call

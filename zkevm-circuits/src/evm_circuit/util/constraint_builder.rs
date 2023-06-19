@@ -515,10 +515,10 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
     }
 
     #[cfg(feature = "kroma")]
-    pub(crate) fn end_deposit_tx_or_base_fee_hook(&mut self) {
+    pub(crate) fn end_deposit_tx_or_vp_reward_hook(&mut self) {
         let next_state = self
             .next
-            .execution_state_selector([ExecutionState::EndDepositTx, ExecutionState::BaseFeeHook]);
+            .execution_state_selector([ExecutionState::EndDepositTx, ExecutionState::VpRewardHook]);
 
         self.add_constraint(
             "Constrain next execution state",
