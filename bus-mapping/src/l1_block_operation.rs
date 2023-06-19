@@ -1,7 +1,6 @@
 //! L1 Block Operation
 
-use core::cmp::Ordering;
-use core::fmt;
+use core::{cmp::Ordering, fmt};
 use eth_types::Word;
 
 use crate::operation::{Op, OpEnum};
@@ -16,6 +15,8 @@ pub enum L1BlockField {
     L1FeeOverhead,
     /// L1 fee scalar.
     L1FeeScalar,
+    /// Validator Reward Ratio
+    ValidatorRewardRatio,
 }
 
 /// Represents L1Block read/write operation.

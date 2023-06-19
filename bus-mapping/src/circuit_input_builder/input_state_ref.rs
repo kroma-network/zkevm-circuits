@@ -119,16 +119,15 @@ impl<'a> CircuitInputStateRef<'a> {
     }
 
     #[cfg(feature = "kroma")]
-    /// Create a new BaseFeeHook step
-    pub fn new_base_fee_fee_hook_step(&self) -> ExecStep {
+    /// Create a new VpRewardHook step
+    pub fn new_reward_hook_step(&self) -> ExecStep {
         let prev_step = self
             .tx
             .steps()
             .last()
             .expect("steps should have at least one BeginTx step");
         ExecStep {
-            exec_state: ExecState::BaseFeeHook,
-            // Dispatch to EndTx step
+            exec_state: ExecState::VpRewardHook,
             error: prev_step.error.clone(),
             gas_left: prev_step.gas_left,
             gas_cost: prev_step.gas_cost,
@@ -139,16 +138,15 @@ impl<'a> CircuitInputStateRef<'a> {
     }
 
     #[cfg(feature = "kroma")]
-    /// Create a new RollupFeeHook step
-    pub fn new_rollup_fee_hook_step(&self) -> ExecStep {
+    /// Create a new ProposerRewardHook step
+    pub fn new_proposer_reward_hook_step(&self) -> ExecStep {
         let prev_step = self
             .tx
             .steps()
             .last()
             .expect("steps should have at least one BeginTx step");
         ExecStep {
-            exec_state: ExecState::RollupFeeHook,
-            // Dispatch to EndTx step
+            exec_state: ExecState::ProposerRewardHook,
             error: prev_step.error.clone(),
             gas_left: prev_step.gas_left,
             gas_cost: prev_step.gas_cost,

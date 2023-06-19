@@ -1,4 +1,4 @@
-use eth_types::kroma_params::PROPOSER_FEE_RECIPIENT;
+use eth_types::address;
 use ethers::{
     abi::{self, Tokenize},
     contract::{builders::ContractCall, Contract, ContractFactory},
@@ -400,7 +400,7 @@ async fn main() {
     );
 
     let gen_data = GenDataOutput {
-        coinbase: *PROPOSER_FEE_RECIPIENT,
+        coinbase: address!("0x0000000000000000000000000000000000000000"),
         wallets: wallets.iter().map(|w| w.address()).collect(),
         blocks,
         deployments,

@@ -14,13 +14,13 @@ use crate::{
     util::Expr,
 };
 use eth_types::{
-    kroma_params::{L1_COST_DENOMINATOR, L1_FEE_RECIPIENT},
+    kroma_params::{L1_COST_DENOMINATOR, PROPOSER_REWARD_VAULT},
     Field, ToLittleEndian, ToScalar,
 };
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
-pub(crate) struct RollupFeeHookGadget<F> {
+pub(crate) struct ProposerRewardHookGadget<F> {
     tx_id: Cell<F>,
     l1_base_fee: Word<F>,
     l1_fee_overhead: Word<F>,
@@ -35,14 +35,14 @@ pub(crate) struct RollupFeeHookGadget<F> {
     mul_l1_gas_to_use_by_l1_base_fee: MulAddWordsGadget<F>,
     mul_l1_fee_tmp_by_l1_fee_scalar: MulAddWordsGadget<F>,
     div_l1_fee_by_l1_cost_denominator: MulAddWordsGadget<F>,
-    l1_fee_recipient: Cell<F>,
-    l1_fee_reward: UpdateBalanceGadget<F, 2, true>,
+    proposer_reward_vault: Cell<F>,
+    proposer_reward: UpdateBalanceGadget<F, 2, true>,
 }
 
-impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
-    const NAME: &'static str = "RollupFeeHook";
+impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
+    const NAME: &'static str = "ProposerRewardHookGadget";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::RollupFeeHook;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::ProposerRewardHook;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
@@ -54,7 +54,7 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
         ]
         .map(|field_tag| cb.l1_block(field_tag));
 
-        // Add l1 rollup fee to l1_fee_recipient's balance
+        // Add l1 rollup fee to proposer_reward_vault's balance
         let tx_rollup_data_gas_cost =
             cb.tx_context_as_word(tx_id.expr(), TxContextFieldTag::RollupDataGasCost, None);
         let l1_gas_to_use = cb.query_word_rlc();
@@ -99,9 +99,14 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             div_l1_fee_by_l1_cost_denominator.overflow(),
         );
 
-        let l1_fee_recipient = cb.query_cell();
-        let l1_fee_reward =
-            UpdateBalanceGadget::construct(cb, l1_fee_recipient.expr(), vec![l1_fee], None, None);
+        let proposer_reward_vault = cb.query_cell();
+        let proposer_reward = UpdateBalanceGadget::construct(
+            cb,
+            proposer_reward_vault.expr(),
+            vec![l1_fee],
+            None,
+            None,
+        );
 
         cb.require_step_state_transition(StepStateTransition {
             rw_counter: Delta(5.expr()),
@@ -123,8 +128,8 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             mul_l1_gas_to_use_by_l1_base_fee,
             mul_l1_fee_tmp_by_l1_fee_scalar,
             div_l1_fee_by_l1_cost_denominator,
-            l1_fee_recipient,
-            l1_fee_reward,
+            proposer_reward_vault,
+            proposer_reward,
         }
     }
 
@@ -137,7 +142,7 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
         _: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        let (l1_fee_recipient_balance, l1_fee_recipient_balance_prev) =
+        let (proposer_reward_vault_balance, proposer_reward_vault_balance_balance_prev) =
             block.rws[step.rw_indices[4]].account_value_pair();
 
         self.tx_id
@@ -188,21 +193,21 @@ impl<F: Field> ExecutionGadget<F> for RollupFeeHookGadget<F> {
             offset,
             [l1_fee, l1_cost_denominator, l1_cost_remainder, l1_fee_tmp2],
         )?;
-        self.l1_fee_recipient.assign(
+        self.proposer_reward_vault.assign(
             region,
             offset,
             Value::known(
-                L1_FEE_RECIPIENT
+                PROPOSER_REWARD_VAULT
                     .to_scalar()
                     .expect("unexpected Address -> Scalar conversion failure"),
             ),
         )?;
-        self.l1_fee_reward.assign(
+        self.proposer_reward.assign(
             region,
             offset,
-            l1_fee_recipient_balance_prev,
+            proposer_reward_vault_balance_balance_prev,
             vec![l1_fee],
-            l1_fee_recipient_balance,
+            proposer_reward_vault_balance,
         )?;
 
         Ok(())

@@ -57,8 +57,6 @@ mod add_sub;
 mod addmod;
 mod address;
 mod balance;
-#[cfg(feature = "kroma")]
-mod base_fee_hook;
 mod begin_tx;
 mod bitwise;
 mod block_ctx;
@@ -120,12 +118,12 @@ mod opcode_not;
 mod origin;
 mod pc;
 mod pop;
+#[cfg(feature = "kroma")]
+mod proposer_reward_hook;
 mod push;
 mod return_revert;
 mod returndatacopy;
 mod returndatasize;
-#[cfg(feature = "kroma")]
-mod rollup_fee_hook;
 mod sar;
 mod sdiv_smod;
 mod selfbalance;
@@ -137,14 +135,14 @@ mod sload;
 mod sstore;
 mod stop;
 mod swap;
+#[cfg(feature = "kroma")]
+mod vp_reward_hook;
 
 use self::{logs::LogGadget, sha3::Sha3Gadget};
 use add_sub::AddSubGadget;
 use addmod::AddModGadget;
 use address::AddressGadget;
 use balance::BalanceGadget;
-#[cfg(feature = "kroma")]
-use base_fee_hook::BaseFeeHookGadget;
 use begin_tx::BeginTxGadget;
 use bitwise::BitwiseGadget;
 use block_ctx::{BlockCtxU160Gadget, BlockCtxU256Gadget, BlockCtxU64Gadget};
@@ -196,6 +194,8 @@ use is_zero::IsZeroGadget;
 use jump::JumpGadget;
 use jumpdest::JumpdestGadget;
 use jumpi::JumpiGadget;
+#[cfg(feature = "kroma")]
+use vp_reward_hook::VpRewardHookGadget;
 
 use memory::MemoryGadget;
 use msize::MsizeGadget;
@@ -205,12 +205,12 @@ use opcode_not::NotGadget;
 use origin::OriginGadget;
 use pc::PcGadget;
 use pop::PopGadget;
+#[cfg(feature = "kroma")]
+use proposer_reward_hook::ProposerRewardHookGadget;
 use push::PushGadget;
 use return_revert::ReturnRevertGadget;
 use returndatacopy::ReturnDataCopyGadget;
 use returndatasize::ReturnDataSizeGadget;
-#[cfg(feature = "kroma")]
-use rollup_fee_hook::RollupFeeHookGadget;
 use sar::SarGadget;
 use sdiv_smod::SignedDivModGadget;
 use selfbalance::SelfbalanceGadget;
@@ -270,9 +270,9 @@ pub(crate) struct ExecutionConfig<F> {
     #[cfg(feature = "kroma")]
     end_deposit_tx_gadget: Box<EndDepositTxGadget<F>>,
     #[cfg(feature = "kroma")]
-    base_fee_hook: Box<BaseFeeHookGadget<F>>,
+    vp_reward_hook: Box<VpRewardHookGadget<F>>,
     #[cfg(feature = "kroma")]
-    rollup_fee_hook: Box<RollupFeeHookGadget<F>>,
+    proposer_reward_hook: Box<ProposerRewardHookGadget<F>>,
     // opcode gadgets
     add_sub_gadget: Box<AddSubGadget<F>>,
     addmod_gadget: Box<AddModGadget<F>>,
@@ -545,9 +545,9 @@ impl<F: Field> ExecutionConfig<F> {
             #[cfg(feature = "kroma")]
             end_deposit_tx_gadget: configure_gadget!(),
             #[cfg(feature = "kroma")]
-            base_fee_hook: configure_gadget!(),
+            vp_reward_hook: configure_gadget!(),
             #[cfg(feature = "kroma")]
-            rollup_fee_hook: configure_gadget!(),
+            proposer_reward_hook: configure_gadget!(),
             // opcode gadgets
             add_sub_gadget: configure_gadget!(),
             addmod_gadget: configure_gadget!(),
@@ -826,14 +826,14 @@ impl<F: Field> ExecutionConfig<F> {
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "BaseFeeHook can only transit to RollupFeeHook",
-                            ExecutionState::BaseFeeHook,
-                            vec![ExecutionState::RollupFeeHook],
+                            "VpRewardHook can only transit to ProposerRewardHook",
+                            ExecutionState::VpRewardHook,
+                            vec![ExecutionState::ProposerRewardHook],
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "RollupFeeHook can only transit to EndTx",
-                            ExecutionState::RollupFeeHook,
+                            "ProposerRewardHook can only transit to EndTx",
+                            ExecutionState::ProposerRewardHook,
                             vec![ExecutionState::EndTx],
                         ),
                     ])
@@ -874,8 +874,8 @@ impl<F: Field> ExecutionConfig<F> {
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "Only ExecutionState which halts or BeginTx can transit to BaseFeeHook",
-                            ExecutionState::BaseFeeHook,
+                            "Only ExecutionState which halts or BeginTx can transit to VpRewardHook",
+                            ExecutionState::VpRewardHook,
                             ExecutionState::iter()
                                 .filter(ExecutionState::halts)
                                 .chain(iter::once(ExecutionState::BeginTx))
@@ -1402,9 +1402,9 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
             #[cfg(feature = "kroma")]
-            ExecutionState::BaseFeeHook => assign_exec_step!(self.base_fee_hook),
+            ExecutionState::VpRewardHook => assign_exec_step!(self.vp_reward_hook),
             #[cfg(feature = "kroma")]
-            ExecutionState::RollupFeeHook => assign_exec_step!(self.rollup_fee_hook),
+            ExecutionState::ProposerRewardHook => assign_exec_step!(self.proposer_reward_hook),
             // opcode
             ExecutionState::ADD_SUB => assign_exec_step!(self.add_sub_gadget),
             ExecutionState::ADDMOD => assign_exec_step!(self.addmod_gadget),

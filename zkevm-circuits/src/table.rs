@@ -492,6 +492,8 @@ pub enum L1BlockFieldTag {
     L1FeeOverhead,
     /// L1 fee scalar
     L1FeeScalar,
+    /// Validator Reward Ratio
+    ValidatorRewardRatio,
 }
 #[cfg(feature = "kroma")]
 impl_expr!(L1BlockFieldTag);

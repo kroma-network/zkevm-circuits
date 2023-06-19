@@ -15,12 +15,14 @@ pub use external_tracer::LoggerConfig;
 use eth_types::{
     geth_types::DEPOSIT_TX_TYPE,
     kroma_l1_block::BYTECODE,
-    kroma_params::{BASE_FEE_RECIPIENT, L1_BLOCK, L1_FEE_RECIPIENT, SYSTEM_TX_CALLER},
+    kroma_params::{
+        L1_BLOCK, PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, SYSTEM_TX_CALLER, VALIDATOR_REWARD_VAULT,
+    },
     Bytes,
 };
 
 #[cfg(feature = "kroma")]
-pub const DEPOSIT_TX_GAS: u64 = 150000000u64;
+pub const DEPOSIT_TX_GAS: u64 = 1000000u64;
 #[cfg(not(feature = "kroma"))]
 pub const DEPOSIT_TX_GAS: u64 = 0u64;
 /// TestContext is a type that contains all the information from a block
@@ -133,15 +135,16 @@ macro_rules! nonce {
 
 #[macro_export]
 // Following accounts are added.
-// - $NACC - 4: L1Block.sol
-// - $NACC - 3: SystemTxDepositor
-// - $NACC - 2: BaseFeeRecipient
-// - $NACC - 1: L1FeeRecipient
+// - $NACC - 5: L1Block.sol
+// - $NACC - 4: SystemTxDepositor
+// - $NACC - 3: ProtocolRewardVault
+// - $NACC - 2: ProposerRewardVault
+// - $NACC - 1: ValidatorRewardVault
 // Following txs are added at the beginning.
 // - 0: SystemDepositTx.
 macro_rules! declare_test_context {
     ($ty: ident, $NACC: expr, $NTX: expr) => {
-        type $ty = TestContext<{ $NACC + 4 }, { $NTX + 1 }>;
+        type $ty = TestContext<{ $NACC + 5 }, { $NTX + 1 }>;
     };
 }
 
@@ -366,7 +369,7 @@ pub mod helpers {
     #[cfg(feature = "kroma")]
     /// Intercept account_0_code_account_1_no_code and setup accounts for Kroma
     /// unittest.
-    pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 6]) {
+    pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 7]) {
         |mut accs| {
             do_account_0_code_account_1_no_code(accs.as_mut_slice(), code);
             setup_kroma_required_accounts(accs.as_mut_slice(), 2);
@@ -377,21 +380,25 @@ pub mod helpers {
     /// Generate existing accounts in Kroma.
     /// - L1_BLOCK
     /// - SYSTEM_TX_CALLER
-    /// - BASE_FEE_RECIPIENT
-    /// - L1_FEE_RECIPIENT
+    /// - PROTOCOL_VAULT
+    /// - PROPOSER_REWARD_VAULT
+    /// - VALIDATOR_REWARD_VAULT
     pub fn setup_kroma_required_accounts(accs: &mut [&mut MockAccount], n: usize) {
         accs[n].address(*L1_BLOCK).code(BYTECODE.clone());
 
         // luke: temporarily add balance to avoid panic on check_update_sdb_account
         accs[n + 1].address(*SYSTEM_TX_CALLER).balance(eth(10));
-        accs[n + 2].address(*BASE_FEE_RECIPIENT).balance(eth(10));
-        accs[n + 3].address(*L1_FEE_RECIPIENT).balance(eth(10));
+        accs[n + 2].address(*PROTOCOL_VAULT).balance(eth(10));
+        accs[n + 3].address(*PROPOSER_REWARD_VAULT).balance(eth(10));
+        accs[n + 4]
+            .address(*VALIDATOR_REWARD_VAULT)
+            .balance(eth(10));
     }
 
     /// Generate a single transaction from the second account of the list to the
     /// first one.
     #[cfg(feature = "kroma")]
-    pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 6]) {
+    pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 7]) {
         system_deposit_tx(txs[0]);
         do_tx_from_1_to_0(txs[1], accs.as_slice());
     }
@@ -417,16 +424,35 @@ pub mod helpers {
             }};
         }
 
-        let mut calldata = Vec::with_capacity(4 + 32 * 8);
-        calldata.extend(vec![0x01, 0x5d, 0x8e, 0xb9]); // setL1BlockValues
-        calldata.extend(vec![0; 32]); // l1 blocknumber
-        calldata.extend(vec![0; 32]); // l1 timestamp
-        calldata.extend(padding!(vec![0x08])); // l1 basefee
-        calldata.extend(vec![0; 32]); // l1 hash
-        calldata.extend(vec![0; 32]); // sequenceNumber
-        calldata.extend(vec![0; 32]); // batcherHash
-        calldata.extend(padding!(vec![0x08, 0x34])); // l1 fee overhead
-        calldata.extend(padding!(vec![0x0f, 0x42, 0x40])); // l1 fee scalar
+        let mut calldata = Vec::with_capacity(4 + 32 * 9);
+
+        // setL1BlockValues
+        calldata.extend(vec![0xef, 0xc6, 0x74, 0xeb]);
+        // l1 blocknumber: 2295
+        calldata.extend(padding!(vec![0x08, 0xf7]));
+        // l1 timestamp: 1685085294
+        calldata.extend(padding!(vec![0x64, 0x70, 0x5c, 0x6e]));
+        // l1 basefee: 7
+        calldata.extend(padding!(vec![0x07]));
+        // l1 hash
+        calldata.extend(vec![
+            0x36, 0xe0, 0x8a, 0x25, 0xfc, 0x21, 0x49, 0x1f, 0xc3, 0x48, 0xe2, 0xd6, 0x3e, 0x42,
+            0xce, 0xda, 0xa3, 0xc6, 0x33, 0x17, 0x80, 0xf2, 0x2b, 0xaa, 0x5e, 0xb4, 0x23, 0x98,
+            0x1e, 0xfc, 0x12, 0xa0,
+        ]);
+        // sequenceNumber: 0
+        calldata.extend(vec![0; 32]);
+        // batcherHash
+        calldata.extend(padding!(vec![
+            0x3c, 0x44, 0xcd, 0xdd, 0xb6, 0xa9, 0x00, 0xfa, 0x2b, 0x58, 0x5d, 0xd2, 0x99, 0xe0,
+            0x3d, 0x12, 0xfa, 0x42, 0x93, 0xbc
+        ]));
+        // l1 fee overhead: 2100
+        calldata.extend(padding!(vec![0x08, 0x34]));
+        // l1 fee scalar: 1000000
+        calldata.extend(padding!(vec![0x0f, 0x42, 0x40]));
+        // validator reward ratio: 2000
+        calldata.extend(padding!(vec![0x07, 0xd0]));
 
         tx.transaction_type(DEPOSIT_TX_TYPE)
             .from(*SYSTEM_TX_CALLER)

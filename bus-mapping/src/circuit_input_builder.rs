@@ -15,7 +15,7 @@ pub use self::block::BlockHead;
 #[cfg(feature = "kroma")]
 use crate::evm::opcodes::gen_end_deposit_tx_ops;
 #[cfg(feature = "kroma")]
-use crate::evm::opcodes::gen_fee_hook_ops;
+use crate::evm::opcodes::gen_reward_hook_ops;
 use crate::{
     error::Error,
     evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
@@ -463,9 +463,9 @@ impl<'a> CircuitInputBuilder {
             tx.steps_mut().push(end_deposit_tx_step);
         } else {
             #[cfg(feature = "kroma")]
-            let fee_hook_steps = gen_fee_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            let reward_hook_steps = gen_reward_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             #[cfg(feature = "kroma")]
-            tx.steps_mut().extend(fee_hook_steps);
+            tx.steps_mut().extend(reward_hook_steps);
 
             let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             tx.steps_mut().push(end_tx_step);
@@ -766,14 +766,21 @@ pub fn get_state_accesses(
             None,
             RW::WRITE,
             AccessValue::Account {
-                address: *kroma_params::BASE_FEE_RECIPIENT,
+                address: *kroma_params::VALIDATOR_REWARD_VAULT,
             },
         ));
         block_access_trace.push(Access::new(
             None,
             RW::WRITE,
             AccessValue::Account {
-                address: *kroma_params::L1_FEE_RECIPIENT,
+                address: *kroma_params::PROTOCOL_VAULT,
+            },
+        ));
+        block_access_trace.push(Access::new(
+            None,
+            RW::WRITE,
+            AccessValue::Account {
+                address: *kroma_params::PROPOSER_REWARD_VAULT,
             },
         ));
     }

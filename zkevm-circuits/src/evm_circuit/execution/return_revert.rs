@@ -136,7 +136,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
 
         // Case B in the specs.
         cb.condition(is_root.expr(), |cb| {
-            cb.end_deposit_tx_or_base_fee_hook();
+            cb.end_deposit_tx_or_vp_reward_hook();
             cb.call_context_lookup(
                 false.expr(),
                 None,
