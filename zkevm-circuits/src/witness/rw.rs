@@ -922,6 +922,7 @@ impl From<&operation::OperationContainer> for RwMap {
                         L1BlockField::L1BaseFee => L1BlockFieldTag::L1BaseFee,
                         L1BlockField::L1FeeOverhead => L1BlockFieldTag::L1FeeOverhead,
                         L1BlockField::L1FeeScalar => L1BlockFieldTag::L1FeeScalar,
+                        L1BlockField::ValidatorRewardRatio => L1BlockFieldTag::ValidatorRewardRatio,
                     },
                     value: op.op().value,
                 })

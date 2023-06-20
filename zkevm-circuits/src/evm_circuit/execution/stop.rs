@@ -204,13 +204,13 @@ impl<F: Field> StopGadget<F> {
             );
         });
         cb.condition(1.expr() - is_deposit_tx.expr(), |cb| {
-            let is_to_base_fee_hook = cb
+            let is_to_vp_reward_hook = cb
                 .next
-                .execution_state_selector([ExecutionState::BaseFeeHook]);
+                .execution_state_selector([ExecutionState::VpRewardHook]);
             cb.require_equal(
-                "Go to BaseFeeHook only when is_root",
+                "Go to VpRewardHook only when is_root",
                 cb.curr.state.is_root.expr(),
-                is_to_base_fee_hook,
+                is_to_vp_reward_hook,
             );
         });
     }

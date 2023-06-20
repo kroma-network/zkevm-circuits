@@ -135,7 +135,7 @@ mod test {
 
             CircuitTestBuilder::new_from_test_ctx(ctx)
                 .params(CircuitsParams {
-                    max_calldata: 1300,
+                    max_calldata: 1400,
                     ..CircuitsParams::default()
                 })
                 .run();

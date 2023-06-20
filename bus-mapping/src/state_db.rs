@@ -12,6 +12,7 @@ use crate::Error;
 #[cfg(feature = "kroma")]
 use eth_types::kroma_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
+    VALIDATOR_REWARD_RATIO_KEY,
 };
 
 lazy_static! {
@@ -277,8 +278,8 @@ impl StateDB {
     }
 
     #[cfg(feature = "kroma")]
-    /// Get data from L1_BLOCK which are required to compute rollup l1 fee.
-    pub fn get_l1_block(&self) -> Result<(Word, Word, Word), Error> {
+    /// Get data from L1_BLOCK which are required to compute rewards.
+    pub fn get_l1_block(&self) -> Result<(Word, Word, Word, Word), Error> {
         let (found, l1_base_fee) = self.get_storage(&L1_BLOCK, &BASE_FEE_KEY);
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *BASE_FEE_KEY));
@@ -291,7 +292,20 @@ impl StateDB {
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_SCALAR_KEY));
         }
-        Ok((*l1_base_fee, *l1_fee_overhead, *l1_fee_scalar))
+        let (found, validator_reward_ratio) =
+            self.get_storage(&L1_BLOCK, &VALIDATOR_REWARD_RATIO_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(
+                *L1_BLOCK,
+                *VALIDATOR_REWARD_RATIO_KEY,
+            ));
+        }
+        Ok((
+            *l1_base_fee,
+            *l1_fee_overhead,
+            *l1_fee_scalar,
+            *validator_reward_ratio,
+        ))
     }
 
     #[cfg(feature = "kroma")]

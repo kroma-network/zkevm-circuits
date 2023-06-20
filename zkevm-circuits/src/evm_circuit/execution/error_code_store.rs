@@ -143,7 +143,6 @@ mod test {
         test_ctx::{SimpleTestContext, TestContext1_1},
         tx_idx, MOCK_ACCOUNTS,
     };
-    use snark_verifier::system;
 
     use crate::test_util::CircuitTestBuilder;
 

@@ -105,7 +105,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
         if let Some(error) = step.error.as_ref() {
             log::debug!("step err {:?}", error);
             #[cfg(feature = "kroma")]
-            if !step.exec_state.is_fee_hook() {
+            if !step.exec_state.is_reward_hook() {
                 return error.into();
             }
             #[cfg(not(feature = "kroma"))]
@@ -208,9 +208,11 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
             #[cfg(feature = "kroma")]
             circuit_input_builder::ExecState::EndDepositTx => ExecutionState::EndDepositTx,
             #[cfg(feature = "kroma")]
-            circuit_input_builder::ExecState::BaseFeeHook => ExecutionState::BaseFeeHook,
+            circuit_input_builder::ExecState::VpRewardHook => ExecutionState::VpRewardHook,
             #[cfg(feature = "kroma")]
-            circuit_input_builder::ExecState::RollupFeeHook => ExecutionState::RollupFeeHook,
+            circuit_input_builder::ExecState::ProposerRewardHook => {
+                ExecutionState::ProposerRewardHook
+            }
         }
     }
 }
