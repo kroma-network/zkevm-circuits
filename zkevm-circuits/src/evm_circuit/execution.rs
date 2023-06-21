@@ -79,6 +79,7 @@ mod end_block;
 #[cfg(feature = "kroma")]
 mod end_deposit_tx;
 mod end_inner_block;
+#[cfg(not(feature = "kroma"))]
 mod end_tx;
 mod error_code_store;
 mod error_invalid_creation_code;
@@ -108,6 +109,8 @@ mod is_zero;
 mod jump;
 mod jumpdest;
 mod jumpi;
+#[cfg(feature = "kroma")]
+mod kroma_end_tx;
 mod logs;
 mod memory;
 mod msize;
@@ -165,6 +168,7 @@ use end_block::EndBlockGadget;
 #[cfg(feature = "kroma")]
 use end_deposit_tx::EndDepositTxGadget;
 use end_inner_block::EndInnerBlockGadget;
+#[cfg(not(feature = "kroma"))]
 use end_tx::EndTxGadget;
 use error_code_store::ErrorCodeStoreGadget;
 use error_invalid_creation_code::ErrorInvalidCreationCodeGadget;
@@ -194,6 +198,8 @@ use is_zero::IsZeroGadget;
 use jump::JumpGadget;
 use jumpdest::JumpdestGadget;
 use jumpi::JumpiGadget;
+#[cfg(feature = "kroma")]
+use kroma_end_tx::EndTxGadget;
 #[cfg(feature = "kroma")]
 use vp_reward_hook::VpRewardHookGadget;
 
