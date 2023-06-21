@@ -25,7 +25,6 @@ pub(crate) struct VpRewardHookGadget<F> {
     tx_gas: Cell<F>,
     validator_reward_ratio: Word<F>,
     mul_gas_used_by_tx_gas_price: MulWordByU64Gadget<F>,
-    total_reward: Word<F>, // tx_gas_price * gas_used (total reward)
     zero: Word<F>,
     validator_reward_temp: Word<F>, // tx_gas_price * gas_used * validator reward ratio
     mul_total_reward_by_reward_ratio: MulAddWordsGadget<F>,
@@ -56,7 +55,7 @@ impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
             MulWordByU64Gadget::construct(cb, tx_gas_price, gas_used);
 
         // tx_gas_price * gas_used * validator reward ratio
-        let total_reward = cb.query_word_rlc();
+        let total_reward = mul_gas_used_by_tx_gas_price.product();
         // TODO: Instead of being assigned to cell, Can't 0 be used directly?
         let zero = cb.query_word_rlc();
         let validator_reward_temp = cb.query_word_rlc();
@@ -132,7 +131,6 @@ impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
             tx_gas,
             validator_reward_ratio,
             mul_gas_used_by_tx_gas_price,
-            total_reward,
             zero,
             validator_reward_temp,
             mul_total_reward_by_reward_ratio,
@@ -186,8 +184,6 @@ impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
 
         // tx_gas_price * gas_used * validator reward ratio
         let validator_reward_temp = total_reward * validator_reward_ratio;
-        self.total_reward
-            .assign(region, offset, Some(total_reward.to_le_bytes()))?;
         let zero = eth_types::Word::zero();
         self.zero.assign(region, offset, Some(zero.to_le_bytes()))?;
         self.validator_reward_temp.assign(
