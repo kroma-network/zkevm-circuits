@@ -923,9 +923,9 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
 
 #[cfg(feature = "kroma")]
 /// validator, protocol reward hook
-pub fn gen_vp_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+pub fn gen_fee_distribution_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     debug_assert!(!state.tx.is_deposit());
-    let mut exec_step = state.new_reward_hook_step();
+    let mut exec_step = state.new_fee_distribution_hook_step();
     let call = state.tx.calls()[0].clone();
 
     state.call_context_read(
@@ -1028,9 +1028,9 @@ pub fn gen_proposer_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<
 
 #[cfg(feature = "kroma")]
 pub fn gen_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
-    let vp_reward_hook_step = gen_vp_reward_hook_ops(state)?;
+    let fee_distribution_hook_step = gen_fee_distribution_hook_ops(state)?;
     let proposer_reward_hook_step = gen_proposer_reward_hook_ops(state)?;
-    Ok(vec![vp_reward_hook_step, proposer_reward_hook_step])
+    Ok(vec![fee_distribution_hook_step, proposer_reward_hook_step])
 }
 
 #[derive(Debug, Copy, Clone)]

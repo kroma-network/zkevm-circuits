@@ -119,15 +119,15 @@ impl<'a> CircuitInputStateRef<'a> {
     }
 
     #[cfg(feature = "kroma")]
-    /// Create a new VpRewardHook step
-    pub fn new_reward_hook_step(&self) -> ExecStep {
+    /// Create a new FeeDistributionHook step
+    pub fn new_fee_distribution_hook_step(&self) -> ExecStep {
         let prev_step = self
             .tx
             .steps()
             .last()
             .expect("steps should have at least one BeginTx step");
         ExecStep {
-            exec_state: ExecState::VpRewardHook,
+            exec_state: ExecState::FeeDistributionHook,
             error: prev_step.error.clone(),
             gas_left: prev_step.gas_left,
             gas_cost: prev_step.gas_cost,
