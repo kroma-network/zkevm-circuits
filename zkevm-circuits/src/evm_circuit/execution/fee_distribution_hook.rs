@@ -17,6 +17,7 @@ use eth_types::{
     kroma_params::{PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_VAULT},
     Field, ToLittleEndian, ToScalar, U256,
 };
+use gadgets::util::sum;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
@@ -56,6 +57,7 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         let total_reward = mul_gas_used_by_tx_gas_price.product();
         // TODO: Instead of being assigned to cell, Can't 0 be used directly?
         let zero = cb.query_word_rlc();
+        cb.add_constraint("zero should be zero", sum::expr(&zero.cells));
         let validator_reward_temp = cb.query_word_rlc();
         let mul_total_reward_by_reward_ratio = MulAddWordsGadget::construct(
             cb,
