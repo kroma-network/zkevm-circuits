@@ -103,6 +103,8 @@ mod exp;
 mod extcodecopy;
 mod extcodehash;
 mod extcodesize;
+#[cfg(feature = "kroma")]
+mod fee_distribution_hook;
 mod gas;
 mod gasprice;
 mod is_zero;
@@ -138,8 +140,6 @@ mod sload;
 mod sstore;
 mod stop;
 mod swap;
-#[cfg(feature = "kroma")]
-mod vp_reward_hook;
 
 use self::{logs::LogGadget, sha3::Sha3Gadget};
 use add_sub::AddSubGadget;
@@ -192,6 +192,8 @@ use exp::ExponentiationGadget;
 use extcodecopy::ExtcodecopyGadget;
 use extcodehash::ExtcodehashGadget;
 use extcodesize::ExtcodesizeGadget;
+#[cfg(feature = "kroma")]
+use fee_distribution_hook::FeeDistributionHookGadget;
 use gas::GasGadget;
 use gasprice::GasPriceGadget;
 use is_zero::IsZeroGadget;
@@ -200,8 +202,6 @@ use jumpdest::JumpdestGadget;
 use jumpi::JumpiGadget;
 #[cfg(feature = "kroma")]
 use kroma_end_tx::EndTxGadget;
-#[cfg(feature = "kroma")]
-use vp_reward_hook::VpRewardHookGadget;
 
 use memory::MemoryGadget;
 use msize::MsizeGadget;
@@ -276,7 +276,7 @@ pub(crate) struct ExecutionConfig<F> {
     #[cfg(feature = "kroma")]
     end_deposit_tx_gadget: Box<EndDepositTxGadget<F>>,
     #[cfg(feature = "kroma")]
-    vp_reward_hook: Box<VpRewardHookGadget<F>>,
+    fee_distribution_hook: Box<FeeDistributionHookGadget<F>>,
     #[cfg(feature = "kroma")]
     proposer_reward_hook: Box<ProposerRewardHookGadget<F>>,
     // opcode gadgets
@@ -551,7 +551,7 @@ impl<F: Field> ExecutionConfig<F> {
             #[cfg(feature = "kroma")]
             end_deposit_tx_gadget: configure_gadget!(),
             #[cfg(feature = "kroma")]
-            vp_reward_hook: configure_gadget!(),
+            fee_distribution_hook: configure_gadget!(),
             #[cfg(feature = "kroma")]
             proposer_reward_hook: configure_gadget!(),
             // opcode gadgets
@@ -832,8 +832,8 @@ impl<F: Field> ExecutionConfig<F> {
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "VpRewardHook can only transit to ProposerRewardHook",
-                            ExecutionState::VpRewardHook,
+                            "FeeDistributionHook can only transit to ProposerRewardHook",
+                            ExecutionState::FeeDistributionHook,
                             vec![ExecutionState::ProposerRewardHook],
                         ),
                         #[cfg(feature = "kroma")]
@@ -880,8 +880,8 @@ impl<F: Field> ExecutionConfig<F> {
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "Only ExecutionState which halts or BeginTx can transit to VpRewardHook",
-                            ExecutionState::VpRewardHook,
+                            "Only ExecutionState which halts or BeginTx can transit to FeeDistributionHook",
+                            ExecutionState::FeeDistributionHook,
                             ExecutionState::iter()
                                 .filter(ExecutionState::halts)
                                 .chain(iter::once(ExecutionState::BeginTx))
@@ -1408,7 +1408,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
             #[cfg(feature = "kroma")]
-            ExecutionState::VpRewardHook => assign_exec_step!(self.vp_reward_hook),
+            ExecutionState::FeeDistributionHook => assign_exec_step!(self.fee_distribution_hook),
             #[cfg(feature = "kroma")]
             ExecutionState::ProposerRewardHook => assign_exec_step!(self.proposer_reward_hook),
             // opcode

@@ -125,8 +125,8 @@ pub enum ExecState {
     /// Virtual step End Tx for Kroma deposit tx
     EndDepositTx,
     #[cfg(feature = "kroma")]
-    /// Virtual step VpReward Hook (Valdiator and Protocol reward hook)
-    VpRewardHook,
+    /// Virtual step Fee Distribution Hook
+    FeeDistributionHook,
     #[cfg(feature = "kroma")]
     /// Virtual step Proposer Reward Hook
     ProposerRewardHook,
@@ -170,9 +170,9 @@ impl ExecState {
     }
 
     #[cfg(feature = "kroma")]
-    /// Returns `true` if `ExecState` is `VpRewardHook` or `ProposerRewardHook`.
+    /// Returns `true` if `ExecState` is `FeeDistributionHook` or `ProposerRewardHook`.
     pub fn is_reward_hook(&self) -> bool {
-        *self == ExecState::VpRewardHook || *self == ExecState::ProposerRewardHook
+        *self == ExecState::FeeDistributionHook || *self == ExecState::ProposerRewardHook
     }
 }
 

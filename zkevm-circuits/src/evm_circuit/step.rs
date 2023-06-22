@@ -29,7 +29,7 @@ pub enum ExecutionState {
     EndInnerBlock,
     EndBlock,
     #[cfg(feature = "kroma")]
-    VpRewardHook,
+    FeeDistributionHook,
     #[cfg(feature = "kroma")]
     ProposerRewardHook,
     // Opcode successful cases

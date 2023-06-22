@@ -208,7 +208,9 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
             #[cfg(feature = "kroma")]
             circuit_input_builder::ExecState::EndDepositTx => ExecutionState::EndDepositTx,
             #[cfg(feature = "kroma")]
-            circuit_input_builder::ExecState::VpRewardHook => ExecutionState::VpRewardHook,
+            circuit_input_builder::ExecState::FeeDistributionHook => {
+                ExecutionState::FeeDistributionHook
+            }
             #[cfg(feature = "kroma")]
             circuit_input_builder::ExecState::ProposerRewardHook => {
                 ExecutionState::ProposerRewardHook
