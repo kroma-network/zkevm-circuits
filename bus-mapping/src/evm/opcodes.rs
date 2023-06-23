@@ -1027,7 +1027,7 @@ pub fn gen_proposer_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<
 }
 
 #[cfg(feature = "kroma")]
-pub fn gen_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
+pub fn gen_kroma_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
     let fee_distribution_hook_step = gen_fee_distribution_hook_ops(state)?;
     let proposer_reward_hook_step = gen_proposer_reward_hook_ops(state)?;
     Ok(vec![fee_distribution_hook_step, proposer_reward_hook_step])
