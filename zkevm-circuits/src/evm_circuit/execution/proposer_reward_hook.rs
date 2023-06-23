@@ -65,6 +65,7 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
             l1_gas_to_use.clone(),
         );
 
+        // TODO: Instead of being assigned to cell, Can't 0 be used directly?
         let zero = cb.query_word_rlc();
         cb.add_constraint("zero should be zero", sum::expr(&zero.cells));
         let l1_fee_tmp = cb.query_word_rlc();
