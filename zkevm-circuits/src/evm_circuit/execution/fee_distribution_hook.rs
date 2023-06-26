@@ -17,15 +17,15 @@ use eth_types::{
     kroma_params::{PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_VAULT},
     Field, ToLittleEndian, ToScalar, U256,
 };
+use gadgets::util::sum;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
-pub(crate) struct VpRewardHookGadget<F> {
+pub(crate) struct FeeDistributionHookGadget<F> {
     tx_id: Cell<F>,
     tx_gas: Cell<F>,
     validator_reward_ratio: Word<F>,
     mul_gas_used_by_tx_gas_price: MulWordByU64Gadget<F>,
-    total_reward: Word<F>, // tx_gas_price * gas_used (total reward)
     zero: Word<F>,
     validator_reward_temp: Word<F>, // tx_gas_price * gas_used * validator reward ratio
     mul_total_reward_by_reward_ratio: MulAddWordsGadget<F>,
@@ -39,10 +39,10 @@ pub(crate) struct VpRewardHookGadget<F> {
     sum_protocol_validator_rewards: AddWordsGadget<F, 2, true>,
 }
 
-impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
-    const NAME: &'static str = "VpRewardHook";
+impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
+    const NAME: &'static str = "FeeDistributionHook";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::VpRewardHook;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::FeeDistributionHook;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
@@ -54,11 +54,10 @@ impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
         // tx_gas_price * gas_used
         let mul_gas_used_by_tx_gas_price =
             MulWordByU64Gadget::construct(cb, tx_gas_price, gas_used);
-
-        // tx_gas_price * gas_used * validator reward ratio
-        let total_reward = cb.query_word_rlc();
+        let total_reward = mul_gas_used_by_tx_gas_price.product();
         // TODO: Instead of being assigned to cell, Can't 0 be used directly?
         let zero = cb.query_word_rlc();
+        cb.add_constraint("zero should be zero", sum::expr(&zero.cells));
         let validator_reward_temp = cb.query_word_rlc();
         let mul_total_reward_by_reward_ratio = MulAddWordsGadget::construct(
             cb,
@@ -132,7 +131,6 @@ impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
             tx_gas,
             validator_reward_ratio,
             mul_gas_used_by_tx_gas_price,
-            total_reward,
             zero,
             validator_reward_temp,
             mul_total_reward_by_reward_ratio,
@@ -186,8 +184,6 @@ impl<F: Field> ExecutionGadget<F> for VpRewardHookGadget<F> {
 
         // tx_gas_price * gas_used * validator reward ratio
         let validator_reward_temp = total_reward * validator_reward_ratio;
-        self.total_reward
-            .assign(region, offset, Some(total_reward.to_le_bytes()))?;
         let zero = eth_types::Word::zero();
         self.zero.assign(region, offset, Some(zero.to_le_bytes()))?;
         self.validator_reward_temp.assign(

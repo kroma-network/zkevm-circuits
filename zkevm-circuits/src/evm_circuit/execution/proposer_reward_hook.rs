@@ -17,6 +17,7 @@ use eth_types::{
     kroma_params::{L1_COST_DENOMINATOR, PROPOSER_REWARD_VAULT},
     Field, ToLittleEndian, ToScalar,
 };
+use gadgets::util::sum;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
@@ -64,7 +65,9 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
             l1_gas_to_use.clone(),
         );
 
+        // TODO: Instead of being assigned to cell, Can't 0 be used directly?
         let zero = cb.query_word_rlc();
+        cb.add_constraint("zero should be zero", sum::expr(&zero.cells));
         let l1_fee_tmp = cb.query_word_rlc();
         let mul_l1_gas_to_use_by_l1_base_fee =
             MulAddWordsGadget::construct(cb, [&l1_gas_to_use, &l1_base_fee, &zero, &l1_fee_tmp]);

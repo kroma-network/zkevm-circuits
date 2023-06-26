@@ -15,7 +15,7 @@ pub use self::block::BlockHead;
 #[cfg(feature = "kroma")]
 use crate::evm::opcodes::gen_end_deposit_tx_ops;
 #[cfg(feature = "kroma")]
-use crate::evm::opcodes::gen_reward_hook_ops;
+use crate::evm::opcodes::gen_kroma_hook_ops;
 use crate::{
     error::Error,
     evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
@@ -463,7 +463,7 @@ impl<'a> CircuitInputBuilder {
             tx.steps_mut().push(end_deposit_tx_step);
         } else {
             #[cfg(feature = "kroma")]
-            let reward_hook_steps = gen_reward_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            let reward_hook_steps = gen_kroma_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             #[cfg(feature = "kroma")]
             tx.steps_mut().extend(reward_hook_steps);
 

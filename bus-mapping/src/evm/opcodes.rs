@@ -684,6 +684,41 @@ pub fn gen_begin_tx_ops(
     Ok(())
 }
 
+fn tip_to_coinbase(
+    state: &mut CircuitInputStateRef,
+    effective_refund: u64,
+    exec_step: &mut ExecStep,
+) -> Result<(), Error> {
+    let block_info = state.block.headers.get(&state.tx.block_num).unwrap();
+    let effective_tip = state.tx.gas_price - block_info.base_fee;
+    let gas_cost = state.tx.gas - exec_step.gas_left.0 - effective_refund;
+    let coinbase_reward = effective_tip * gas_cost;
+    log::trace!(
+        "coinbase reward = ({} - {}) * ({} - {} - {}) = {}",
+        state.tx.gas_price,
+        block_info.base_fee,
+        state.tx.gas,
+        exec_step.gas_left.0,
+        effective_refund,
+        coinbase_reward
+    );
+    let (found, coinbase_account) = state.sdb.get_account_mut(&block_info.coinbase);
+    if !found {
+        log::error!("coinbase account not found: {}", block_info.coinbase);
+        return Err(Error::AccountNotFound(block_info.coinbase));
+    }
+    let coinbase_balance_prev = coinbase_account.balance;
+    let coinbase_balance = coinbase_balance_prev + coinbase_reward;
+    state.account_write(
+        exec_step,
+        block_info.coinbase,
+        AccountField::Balance,
+        coinbase_balance,
+        coinbase_balance_prev,
+    )?;
+    Ok(())
+}
+
 pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     let mut exec_step = state.new_end_tx_step();
     let call = state.tx.calls()[0].clone();
@@ -729,38 +764,8 @@ pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
         caller_balance_prev,
     )?;
 
-    let block_info = state
-        .block
-        .headers
-        .get(&state.tx.block_num)
-        .unwrap()
-        .clone();
-    let effective_tip = state.tx.gas_price - block_info.base_fee;
-    let gas_cost = state.tx.gas - exec_step.gas_left.0 - effective_refund;
-    let coinbase_reward = effective_tip * gas_cost;
-    log::trace!(
-        "coinbase reward = ({} - {}) * ({} - {} - {}) = {}",
-        state.tx.gas_price,
-        block_info.base_fee,
-        state.tx.gas,
-        exec_step.gas_left.0,
-        effective_refund,
-        coinbase_reward
-    );
-    let (found, coinbase_account) = state.sdb.get_account_mut(&block_info.coinbase);
-    if !found {
-        log::error!("coinbase account not found: {}", block_info.coinbase);
-        return Err(Error::AccountNotFound(block_info.coinbase));
-    }
-    let coinbase_balance_prev = coinbase_account.balance;
-    let coinbase_balance = coinbase_balance_prev + coinbase_reward;
-    state.account_write(
-        &mut exec_step,
-        block_info.coinbase,
-        AccountField::Balance,
-        coinbase_balance,
-        coinbase_balance_prev,
-    )?;
+    #[cfg(not(feature = "kroma"))]
+    tip_to_coinbase(state, effective_refund, &mut exec_step)?;
 
     // handle tx receipt tag
     state.tx_receipt_write(
@@ -918,9 +923,9 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
 
 #[cfg(feature = "kroma")]
 /// validator, protocol reward hook
-pub fn gen_vp_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+pub fn gen_fee_distribution_hook_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     debug_assert!(!state.tx.is_deposit());
-    let mut exec_step = state.new_reward_hook_step();
+    let mut exec_step = state.new_fee_distribution_hook_step();
     let call = state.tx.calls()[0].clone();
 
     state.call_context_read(
@@ -1022,10 +1027,10 @@ pub fn gen_proposer_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<
 }
 
 #[cfg(feature = "kroma")]
-pub fn gen_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
-    let vp_reward_hook_step = gen_vp_reward_hook_ops(state)?;
+pub fn gen_kroma_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
+    let fee_distribution_hook_step = gen_fee_distribution_hook_ops(state)?;
     let proposer_reward_hook_step = gen_proposer_reward_hook_ops(state)?;
-    Ok(vec![vp_reward_hook_step, proposer_reward_hook_step])
+    Ok(vec![fee_distribution_hook_step, proposer_reward_hook_step])
 }
 
 #[derive(Debug, Copy, Clone)]
