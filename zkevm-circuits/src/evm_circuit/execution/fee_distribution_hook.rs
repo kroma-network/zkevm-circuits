@@ -68,10 +68,6 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
                 &validator_reward_temp,
             ],
         );
-        cb.require_zero(
-            "mul_total_reward_by_reward_ratio's overflow == 0",
-            mul_total_reward_by_reward_ratio.overflow(),
-        );
 
         // gas_used * tx_gas_price * validator reward ratio / REWARD_DENOMINATOR
         let validator_reward = cb.query_word_rlc();
