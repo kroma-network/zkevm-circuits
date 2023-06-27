@@ -122,6 +122,9 @@ pub enum ExecState {
     /// Virtual step End Block
     EndBlock,
     #[cfg(feature = "kroma")]
+    /// Virtual step Begin Deposit Tx
+    BeginDepositTx,
+    #[cfg(feature = "kroma")]
     /// Virtual step End Tx for Kroma deposit tx
     EndDepositTx,
     #[cfg(feature = "kroma")]

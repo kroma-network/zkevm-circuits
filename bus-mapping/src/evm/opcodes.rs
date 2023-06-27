@@ -448,7 +448,12 @@ pub fn gen_begin_tx_ops(
     state: &mut CircuitInputStateRef,
     geth_trace: &GethExecTrace,
 ) -> Result<(), Error> {
-    let mut exec_step = state.new_begin_tx_step();
+    let is_deposit = state.tx.is_deposit();
+    let mut exec_step = if is_deposit {
+        state.new_begin_deposit_tx_step()
+    } else {
+        state.new_begin_tx_step()
+    };
     let call = state.call()?.clone();
 
     for (field, value) in [
@@ -469,9 +474,10 @@ pub fn gen_begin_tx_ops(
     // Add mint to caller's balance
     let caller_address = call.caller_address;
     #[cfg(feature = "kroma")]
-    if state.tx.is_deposit() {
+    if is_deposit {
         state.mint(&mut exec_step, caller_address, state.tx.mint)?;
     }
+
     let mut nonce_prev = state.sdb.get_account(&caller_address).1.nonce;
     debug_assert!(nonce_prev <= state.tx.nonce.into());
     while nonce_prev < state.tx.nonce.into() {
