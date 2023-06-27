@@ -80,15 +80,10 @@ impl<'a> CircuitInputStateRef<'a> {
         self.new_begin_tx_helper(ExecState::BeginDepositTx)
     }
 
-    /// Create a new EndTx step
-    pub fn new_end_tx_step(&self) -> ExecStep {
-        let prev_step = self
-            .tx
-            .steps()
-            .last()
-            .expect("steps should have at least one BeginTx step");
+    /// Help to create a new EndTx or EndDepositTx step
+    fn new_end_tx_step_helper(&self, exec_state: ExecState, prev_step: &ExecStep) -> ExecStep {
         ExecStep {
-            exec_state: ExecState::EndTx,
+            exec_state: exec_state,
             gas_left: if prev_step.error.is_none() {
                 let mut gas_left = prev_step.gas_left.0 - prev_step.gas_cost.0;
                 // handling for contract creation tx
@@ -121,12 +116,25 @@ impl<'a> CircuitInputStateRef<'a> {
         }
     }
 
+    /// Create a new EndTx step
+    pub fn new_end_tx_step(&self) -> ExecStep {
+        let prev_step = self
+            .tx
+            .steps()
+            .last()
+            .expect("steps should have at least one BeginTx step");
+        self.new_end_tx_step_helper(ExecState::EndTx, prev_step)
+    }
+
     #[cfg(feature = "kroma")]
     /// Create a new EndDepositTx step
     pub fn new_end_deposit_tx_step(&self) -> ExecStep {
-        let mut exec_step = self.new_end_tx_step();
-        exec_step.exec_state = ExecState::EndDepositTx;
-        exec_step
+        let prev_step = self
+            .tx
+            .steps()
+            .last()
+            .expect("steps should have at least one BeginDepositTx step");
+        self.new_end_tx_step_helper(ExecState::EndDepositTx, prev_step)
     }
 
     #[cfg(feature = "kroma")]
