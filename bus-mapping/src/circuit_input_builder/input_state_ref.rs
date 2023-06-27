@@ -59,14 +59,25 @@ impl<'a> CircuitInputStateRef<'a> {
         ))
     }
 
-    /// Create a new BeginTx step
-    pub fn new_begin_tx_step(&self) -> ExecStep {
+    /// Help to create a new BeginTx or BeginDepositTx step
+    fn new_begin_tx_helper(&self, exec_step: ExecState) -> ExecStep {
         ExecStep {
-            exec_state: ExecState::BeginTx,
+            exec_state: exec_step,
             gas_left: Gas(self.tx.gas),
             rwc: self.block_ctx.rwc,
             ..Default::default()
         }
+    }
+
+    /// Create a new BeginTx step
+    pub fn new_begin_tx_step(&self) -> ExecStep {
+        self.new_begin_tx_helper(ExecState::BeginTx)
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Create a new BeginDepositTx step
+    pub fn new_begin_deposit_tx_step(&self) -> ExecStep {
+        self.new_begin_tx_helper(ExecState::BeginDepositTx)
     }
 
     /// Create a new EndTx step
@@ -144,7 +155,7 @@ impl<'a> CircuitInputStateRef<'a> {
             .tx
             .steps()
             .last()
-            .expect("steps should have at least one BeginTx step");
+            .expect("steps should have at least one FeeDistributionHook step");
         ExecStep {
             exec_state: ExecState::ProposerRewardHook,
             error: prev_step.error.clone(),

@@ -150,7 +150,10 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
         });
 
         cb.condition(
-            cb.next.execution_state_selector([ExecutionState::BeginTx]),
+            cb.next.execution_state_selector([
+                ExecutionState::BeginTx,
+                ExecutionState::BeginDepositTx,
+            ]),
             |cb| {
                 cb.call_context_lookup(
                     true.expr(),

@@ -24,10 +24,12 @@ pub enum ExecutionState {
     // Internal state
     BeginTx,
     EndTx,
-    #[cfg(feature = "kroma")]
-    EndDepositTx,
     EndInnerBlock,
     EndBlock,
+    #[cfg(feature = "kroma")]
+    BeginDepositTx,
+    #[cfg(feature = "kroma")]
+    EndDepositTx,
     #[cfg(feature = "kroma")]
     FeeDistributionHook,
     #[cfg(feature = "kroma")]
