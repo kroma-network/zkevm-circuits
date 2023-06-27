@@ -5,7 +5,7 @@ use crate::{
         util::{
             common_gadget::UpdateBalanceGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::{AddWordsGadget, MulAddWordsGadget, MulWordByU64Gadget},
+            math_gadget::{AddWordsGadget, LtWordGadget, MulAddWordsGadget, MulWordByU64Gadget},
             CachedRegion, Cell, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
@@ -32,6 +32,7 @@ pub(crate) struct FeeDistributionHookGadget<F> {
     remainder: Word<F>,
     reward_denominator: Word<F>,
     div_validator_reward_temp_by_reward_denominator: MulAddWordsGadget<F>,
+    is_remainder_lt_denominator: LtWordGadget<F>,
     protocol_reward_vault: Cell<F>,
     protocol_received_reward: UpdateBalanceGadget<F, 2, true>,
     validator_reward_vault: Cell<F>,
@@ -88,6 +89,12 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             "div_validator_reward_temp_by_reward_denominator's overflow == 0",
             div_validator_reward_temp_by_reward_denominator.overflow(),
         );
+        let is_remainder_lt_denominator =
+            LtWordGadget::construct(cb, &remainder, &reward_denominator);
+        cb.require_true(
+            "remainder < denominator",
+            is_remainder_lt_denominator.expr(),
+        );
 
         // protocol reward
         let protocol_reward = cb.query_word_rlc();
@@ -133,6 +140,7 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             remainder,
             reward_denominator,
             div_validator_reward_temp_by_reward_denominator,
+            is_remainder_lt_denominator,
             validator_reward_vault,
             validator_received_reward,
             protocol_reward_vault,
@@ -217,6 +225,8 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
                     validator_reward_temp,
                 ],
             )?;
+        self.is_remainder_lt_denominator
+            .assign(region, offset, remainder, *REWARD_DENOMINATOR)?;
 
         self.protocol_received_reward.assign(
             region,

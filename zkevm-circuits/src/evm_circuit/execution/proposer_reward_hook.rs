@@ -5,7 +5,7 @@ use crate::{
         util::{
             common_gadget::UpdateBalanceGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::{AddWordsGadget, MulAddWordsGadget},
+            math_gadget::{AddWordsGadget, LtWordGadget, MulAddWordsGadget},
             CachedRegion, Cell, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
@@ -36,6 +36,7 @@ pub(crate) struct ProposerRewardHookGadget<F> {
     mul_l1_gas_to_use_by_l1_base_fee: MulAddWordsGadget<F>,
     mul_l1_fee_tmp_by_l1_fee_scalar: MulAddWordsGadget<F>,
     div_l1_fee_by_l1_cost_denominator: MulAddWordsGadget<F>,
+    is_remainder_lt_denominator: LtWordGadget<F>,
     proposer_reward_vault: Cell<F>,
     proposer_reward: UpdateBalanceGadget<F, 2, true>,
 }
@@ -79,7 +80,6 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
         let l1_fee = cb.query_word_rlc();
         let l1_cost_denominator = cb.query_word_rlc();
         let l1_cost_remainder = cb.query_word_rlc();
-        // TODO(chokobole): Need to check l1_cost_remainder < l1_cost_denominator
         let div_l1_fee_by_l1_cost_denominator = MulAddWordsGadget::construct(
             cb,
             [
@@ -88,6 +88,12 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
                 &l1_cost_remainder,
                 &l1_fee_tmp2,
             ],
+        );
+        let is_remainder_lt_denominator =
+            LtWordGadget::construct(cb, &l1_cost_remainder, &l1_cost_denominator);
+        cb.require_true(
+            "remainder < denominator",
+            is_remainder_lt_denominator.expr(),
         );
         cb.require_zero(
             "div_l1_fee_by_l1_cost_denominator's overflow == 0",
@@ -123,6 +129,7 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
             mul_l1_gas_to_use_by_l1_base_fee,
             mul_l1_fee_tmp_by_l1_fee_scalar,
             div_l1_fee_by_l1_cost_denominator,
+            is_remainder_lt_denominator,
             proposer_reward_vault,
             proposer_reward,
         }
@@ -187,6 +194,12 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
             region,
             offset,
             [l1_fee, l1_cost_denominator, l1_cost_remainder, l1_fee_tmp2],
+        )?;
+        self.is_remainder_lt_denominator.assign(
+            region,
+            offset,
+            l1_cost_remainder,
+            l1_cost_denominator,
         )?;
         self.proposer_reward_vault.assign(
             region,
