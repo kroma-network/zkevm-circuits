@@ -71,18 +71,10 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
         let l1_fee_tmp = cb.query_word_rlc();
         let mul_l1_gas_to_use_by_l1_base_fee =
             MulAddWordsGadget::construct(cb, [&l1_gas_to_use, &l1_base_fee, &zero, &l1_fee_tmp]);
-        cb.require_zero(
-            "mul_l1_gas_to_use_by_l1_base_fee's overflow == 0",
-            mul_l1_gas_to_use_by_l1_base_fee.overflow(),
-        );
 
         let l1_fee_tmp2 = cb.query_word_rlc();
         let mul_l1_fee_tmp_by_l1_fee_scalar =
             MulAddWordsGadget::construct(cb, [&l1_fee_tmp, &l1_fee_scalar, &zero, &l1_fee_tmp2]);
-        cb.require_zero(
-            "mul_l1_fee_tmp_by_l1_fee_scalar's overflow == 0",
-            mul_l1_fee_tmp_by_l1_fee_scalar.overflow(),
-        );
 
         let l1_fee = cb.query_word_rlc();
         let l1_cost_denominator = cb.query_word_rlc();
