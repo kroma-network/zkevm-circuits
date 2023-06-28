@@ -5,7 +5,7 @@ use crate::{
         step::ExecutionState,
         util::{
             and,
-            common_gadget::TransferWithGasFeeGadget,
+            common_gadget::{TransferWithGasFeeGadget, UpdateBalanceGadget},
             constraint_builder::{
                 ConstraintBuilder, ReversionInfo, StepStateTransition,
                 Transition::{Delta, To},
@@ -21,28 +21,24 @@ use crate::{
     },
     table::{AccountFieldTag, CallContextFieldTag, TxFieldTag as TxContextFieldTag},
 };
-#[cfg(feature = "kroma")]
-use eth_types::geth_types::DEPOSIT_TX_TYPE;
-use eth_types::{Address, Field, ToLittleEndian, ToScalar};
+use eth_types::{
+    evm_types::rwc_util::BEGIN_TX_MINT_RWC_OFFSET, geth_types::DEPOSIT_TX_TYPE, Address, Field,
+    ToLittleEndian, ToScalar,
+};
 use ethers_core::utils::{get_contract_address, keccak256, rlp::RlpStream};
+#[cfg(feature = "reject-eip2718")]
+use gadgets::util::select;
 use gadgets::util::{expr_from_bytes, not, or, Expr};
 use halo2_proofs::{circuit::Value, plonk::Error};
 
-#[cfg(feature = "reject-eip2718")]
-use gadgets::util::select;
-
 #[derive(Clone, Debug)]
-pub(crate) struct BeginTxGadget<F> {
+pub(crate) struct BeginDepositTxGadget<F> {
     tx_id: Cell<F>,
-    #[cfg(feature = "kroma")]
     tx_type: Cell<F>,
-    #[cfg(feature = "kroma")]
-    is_tx_type_deposit: IsEqualGadget<F>,
-    #[cfg(feature = "kroma")]
-    is_tx_id_one: IsEqualGadget<F>,
     tx_nonce: Cell<F>,
     tx_gas: Cell<F>,
     tx_gas_price: Word<F>,
+    mint: UpdateBalanceGadget<F, 2, true>,
     mul_gas_fee_by_gas: MulWordByU64Gadget<F>,
     tx_caller_address: Cell<F>,
     tx_caller_address_is_zero: IsZeroGadget<F>,
@@ -51,6 +47,7 @@ pub(crate) struct BeginTxGadget<F> {
     call_callee_address: Cell<F>,
     tx_is_create: Cell<F>,
     tx_value: Word<F>,
+    tx_mint: Word<F>,
     tx_call_data_length: Cell<F>,
     tx_call_data_gas_cost: Cell<F>,
     reversion_info: ReversionInfo<F>,
@@ -68,10 +65,10 @@ pub(crate) struct BeginTxGadget<F> {
     is_caller_callee_equal: Cell<F>,
 }
 
-impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
-    const NAME: &'static str = "BeginTx";
+impl<F: Field> ExecutionGadget<F> for BeginDepositTxGadget<F> {
+    const NAME: &'static str = "BeginDepositTxGadget";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::BeginTx;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::BeginDepositTx;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         // Use rw_counter of the step which triggers next call as its call_id.
@@ -93,20 +90,6 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             is_persistent.expr(),
         ); // rwc_delta += 1
 
-        #[cfg(not(feature = "kroma"))]
-        let [tx_nonce, tx_gas, tx_caller_address, tx_callee_address, tx_is_create, tx_call_data_length, tx_call_data_gas_cost] =
-            [
-                TxContextFieldTag::Nonce,
-                TxContextFieldTag::Gas,
-                TxContextFieldTag::CallerAddress,
-                TxContextFieldTag::CalleeAddress,
-                TxContextFieldTag::IsCreate,
-                TxContextFieldTag::CallDataLength,
-                TxContextFieldTag::CallDataGasCost,
-            ]
-            .map(|field_tag| cb.tx_context(tx_id.expr(), field_tag, None));
-
-        #[cfg(feature = "kroma")]
         let [tx_type, tx_nonce, tx_gas, tx_caller_address, tx_callee_address, tx_is_create, tx_call_data_length, tx_call_data_gas_cost] =
             [
                 TxContextFieldTag::Type,
@@ -119,11 +102,12 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 TxContextFieldTag::CallDataGasCost,
             ]
             .map(|field_tag| cb.tx_context(tx_id.expr(), field_tag, None));
-        #[cfg(feature = "kroma")]
-        let is_tx_type_deposit =
-            IsEqualGadget::construct(cb, tx_type.expr(), DEPOSIT_TX_TYPE.expr());
-        #[cfg(feature = "kroma")]
-        cb.require_zero("In BeginTx, tx.type != 126", is_tx_type_deposit.expr());
+
+        cb.require_equal(
+            "In BeginDepositTx, tx.type == 126",
+            tx_type.expr(),
+            DEPOSIT_TX_TYPE.expr(),
+        );
 
         let tx_caller_address_is_zero = IsZeroGadget::construct(cb, tx_caller_address.expr());
         cb.require_equal(
@@ -151,20 +135,20 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             );
         });
 
-        #[cfg(not(feature = "kroma"))]
-        // Add first BeginTx step constraint to have tx_id == 1
+        // Add first BeginDepositTx step constraint to have tx_id == 1
         cb.step_first(|cb| {
             cb.require_equal("tx_id is initialized to be 1", tx_id.expr(), 1.expr());
         });
 
-        #[cfg(feature = "kroma")]
-        let is_tx_id_one = IsEqualGadget::construct(cb, tx_id.expr(), 1.expr());
-        #[cfg(feature = "kroma")]
-        cb.require_equal(
-            "On BeginTx, tx_id should not be 1",
-            is_tx_id_one.expr(),
-            0.expr(),
-        );
+        // NOTE(luke): handle mint
+        let tx_mint = cb.tx_context_as_word(tx_id.expr(), TxContextFieldTag::Mint, None);
+        let mint = UpdateBalanceGadget::construct(
+            cb,
+            tx_caller_address.expr(),
+            vec![tx_mint.clone()],
+            None,
+            Some(1.expr()),
+        ); // rwc_delta += 1
 
         // Increase caller's nonce.
         // (tx caller's nonce always increases even when tx ends with error)
@@ -334,11 +318,12 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             }
 
             cb.require_step_state_transition(StepStateTransition {
-                // 21 + TransferWithGasFeeGadget associated reads and writes:
+                // 22 + TransferWithGasFeeGadget associated reads and writes:
                 //   - Write CallContext TxId
                 //   - Write CallContext RwCounterEndOfReversion
                 //   - Write CallContext IsPersistent
                 //   - Write CallContext IsSuccess
+                //   - Write Account Balance (handle mint)
                 //   - Write Account Nonce
                 //   - Write TxAccessListAccount
                 //   - Write TxAccessListAccount
@@ -357,7 +342,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 //   - Write CallContext IsRoot
                 //   - Write CallContext IsCreate
                 //   - Write CallContext CodeHash
-                rw_counter: Delta(21.expr() + transfer_with_gas_fee.rw_delta()),
+                rw_counter: Delta(22.expr() + transfer_with_gas_fee.rw_delta()),
                 call_id: To(call_id.expr()),
                 is_root: To(true.expr()),
                 is_create: To(tx_is_create.expr()),
@@ -387,36 +372,26 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             // 1.expr(),
             // );
 
-            #[cfg(feature = "kroma")]
-            {
-                cb.require_equal(
-                    "Go to FeeDistributionHook when Tx to precompile",
-                    cb.next
-                        .execution_state_selector([ExecutionState::FeeDistributionHook]),
-                    1.expr(),
-                );
-            }
-            #[cfg(not(feature = "kroma"))]
-            {
-                cb.require_equal(
-                    "Go to EndTx when Tx to precompile",
-                    cb.next.execution_state_selector([ExecutionState::EndTx]),
-                    1.expr(),
-                );
-            }
+            cb.require_equal(
+                "Go to EndDepositTx when Tx to precompile",
+                cb.next
+                    .execution_state_selector([ExecutionState::EndDepositTx]),
+                1.expr(),
+            );
 
             cb.require_step_state_transition(StepStateTransition {
-                // 7 + TransferWithGasFeeGadget associated reads and writes:
+                // 8 + TransferWithGasFeeGadget associated reads and writes:
                 //   - Write CallContext TxId
                 //   - Write CallContext RwCounterEndOfReversion
                 //   - Write CallContext IsPersistent
                 //   - Write CallContext IsSuccess
+                //   - Write Account Balance (handle mint)
                 //   - Write Account (Caller) Nonce
                 //   - Write TxAccessListAccount (Caller)
                 //   - Write TxAccessListAccount (Callee)
                 //   - a TransferWithGasFeeGadget
                 rw_counter: Delta(
-                    7.expr()
+                    8.expr()
                         + transfer_with_gas_fee.rw_delta()
                         // TRICKY:
                         // Process the reversion only for Precompile in begin TX. Since no
@@ -446,36 +421,26 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                     1.expr(),
                 );
 
-                #[cfg(feature = "kroma")]
-                {
-                    cb.require_equal(
-                        "Go to FeeDistributionHook when Tx to account with empty code",
-                        cb.next
-                            .execution_state_selector([ExecutionState::FeeDistributionHook]),
-                        1.expr(),
-                    );
-                }
-                #[cfg(not(feature = "kroma"))]
-                {
-                    cb.require_equal(
-                        "Go to EndTx when Tx to account with empty code.",
-                        cb.next.execution_state_selector([ExecutionState::EndTx]),
-                        1.expr(),
-                    );
-                }
+                cb.require_equal(
+                    "Go to EndDepositTx when Tx to account with empty code",
+                    cb.next
+                        .execution_state_selector([ExecutionState::EndDepositTx]),
+                    1.expr(),
+                );
 
                 cb.require_step_state_transition(StepStateTransition {
-                    // 8 + TransferWithGasFeeGadget associated reads and writes:
+                    // 9 + TransferWithGasFeeGadget associated reads and writes:
                     //   - Write CallContext TxId
                     //   - Write CallContext RwCounterEndOfReversion
                     //   - Write CallContext IsPersistent
                     //   - Write CallContext IsSuccess
+                    //   - Write Account Balance (handle mint)
                     //   - Write Account Nonce
                     //   - Write TxAccessListAccount
                     //   - Write TxAccessListAccount
                     //   - Read Account CodeHash
                     //   - a TransferWithGasFeeGadget
-                    rw_counter: Delta(8.expr() + transfer_with_gas_fee.rw_delta()),
+                    rw_counter: Delta(9.expr() + transfer_with_gas_fee.rw_delta()),
                     call_id: To(call_id.expr()),
                     ..StepStateTransition::any()
                 });
@@ -512,11 +477,12 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 }
 
                 cb.require_step_state_transition(StepStateTransition {
-                    // 21 + TransferWithGasFeeGadget associated reads and writes:
+                    // 22 + TransferWithGasFeeGadget associated reads and writes:
                     //   - Write CallContext TxId
                     //   - Write CallContext RwCounterEndOfReversion
                     //   - Write CallContext IsPersistent
                     //   - Write CallContext IsSuccess
+                    //   - Write Account Balance (handle mint)
                     //   - Write Account Nonce
                     //   - Write TxAccessListAccount
                     //   - Write TxAccessListAccount
@@ -535,7 +501,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                     //   - Write CallContext IsRoot
                     //   - Write CallContext IsCreate
                     //   - Write CallContext CodeHash
-                    rw_counter: Delta(21.expr() + transfer_with_gas_fee.rw_delta()),
+                    rw_counter: Delta(22.expr() + transfer_with_gas_fee.rw_delta()),
                     call_id: To(call_id.expr()),
                     is_root: To(true.expr()),
                     is_create: To(tx_is_create.expr()),
@@ -550,15 +516,11 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
 
         Self {
             tx_id,
-            #[cfg(feature = "kroma")]
             tx_type,
-            #[cfg(feature = "kroma")]
-            is_tx_type_deposit,
-            #[cfg(feature = "kroma")]
-            is_tx_id_one,
             tx_nonce,
             tx_gas,
             tx_gas_price,
+            mint,
             mul_gas_fee_by_gas,
             tx_caller_address,
             tx_caller_address_is_zero,
@@ -567,6 +529,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             call_callee_address,
             tx_is_create,
             tx_value,
+            tx_mint,
             tx_call_data_length,
             tx_call_data_gas_cost,
             reversion_info,
@@ -619,21 +582,13 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             callee_balance_pair = rws.next().account_balance_pair();
         };
 
+        let (mint_balance, mint_balance_prev) =
+            block.rws[step.rw_indices[BEGIN_TX_MINT_RWC_OFFSET]].account_value_pair();
+
         self.tx_id
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
-        #[cfg(feature = "kroma")]
         self.tx_type
             .assign(region, offset, Value::known(F::from(tx.transaction_type)))?;
-        #[cfg(feature = "kroma")]
-        self.is_tx_type_deposit.assign(
-            region,
-            offset,
-            F::from(tx.transaction_type),
-            F::from(DEPOSIT_TX_TYPE),
-        )?;
-        #[cfg(feature = "kroma")]
-        self.is_tx_id_one
-            .assign(region, offset, F::from(tx.id as u64), F::from(1 as u64))?;
         self.tx_nonce
             .assign(region, offset, Value::known(F::from(tx.nonce)))?;
         self.tx_gas
@@ -648,6 +603,15 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             tx.gas_price,
             tx.gas,
             tx.gas_price * tx.gas,
+        )?;
+        self.tx_mint
+            .assign(region, offset, Some(tx.mint.to_le_bytes()))?;
+        self.mint.assign(
+            region,
+            offset,
+            mint_balance_prev,
+            vec![tx.mint],
+            mint_balance,
         )?;
         let caller_address = tx
             .caller_address
@@ -772,365 +736,43 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
     }
 }
 
+#[cfg(feature = "kroma")]
 #[cfg(test)]
 mod test {
-    use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
-    use bus_mapping::evm::OpcodeId;
-    use eth_types::{self, address, bytecode, evm_types::GasCost, word, Bytecode, Word};
-    use ethers_core::types::Bytes;
-
-    #[cfg(feature = "kroma")]
-    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use crate::test_util::CircuitTestBuilder;
+    use eth_types::{self, bytecode, geth_types::DEPOSIT_TX_TYPE};
     use mock::{
-        eth, gwei,
-        test_ctx::{SimpleTestContext, TestContext1_1, TestContext2_1},
-        tx_idx, MOCK_ACCOUNTS,
+        eth,
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, system_deposit_tx},
+            TestContext2_2,
+        },
+        tx_idx,
     };
 
-    fn gas(call_data: &[u8]) -> Word {
-        Word::from(
-            GasCost::TX.as_u64()
-                + 2 * OpcodeId::PUSH32.constant_gas_cost().as_u64()
-                + call_data
-                    .iter()
-                    .map(|&x| if x == 0 { 4 } else { 16 })
-                    .sum::<u64>(),
-        )
-    }
-
-    fn code_with_return() -> Bytecode {
-        bytecode! {
-            PUSH1(0)
-            PUSH1(0)
-            RETURN
-        }
-    }
-
-    fn code_with_revert() -> Bytecode {
-        bytecode! {
-            PUSH1(0)
-            PUSH1(0)
-            REVERT
-        }
-    }
-
-    fn test_ok(tx: eth_types::Transaction, code: Option<Bytecode>) {
+    #[test]
+    fn begin_tx_gadget_deposit() {
         // Get the execution steps from the external tracer
-        let ctx = SimpleTestContext::new(
+
+        let ctx = TestContext2_2::new(
             None,
-            |mut accs| {
-                accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(10));
-                if let Some(code) = code {
-                    accs[0].code(code);
-                }
-                accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
-            },
-            |mut txs, _accs| {
-                #[cfg(feature = "kroma")]
-                system_deposit_tx(txs[0]);
-                txs[tx_idx!(0)]
-                    .to(tx.to.unwrap())
-                    .from(tx.from)
-                    .gas_price(tx.gas_price.unwrap())
-                    .gas(tx.gas)
-                    .input(tx.input)
-                    .value(tx.value);
-            },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap();
-
-        CircuitTestBuilder::new_from_test_ctx(ctx).run();
-    }
-
-    // TODO: Use `mock` crate.
-    fn mock_tx(value: Word, gas_price: Word, calldata: Vec<u8>) -> eth_types::Transaction {
-        let from = MOCK_ACCOUNTS[1];
-        let to = MOCK_ACCOUNTS[0];
-        eth_types::Transaction {
-            from,
-            to: Some(to),
-            value,
-            gas: gas(&calldata),
-            gas_price: Some(gas_price),
-            input: calldata.into(),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn begin_tx_gadget_simple() {
-        // Transfer 1 ether to account with empty code, successfully
-        test_ok(mock_tx(eth(1), gwei(2), vec![]), None);
-
-        // Transfer 1 ether, successfully
-        test_ok(mock_tx(eth(1), gwei(2), vec![]), Some(code_with_return()));
-
-        // Transfer 1 ether, tx reverts
-        test_ok(mock_tx(eth(1), gwei(2), vec![]), Some(code_with_revert()));
-
-        // Transfer nothing with some calldata
-        test_ok(
-            mock_tx(eth(0), gwei(2), vec![1, 2, 3, 4, 0, 0, 0, 0]),
-            Some(code_with_return()),
-        );
-    }
-
-    #[test]
-    fn begin_tx_large_nonce() {
-        // This test checks that the rw table assignment and evm circuit are consistent
-        // in not applying an RLC to account and tx nonces.
-        // https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/592
-        let multibyte_nonce = 700u64;
-
-        let to = MOCK_ACCOUNTS[0];
-        let from = MOCK_ACCOUNTS[1];
-
-        let code = bytecode! {
-            STOP
-        };
-
-        let ctx = TestContext2_1::new(
-            None,
-            |mut accs| {
-                accs[0].address(to).balance(eth(1)).code(code);
-                accs[1].address(from).balance(eth(1)).nonce(multibyte_nonce);
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
-            },
-            |mut txs, _| {
-                #[cfg(feature = "kroma")]
-                system_deposit_tx(txs[0]);
-                txs[tx_idx!(0)].to(to).from(from).nonce(multibyte_nonce);
-            },
-            |block, _| block,
-        )
-        .unwrap();
-
-        CircuitTestBuilder::new_from_test_ctx(ctx).run();
-    }
-
-    #[test]
-    fn begin_tx_gadget_rand() {
-        let random_amount = Word::from_little_endian(&rand_bytes(32)) % eth(1);
-        let random_gas_price = Word::from_little_endian(&rand_bytes(32)) % gwei(2);
-        // If this test fails, we want these values to appear in the CI logs.
-        dbg!(random_amount, random_gas_price);
-
-        for (value, gas_price, calldata, code) in [
-            // Transfer random ether to account with empty code, successfully
-            (random_amount, gwei(2), vec![], None),
-            // Transfer nothing with random gas_price to account with empty code, successfully
-            (eth(0), random_gas_price, vec![], None),
-            // Transfer random ether, successfully
-            (random_amount, gwei(2), vec![], Some(code_with_return())),
-            // Transfer nothing with random gas_price, successfully
-            (eth(0), random_gas_price, vec![], Some(code_with_return())),
-            // Transfer random ether, tx reverts
-            (random_amount, gwei(2), vec![], Some(code_with_revert())),
-            // Transfer nothing with random gas_price, tx reverts
-            (eth(0), random_gas_price, vec![], Some(code_with_revert())),
-        ] {
-            test_ok(mock_tx(value, gas_price, calldata), code);
-        }
-    }
-
-    #[test]
-    fn begin_tx_no_code() {
-        let ctx = TestContext2_1::new(
-            None,
-            |mut accs| {
-                accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
-                accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
-            },
-            |mut txs, _accs| {
-                #[cfg(feature = "kroma")]
-                system_deposit_tx(txs[0]);
-                txs[tx_idx!(0)]
-                    .from(MOCK_ACCOUNTS[0])
-                    .to(MOCK_ACCOUNTS[1])
-                    .gas_price(gwei(2))
-                    .gas(Word::from(0x10000))
-                    .value(eth(2));
-            },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap();
-
-        CircuitTestBuilder::new_from_test_ctx(ctx).run();
-    }
-
-    #[test]
-    fn begin_tx_no_account() {
-        let ctx = TestContext1_1::new(
-            None,
-            |mut accs| {
-                accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
-            },
-            |mut txs, _accs| {
-                #[cfg(feature = "kroma")]
-                system_deposit_tx(txs[0]);
-                txs[tx_idx!(0)]
-                    .from(MOCK_ACCOUNTS[0])
-                    .to(MOCK_ACCOUNTS[1])
-                    .gas_price(gwei(2))
-                    .gas(Word::from(0x10000))
-                    .value(eth(2));
-            },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap();
-
-        CircuitTestBuilder::new_from_test_ctx(ctx).run();
-    }
-
-    fn begin_tx_deploy(nonce: u64) {
-        let code = bytecode! {
-            // [ADDRESS, STOP]
-            PUSH32(word!("3000000000000000000000000000000000000000000000000000000000000000"))
-            PUSH1(0)
-            MSTORE
-
-            PUSH1(2)
-            PUSH1(0)
-            RETURN
-        };
-        let ctx = TestContext1_1::new(
-            None,
-            |mut accs| {
-                accs[0]
-                    .address(MOCK_ACCOUNTS[0])
-                    .balance(eth(20))
-                    .nonce(nonce);
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
-            },
-            |mut txs, _accs| {
-                #[cfg(feature = "kroma")]
-                system_deposit_tx(txs[0]);
-                txs[tx_idx!(0)]
-                    .from(MOCK_ACCOUNTS[0])
-                    .nonce(nonce)
-                    .gas_price(gwei(2))
-                    .gas(Word::from(0x10000))
-                    .value(eth(2))
-                    .input(code.into());
-            },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap();
-
-        CircuitTestBuilder::new_from_test_ctx(ctx).run();
-    }
-
-    #[test]
-    fn begin_tx_deploy_nonce_zero() {
-        begin_tx_deploy(0);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_small_1byte() {
-        begin_tx_deploy(1);
-        begin_tx_deploy(127);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_big_1byte() {
-        begin_tx_deploy(128);
-        begin_tx_deploy(255);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_2bytes() {
-        begin_tx_deploy(0x0100u64);
-        begin_tx_deploy(0x1020u64);
-        begin_tx_deploy(0xffffu64);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_3bytes() {
-        begin_tx_deploy(0x010000u64);
-        begin_tx_deploy(0x102030u64);
-        begin_tx_deploy(0xffffffu64);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_4bytes() {
-        begin_tx_deploy(0x01000000u64);
-        begin_tx_deploy(0x10203040u64);
-        begin_tx_deploy(0xffffffffu64);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_5bytes() {
-        begin_tx_deploy(0x0100000000u64);
-        begin_tx_deploy(0x1020304050u64);
-        begin_tx_deploy(0xffffffffffu64);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_6bytes() {
-        begin_tx_deploy(0x010000000000u64);
-        begin_tx_deploy(0x102030405060u64);
-        begin_tx_deploy(0xffffffffffffu64);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_7bytes() {
-        begin_tx_deploy(0x01000000000000u64);
-        begin_tx_deploy(0x10203040506070u64);
-        begin_tx_deploy(0xffffffffffffffu64);
-    }
-    #[test]
-    fn begin_tx_deploy_nonce_8bytes() {
-        begin_tx_deploy(0x0100000000000000u64);
-        begin_tx_deploy(0x1020304050607080u64);
-        begin_tx_deploy(0xfffffffffffffffeu64);
-    }
-
-    #[test]
-    fn begin_tx_precompile() {
-        let ctx = TestContext1_1::new(
-            None,
-            |mut accs| {
-                accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
-            },
+            account_0_code_account_1_no_code(bytecode! { STOP }),
             |mut txs, accs| {
-                #[cfg(feature = "kroma")]
                 system_deposit_tx(txs[0]);
                 txs[tx_idx!(0)]
-                    .from(accs[0].address)
-                    .to(address!("0x0000000000000000000000000000000000000004"))
-                    .input(Bytes::from(vec![0x01, 0x02, 0x03]));
+                    .to(accs[0].address)
+                    .from(accs[1].address)
+                    .transaction_type(DEPOSIT_TX_TYPE);
+                txs[tx_idx!(1)]
+                    .to(accs[0].address)
+                    .from(accs[1].address)
+                    .transaction_type(DEPOSIT_TX_TYPE)
+                    .mint(eth(1));
             },
             |block, _tx| block.number(0xcafeu64),
         )
-        .unwrap();
-
-        CircuitTestBuilder::new_from_test_ctx(ctx).run();
-    }
-
-    #[test]
-    fn begin_tx_precompile_with_value() {
-        let ctx = TestContext1_1::new(
-            None,
-            |mut accs| {
-                accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
-                #[cfg(feature = "kroma")]
-                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
-            },
-            |mut txs, accs| {
-                #[cfg(feature = "kroma")]
-                system_deposit_tx(txs[0]);
-                txs[tx_idx!(0)]
-                    .from(accs[0].address)
-                    .to(address!("0x0000000000000000000000000000000000000004"))
-                    .value(eth(1))
-                    .input(Bytes::from(vec![0x01, 0x02, 0x03]));
-            },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap();
+        .unwrap()
+        .into();
 
         CircuitTestBuilder::new_from_test_ctx(ctx).run();
     }

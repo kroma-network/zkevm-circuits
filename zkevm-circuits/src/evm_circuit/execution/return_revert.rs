@@ -94,7 +94,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
 
         let is_contract_deployment =
             is_create.clone() * is_success.expr() * not::expr(copy_rw_increase_is_zero.expr());
-        let code_deposit_cost = cb.curr.state.is_create.expr()
+        let _code_deposit_cost = cb.curr.state.is_create.expr()
             * is_success.expr()
             * GasCost::CODE_DEPOSIT_BYTE_COST.expr()
             * range.length();

@@ -57,6 +57,8 @@ mod add_sub;
 mod addmod;
 mod address;
 mod balance;
+#[cfg(feature = "kroma")]
+mod begin_deposit_tx;
 mod begin_tx;
 mod bitwise;
 mod block_ctx;
@@ -146,6 +148,8 @@ use add_sub::AddSubGadget;
 use addmod::AddModGadget;
 use address::AddressGadget;
 use balance::BalanceGadget;
+#[cfg(feature = "kroma")]
+use begin_deposit_tx::BeginDepositTxGadget;
 use begin_tx::BeginTxGadget;
 use bitwise::BitwiseGadget;
 use block_ctx::{BlockCtxU160Gadget, BlockCtxU256Gadget, BlockCtxU64Gadget};
@@ -270,9 +274,11 @@ pub(crate) struct ExecutionConfig<F> {
     instrument: Instrument,
     // internal state gadgets
     begin_tx_gadget: Box<BeginTxGadget<F>>,
-    end_block_gadget: Box<EndBlockGadget<F>>,
-    end_inner_block_gadget: Box<EndInnerBlockGadget<F>>,
     end_tx_gadget: Box<EndTxGadget<F>>,
+    end_inner_block_gadget: Box<EndInnerBlockGadget<F>>,
+    end_block_gadget: Box<EndBlockGadget<F>>,
+    #[cfg(feature = "kroma")]
+    begin_deposit_tx_gadget: Box<BeginDepositTxGadget<F>>,
     #[cfg(feature = "kroma")]
     end_deposit_tx_gadget: Box<EndDepositTxGadget<F>>,
     #[cfg(feature = "kroma")]
@@ -425,12 +431,28 @@ impl<F: Field> ExecutionConfig<F> {
 
             // NEW: Enabled, this will break hand crafted tests, maybe we can remove them?
             let first_step_check = {
-                let begin_tx_end_block_selector = step_curr
-                    .execution_state_selector([ExecutionState::BeginTx, ExecutionState::EndBlock]);
-                iter::once((
-                    "First step should be BeginTx or EndBlock",
-                    q_step_first * (1.expr() - begin_tx_end_block_selector),
-                ))
+                #[cfg(feature = "kroma")]
+                {
+                    let begin_deposit_tx_end_block_selector = step_curr.execution_state_selector([
+                        ExecutionState::BeginDepositTx,
+                        ExecutionState::EndBlock,
+                    ]);
+                    iter::once((
+                        "First step should be BeginDepositTx or EndBlock",
+                        q_step_first * (1.expr() - begin_deposit_tx_end_block_selector),
+                    ))
+                }
+                #[cfg(not(feature = "kroma"))]
+                {
+                    let begin_tx_end_block_selector = step_curr.execution_state_selector([
+                        ExecutionState::BeginTx,
+                        ExecutionState::EndBlock,
+                    ]);
+                    iter::once((
+                        "First step should be BeginTx or EndBlock",
+                        q_step_first * (1.expr() - begin_tx_end_block_selector),
+                    ))
+                }
             };
 
             let last_step_check = {
@@ -545,9 +567,11 @@ impl<F: Field> ExecutionConfig<F> {
             advices,
             // internal states
             begin_tx_gadget: configure_gadget!(),
-            end_block_gadget: configure_gadget!(),
-            end_inner_block_gadget: configure_gadget!(),
             end_tx_gadget: configure_gadget!(),
+            end_inner_block_gadget: configure_gadget!(),
+            end_block_gadget: configure_gadget!(),
+            #[cfg(feature = "kroma")]
+            begin_deposit_tx_gadget: configure_gadget!(),
             #[cfg(feature = "kroma")]
             end_deposit_tx_gadget: configure_gadget!(),
             #[cfg(feature = "kroma")]
@@ -816,12 +840,19 @@ impl<F: Field> ExecutionConfig<F> {
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "EndDepositTx can only transit to BeginTx or EndInnerBlock",
+                            "EndDepositTx can only transit to BeginTx, BeginDepositTx or EndInnerBlock",
                             ExecutionState::EndDepositTx,
-                            vec![ExecutionState::BeginTx, ExecutionState::EndInnerBlock],
+                            vec![ExecutionState::BeginTx, ExecutionState::BeginDepositTx, ExecutionState::EndInnerBlock],
                         ),
+                        #[cfg(feature = "kroma")]
                         (
-                            "EndInnerBlock can only transition to BeginTx, EndInnerBlock or EndBlock",
+                            "EndInnerBlock can only transi to BeginDepositTx, EndInnerBlock or EndBlock",
+                            ExecutionState::EndInnerBlock,
+                            vec![ExecutionState::BeginDepositTx, ExecutionState::EndInnerBlock, ExecutionState::EndBlock],
+                        ),
+                        #[cfg(not(feature = "kroma"))]
+                        (
+                            "EndInnerBlock can only transit to BeginTx, EndInnerBlock or EndBlock",
                             ExecutionState::EndInnerBlock,
                             vec![ExecutionState::BeginTx, ExecutionState::EndInnerBlock, ExecutionState::EndBlock],
                         ),
@@ -854,6 +885,12 @@ impl<F: Field> ExecutionConfig<F> {
                             ExecutionState::BeginTx,
                             vec![ExecutionState::EndTx, ExecutionState::EndDepositTx, ExecutionState::EndInnerBlock],
                         ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            "Only EndDepositTx or EndInnerBlock can transit to BeginDepositTx",
+                            ExecutionState::BeginDepositTx,
+                            vec![ExecutionState::EndDepositTx, ExecutionState::EndInnerBlock],
+                        ),
                         #[cfg(not(feature = "kroma"))]
                         (
                             "Only EndTx or EndInnerBlock can transit to BeginTx",
@@ -862,11 +899,11 @@ impl<F: Field> ExecutionConfig<F> {
                         ),
                         #[cfg(feature = "kroma")]
                         (
-                            "Only ExecutionState which halts or BeginTx can transit to EndDepositTx",
+                            "Only ExecutionState which halts or BeginDepositTx can transit to EndDepositTx",
                             ExecutionState::EndDepositTx,
                             ExecutionState::iter()
                                 .filter(ExecutionState::halts)
-                                .chain(iter::once(ExecutionState::BeginTx))
+                                .chain(iter::once(ExecutionState::BeginDepositTx))
                                 .collect(),
                         ),
                         #[cfg(not(feature = "kroma"))]
@@ -910,6 +947,14 @@ impl<F: Field> ExecutionConfig<F> {
                 )
                 .chain(
                     IntoIterator::into_iter([
+                        #[cfg(feature = "kroma")]
+                        (
+                            "EndInnerBlock -> BeginDepositTx/EndInnerBlock: block number increases by one",
+                            ExecutionState::EndInnerBlock,
+                            vec![ExecutionState::BeginDepositTx, ExecutionState::EndInnerBlock],
+                            step_next.state.block_number.expr() - step_curr.state.block_number.expr() - 1.expr(),
+                        ),
+                        #[cfg(not(feature = "kroma"))]
                         (
                             "EndInnerBlock -> BeginTx/EndInnerBlock: block number increases by one",
                             ExecutionState::EndInnerBlock,
@@ -1403,10 +1448,12 @@ impl<F: Field> ExecutionConfig<F> {
             // internal states
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::EndTx => assign_exec_step!(self.end_tx_gadget),
-            #[cfg(feature = "kroma")]
-            ExecutionState::EndDepositTx => assign_exec_step!(self.end_deposit_tx_gadget),
             ExecutionState::EndInnerBlock => assign_exec_step!(self.end_inner_block_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
+            #[cfg(feature = "kroma")]
+            ExecutionState::BeginDepositTx => assign_exec_step!(self.begin_deposit_tx_gadget),
+            #[cfg(feature = "kroma")]
+            ExecutionState::EndDepositTx => assign_exec_step!(self.end_deposit_tx_gadget),
             #[cfg(feature = "kroma")]
             ExecutionState::FeeDistributionHook => assign_exec_step!(self.fee_distribution_hook),
             #[cfg(feature = "kroma")]
