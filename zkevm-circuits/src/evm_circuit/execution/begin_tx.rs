@@ -21,6 +21,8 @@ use crate::{
     },
     table::{AccountFieldTag, CallContextFieldTag, TxFieldTag as TxContextFieldTag},
 };
+#[cfg(feature = "kroma")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::{Address, Field, ToLittleEndian, ToScalar};
 use ethers_core::utils::{get_contract_address, keccak256, rlp::RlpStream};
 use gadgets::util::{expr_from_bytes, not, or, Expr};
@@ -91,6 +93,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             is_persistent.expr(),
         ); // rwc_delta += 1
 
+        #[cfg(not(feature = "kroma"))]
         let [tx_nonce, tx_gas, tx_caller_address, tx_callee_address, tx_is_create, tx_call_data_length, tx_call_data_gas_cost] =
             [
                 TxContextFieldTag::Nonce,
@@ -102,6 +105,25 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 TxContextFieldTag::CallDataGasCost,
             ]
             .map(|field_tag| cb.tx_context(tx_id.expr(), field_tag, None));
+
+        #[cfg(feature = "kroma")]
+        let [tx_type, tx_nonce, tx_gas, tx_caller_address, tx_callee_address, tx_is_create, tx_call_data_length, tx_call_data_gas_cost] =
+            [
+                TxContextFieldTag::Type,
+                TxContextFieldTag::Nonce,
+                TxContextFieldTag::Gas,
+                TxContextFieldTag::CallerAddress,
+                TxContextFieldTag::CalleeAddress,
+                TxContextFieldTag::IsCreate,
+                TxContextFieldTag::CallDataLength,
+                TxContextFieldTag::CallDataGasCost,
+            ]
+            .map(|field_tag| cb.tx_context(tx_id.expr(), field_tag, None));
+        #[cfg(feature = "kroma")]
+        let is_tx_type_deposit =
+            IsEqualGadget::construct(cb, tx_type.expr(), DEPOSIT_TX_TYPE.expr());
+        #[cfg(feature = "kroma")]
+        cb.require_zero("In BeginTx, tx.type != 126", is_tx_type_deposit.expr());
 
         let tx_caller_address_is_zero = IsZeroGadget::construct(cb, tx_caller_address.expr());
         cb.require_equal(
