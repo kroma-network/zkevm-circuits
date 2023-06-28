@@ -1,6 +1,7 @@
 use super::ExecutionGadget;
 use crate::{
     evm_circuit::{
+        param::N_BYTES_WORD,
         step::ExecutionState,
         util::{
             common_gadget::UpdateBalanceGadget,
@@ -18,7 +19,10 @@ use eth_types::{
     Field, ToLittleEndian, ToScalar, U256,
 };
 use gadgets::util::sum;
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{
+    circuit::Value,
+    plonk::{Error, Expression},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct FeeDistributionHookGadget<F> {
@@ -94,6 +98,18 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         cb.require_true(
             "remainder < denominator",
             is_remainder_lt_denominator.expr(),
+        );
+        let denominator_array: [Expression<F>; N_BYTES_WORD] = REWARD_DENOMINATOR
+            .to_le_bytes()
+            .iter()
+            .map(Expr::expr)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        cb.require_equal(
+            "reward_denominator == REWARD_DENOMINATOR(10000)",
+            reward_denominator.expr(),
+            cb.word_rlc(denominator_array),
         );
 
         // protocol reward

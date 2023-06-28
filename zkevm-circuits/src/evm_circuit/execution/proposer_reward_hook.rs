@@ -1,6 +1,7 @@
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
+        param::N_BYTES_WORD,
         step::ExecutionState,
         util::{
             common_gadget::UpdateBalanceGadget,
@@ -18,7 +19,10 @@ use eth_types::{
     Field, ToLittleEndian, ToScalar,
 };
 use gadgets::util::sum;
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{
+    circuit::Value,
+    plonk::{Error, Expression},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ProposerRewardHookGadget<F> {
@@ -89,15 +93,27 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
                 &l1_fee_tmp2,
             ],
         );
+        cb.require_zero(
+            "div_l1_fee_by_l1_cost_denominator's overflow == 0",
+            div_l1_fee_by_l1_cost_denominator.overflow(),
+        );
         let is_remainder_lt_denominator =
             LtWordGadget::construct(cb, &l1_cost_remainder, &l1_cost_denominator);
         cb.require_true(
             "remainder < denominator",
             is_remainder_lt_denominator.expr(),
         );
-        cb.require_zero(
-            "div_l1_fee_by_l1_cost_denominator's overflow == 0",
-            div_l1_fee_by_l1_cost_denominator.overflow(),
+        let denominator_array: [Expression<F>; N_BYTES_WORD] = L1_COST_DENOMINATOR
+            .to_le_bytes()
+            .iter()
+            .map(Expr::expr)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        cb.require_equal(
+            "l1_cost_denominator == L1_COST_DENOMINATOR(1_000_000)",
+            l1_cost_denominator.expr(),
+            cb.word_rlc(denominator_array),
         );
 
         let proposer_reward_vault = cb.query_cell();
