@@ -1,11 +1,12 @@
 use super::ExecutionGadget;
 use crate::{
     evm_circuit::{
+        param::N_BYTES_WORD,
         step::ExecutionState,
         util::{
             common_gadget::UpdateBalanceGadget,
             constraint_builder::{ConstraintBuilder, StepStateTransition, Transition::Delta},
-            math_gadget::{AddWordsGadget, MulAddWordsGadget, MulWordByU64Gadget},
+            math_gadget::{AddWordsGadget, LtWordGadget, MulAddWordsGadget, MulWordByU64Gadget},
             CachedRegion, Cell, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
@@ -18,7 +19,10 @@ use eth_types::{
     Field, ToLittleEndian, ToScalar, U256,
 };
 use gadgets::util::sum;
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{
+    circuit::Value,
+    plonk::{Error, Expression},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct FeeDistributionHookGadget<F> {
@@ -32,6 +36,7 @@ pub(crate) struct FeeDistributionHookGadget<F> {
     remainder: Word<F>,
     reward_denominator: Word<F>,
     div_validator_reward_temp_by_reward_denominator: MulAddWordsGadget<F>,
+    is_remainder_lt_denominator: LtWordGadget<F>,
     protocol_reward_vault: Cell<F>,
     protocol_received_reward: UpdateBalanceGadget<F, 2, true>,
     validator_reward_vault: Cell<F>,
@@ -68,10 +73,6 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
                 &validator_reward_temp,
             ],
         );
-        cb.require_zero(
-            "mul_total_reward_by_reward_ratio's overflow == 0",
-            mul_total_reward_by_reward_ratio.overflow(),
-        );
 
         // gas_used * tx_gas_price * validator reward ratio / REWARD_DENOMINATOR
         let validator_reward = cb.query_word_rlc();
@@ -91,6 +92,24 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         cb.require_zero(
             "div_validator_reward_temp_by_reward_denominator's overflow == 0",
             div_validator_reward_temp_by_reward_denominator.overflow(),
+        );
+        let is_remainder_lt_denominator =
+            LtWordGadget::construct(cb, &remainder, &reward_denominator);
+        cb.require_true(
+            "remainder < denominator",
+            is_remainder_lt_denominator.expr(),
+        );
+        let denominator_array: [Expression<F>; N_BYTES_WORD] = REWARD_DENOMINATOR
+            .to_le_bytes()
+            .iter()
+            .map(Expr::expr)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        cb.require_equal(
+            "reward_denominator == REWARD_DENOMINATOR(10000)",
+            reward_denominator.expr(),
+            cb.word_rlc(denominator_array),
         );
 
         // protocol reward
@@ -137,6 +156,7 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             remainder,
             reward_denominator,
             div_validator_reward_temp_by_reward_denominator,
+            is_remainder_lt_denominator,
             validator_reward_vault,
             validator_received_reward,
             protocol_reward_vault,
@@ -221,6 +241,8 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
                     validator_reward_temp,
                 ],
             )?;
+        self.is_remainder_lt_denominator
+            .assign(region, offset, remainder, *REWARD_DENOMINATOR)?;
 
         self.protocol_received_reward.assign(
             region,
