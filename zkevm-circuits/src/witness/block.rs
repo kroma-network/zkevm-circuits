@@ -8,7 +8,7 @@ use crate::tx_circuit::TX_LEN;
 
 use crate::{evm_circuit::util::rlc, table::BlockContextFieldTag};
 use bus_mapping::{
-    circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent},
+    circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent, TxL1Fee},
     Error,
 };
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, Word, U256};
@@ -72,17 +72,11 @@ pub struct Block<F> {
 
     /// Kroma
     #[cfg(feature = "kroma")]
-    /// L1 base fee
-    pub l1_base_fee: Word,
+    /// L1 fee
+    pub l1_fee: TxL1Fee,
     #[cfg(feature = "kroma")]
-    /// L1 fee overhead
-    pub l1_fee_overhead: Word,
-    #[cfg(feature = "kroma")]
-    /// L1 fee scalar
-    pub l1_fee_scalar: Word,
-    #[cfg(feature = "kroma")]
-    /// validator reward ration
-    pub validator_reward_ratio: Word,
+    /// L1 fee committed
+    pub l1_fee_committed: TxL1Fee,
 }
 
 /// ...
@@ -415,13 +409,19 @@ pub fn block_convert<F: Field>(
         ),
         chain_id,
         #[cfg(feature = "kroma")]
-        l1_base_fee: block.l1_base_fee,
+        l1_fee: TxL1Fee {
+            base_fee: block.l1_fee.base_fee,
+            fee_overhead: block.l1_fee.fee_overhead,
+            fee_scalar: block.l1_fee.fee_scalar,
+            validator_reward_ratio: block.l1_fee.validator_reward_ratio,
+        },
         #[cfg(feature = "kroma")]
-        l1_fee_overhead: block.l1_fee_overhead,
-        #[cfg(feature = "kroma")]
-        l1_fee_scalar: block.l1_fee_scalar,
-        #[cfg(feature = "kroma")]
-        validator_reward_ratio: block.validator_reward_ratio,
+        l1_fee_committed: TxL1Fee {
+            base_fee: block.l1_fee_committed.base_fee,
+            fee_overhead: block.l1_fee_committed.fee_overhead,
+            fee_scalar: block.l1_fee_committed.fee_scalar,
+            validator_reward_ratio: block.l1_fee_committed.validator_reward_ratio,
+        },
         ..Default::default()
     })
 }

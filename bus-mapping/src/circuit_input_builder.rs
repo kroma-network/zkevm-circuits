@@ -15,7 +15,7 @@ pub use self::block::BlockHead;
 #[cfg(feature = "kroma")]
 use crate::evm::opcodes::gen_end_deposit_tx_ops;
 #[cfg(feature = "kroma")]
-use crate::evm::opcodes::gen_kroma_hook_ops;
+use crate::evm::opcodes::gen_kroma_ops;
 use crate::{
     error::Error,
     evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
@@ -55,7 +55,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     iter,
 };
-pub use transaction::{Transaction, TransactionContext};
+pub use transaction::{Transaction, TransactionContext, TxL1Fee};
 
 /// Circuit Setup Parameters
 #[derive(Debug, Clone, Copy)]
@@ -463,9 +463,9 @@ impl<'a> CircuitInputBuilder {
             tx.steps_mut().push(end_deposit_tx_step);
         } else {
             #[cfg(feature = "kroma")]
-            let reward_hook_steps = gen_kroma_hook_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            let kroma_steps = gen_kroma_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             #[cfg(feature = "kroma")]
-            tx.steps_mut().extend(reward_hook_steps);
+            tx.steps_mut().extend(kroma_steps);
 
             let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
             tx.steps_mut().push(end_tx_step);

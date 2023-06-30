@@ -1,7 +1,9 @@
 //! Block-related utility module
 
 use super::{
-    execution::ExecState, transaction::Transaction, CircuitsParams, CopyEvent, ExecStep, ExpEvent,
+    execution::ExecState,
+    transaction::{Transaction, TxL1Fee},
+    CircuitsParams, CopyEvent, ExecStep, ExpEvent,
 };
 use crate::{
     operation::{OperationContainer, RWCounter},
@@ -159,17 +161,11 @@ pub struct Block {
     pub chain_id: Word,
 
     #[cfg(feature = "kroma")]
-    /// L1 base fee
-    pub l1_base_fee: Word,
+    /// L1 fee
+    pub l1_fee: TxL1Fee,
     #[cfg(feature = "kroma")]
-    /// L1 fee overhead
-    pub l1_fee_overhead: Word,
-    #[cfg(feature = "kroma")]
-    /// L1 fee scalar
-    pub l1_fee_scalar: Word,
-    #[cfg(feature = "kroma")]
-    /// Validator Reward Ratio
-    pub validator_reward_ratio: Word,
+    /// L1 fee committed
+    pub l1_fee_committed: TxL1Fee,
 }
 
 impl Block {

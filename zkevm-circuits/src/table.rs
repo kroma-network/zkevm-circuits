@@ -358,10 +358,6 @@ pub enum RwTableTag {
     TxLog,
     /// Tx Receipt operation
     TxReceipt,
-
-    #[cfg(feature = "kroma")]
-    /// L1 Block operation
-    L1Block,
 }
 impl_expr!(RwTableTag);
 
@@ -481,22 +477,6 @@ pub enum CallContextFieldTag {
     ReversibleWriteCounter,
 }
 impl_expr!(CallContextFieldTag);
-
-#[cfg(feature = "kroma")]
-/// Tag for a L1BlockField in RwTable
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter, EnumCount)]
-pub enum L1BlockFieldTag {
-    /// L1 base fee
-    L1BaseFee = 1,
-    /// L1 fee overhead
-    L1FeeOverhead,
-    /// L1 fee scalar
-    L1FeeScalar,
-    /// Validator Reward Ratio
-    ValidatorRewardRatio,
-}
-#[cfg(feature = "kroma")]
-impl_expr!(L1BlockFieldTag);
 
 /// The RwTable shared between EVM Circuit and State Circuit, which contains
 /// traces of the EVM state operations.
