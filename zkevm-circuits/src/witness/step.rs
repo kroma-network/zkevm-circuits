@@ -105,7 +105,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
         if let Some(error) = step.error.as_ref() {
             log::debug!("step err {:?}", error);
             #[cfg(feature = "kroma")]
-            if !step.exec_state.is_reward_hook() {
+            if !step.exec_state.is_kroma_step() {
                 return error.into();
             }
             #[cfg(not(feature = "kroma"))]
@@ -242,8 +242,6 @@ pub(super) fn step_convert(step: &circuit_input_builder::ExecStep, block_num: u6
                     operation::Target::TxReceipt => RwTableTag::TxReceipt,
                     operation::Target::TxLog => RwTableTag::TxLog,
                     operation::Target::Start => RwTableTag::Start,
-                    #[cfg(feature = "kroma")]
-                    operation::Target::L1Block => RwTableTag::L1Block,
                 };
                 (tag, x.as_usize())
             })

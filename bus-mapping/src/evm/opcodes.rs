@@ -4,8 +4,8 @@ use crate::{
     error::{ExecError, OogError},
     evm::OpcodeId,
     operation::{
-        AccountField, AccountOp, CallContextField, TxAccessListAccountOp, TxReceiptField,
-        TxRefundOp, RW,
+        AccountField, AccountOp, CallContextField, StorageOp, TxAccessListAccountOp,
+        TxReceiptField, TxRefundOp, RW,
     },
     state_db::CodeDB,
     Error,
@@ -13,14 +13,16 @@ use crate::{
 use core::fmt::Debug;
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
-    evm_unimplemented, GethExecStep, GethExecTrace, ToAddress, ToWord, Word,
+    evm_unimplemented,
+    kroma_params::{
+        BASE_FEE_KEY, L1_BLOCK, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY, VALIDATOR_REWARD_RATIO_KEY,
+    },
+    GethExecStep, GethExecTrace, ToAddress, ToWord, Word,
 };
 use ethers_core::utils::get_contract_address;
 
 use crate::util::CHECK_MEM_STRICT;
 
-#[cfg(feature = "kroma")]
-use crate::l1_block_operation::L1BlockField;
 #[cfg(feature = "kroma")]
 use eth_types::kroma_params::{
     PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_VAULT,
@@ -898,21 +900,9 @@ pub fn gen_end_deposit_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecSt
     )?;
 
     if state.tx_ctx.id() == 1 {
-        let (l1_base_fee, l1_fee_overhead, l1_fee_scalar, validator_reward_ratio) =
-            state.sdb.get_l1_block()?;
-        state.l1_block_write(&mut exec_step, L1BlockField::L1BaseFee, l1_base_fee)?;
-        state.l1_block_write(&mut exec_step, L1BlockField::L1FeeOverhead, l1_fee_overhead)?;
-        state.l1_block_write(&mut exec_step, L1BlockField::L1FeeScalar, l1_fee_scalar)?;
-        state.l1_block_write(
-            &mut exec_step,
-            L1BlockField::ValidatorRewardRatio,
-            validator_reward_ratio,
-        )?;
-
-        state.block.l1_base_fee = l1_base_fee;
-        state.block.l1_fee_overhead = l1_fee_overhead;
-        state.block.l1_fee_scalar = l1_fee_scalar;
-        state.block.validator_reward_ratio = validator_reward_ratio;
+        let (values, committed_values) = state.sdb.get_l1_block()?;
+        state.block.l1_fee = values;
+        state.block.l1_fee_committed = committed_values;
     }
 
     if !state.tx_ctx.is_last_tx() {
@@ -943,17 +933,23 @@ pub fn gen_fee_distribution_hook_ops(state: &mut CircuitInputStateRef) -> Result
 
     let gas_used = state.tx.gas - exec_step.gas_left.0;
 
-    let (_, _, _, validator_reward_ratio) = state.sdb.get_l1_block()?;
-    state.l1_block_read(
-        &mut exec_step,
-        L1BlockField::ValidatorRewardRatio,
-        validator_reward_ratio,
-    )?;
-
-    let validator_reward_ratio = state.block.validator_reward_ratio;
+    let validator_reward_ratio = state.block.l1_fee.validator_reward_ratio;
     let total_reward = state.tx.gas_price * gas_used;
     let validator_reward = (total_reward * validator_reward_ratio) / *REWARD_DENOMINATOR;
     let protocol_reward = total_reward - validator_reward;
+
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        StorageOp::new(
+            *L1_BLOCK,
+            *VALIDATOR_REWARD_RATIO_KEY,
+            state.block.l1_fee.validator_reward_ratio,
+            state.block.l1_fee.validator_reward_ratio,
+            state.tx_ctx.id(),
+            state.block.l1_fee_committed.validator_reward_ratio,
+        ),
+    );
 
     // protocol
     let (found, protocol_reward_vault_account) = state.sdb.get_account(&PROTOCOL_VAULT);
@@ -1003,15 +999,47 @@ pub fn gen_proposer_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<
         state.tx_ctx.id().into(),
     );
 
-    let (l1_base_fee, l1_fee_overhead, l1_fee_scalar, _) = state.sdb.get_l1_block()?;
-    state.l1_block_read(&mut exec_step, L1BlockField::L1BaseFee, l1_base_fee)?;
-    state.l1_block_read(&mut exec_step, L1BlockField::L1FeeOverhead, l1_fee_overhead)?;
-    state.l1_block_read(&mut exec_step, L1BlockField::L1FeeScalar, l1_fee_scalar)?;
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        StorageOp::new(
+            *L1_BLOCK,
+            *BASE_FEE_KEY,
+            state.block.l1_fee.base_fee,
+            state.block.l1_fee.base_fee,
+            state.tx_ctx.id(),
+            state.block.l1_fee_committed.base_fee,
+        ),
+    );
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        StorageOp::new(
+            *L1_BLOCK,
+            *L1_FEE_OVERHEAD_KEY,
+            state.block.l1_fee.fee_overhead,
+            state.block.l1_fee.fee_overhead,
+            state.tx_ctx.id(),
+            state.block.l1_fee_committed.fee_overhead,
+        ),
+    );
+    state.push_op(
+        &mut exec_step,
+        RW::READ,
+        StorageOp::new(
+            *L1_BLOCK,
+            *L1_FEE_SCALAR_KEY,
+            state.block.l1_fee.fee_scalar,
+            state.block.l1_fee.fee_scalar,
+            state.tx_ctx.id(),
+            state.block.l1_fee_committed.fee_scalar,
+        ),
+    );
 
     let l1_fee = state.sdb.compute_l1_fee(
-        l1_base_fee,
-        l1_fee_overhead,
-        l1_fee_scalar,
+        state.block.l1_fee.base_fee,
+        state.block.l1_fee.fee_overhead,
+        state.block.l1_fee.fee_scalar,
         state.tx.rollup_data_gas_cost,
     )?;
     let (found, proposer_reward_vault) = state.sdb.get_account_mut(&PROPOSER_REWARD_VAULT);
@@ -1033,7 +1061,7 @@ pub fn gen_proposer_reward_hook_ops(state: &mut CircuitInputStateRef) -> Result<
 }
 
 #[cfg(feature = "kroma")]
-pub fn gen_kroma_hook_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
+pub fn gen_kroma_ops(state: &mut CircuitInputStateRef) -> Result<Vec<ExecStep>, Error> {
     let fee_distribution_hook_step = gen_fee_distribution_hook_ops(state)?;
     let proposer_reward_hook_step = gen_proposer_reward_hook_ops(state)?;
     Ok(vec![fee_distribution_hook_step, proposer_reward_hook_step])

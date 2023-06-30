@@ -174,7 +174,7 @@ impl ExecState {
 
     #[cfg(feature = "kroma")]
     /// Returns `true` if `ExecState` is `FeeDistributionHook` or `ProposerRewardHook`.
-    pub fn is_reward_hook(&self) -> bool {
+    pub fn is_kroma_step(&self) -> bool {
         *self == ExecState::FeeDistributionHook || *self == ExecState::ProposerRewardHook
     }
 }

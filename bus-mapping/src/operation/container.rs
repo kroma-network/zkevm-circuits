@@ -1,5 +1,3 @@
-#[cfg(feature = "kroma")]
-use super::L1BlockOp;
 use super::{
     AccountOp, CallContextOp, MemoryOp, Op, OpEnum, Operation, RWCounter, StackOp, StartOp,
     StorageOp, Target, TxAccessListAccountOp, TxAccessListAccountStorageOp, TxLogOp, TxReceiptOp,
@@ -46,9 +44,6 @@ pub struct OperationContainer {
     pub tx_log: Vec<Operation<TxLogOp>>,
     /// Operations of Start
     pub start: Vec<Operation<StartOp>>,
-    #[cfg(feature = "kroma")]
-    /// Operations of L1BlockOp
-    pub l1_block_log: Vec<Operation<L1BlockOp>>,
 }
 
 impl Default for OperationContainer {
@@ -73,8 +68,6 @@ impl OperationContainer {
             tx_receipt: Vec::new(),
             tx_log: Vec::new(),
             start: Vec::new(),
-            #[cfg(feature = "kroma")]
-            l1_block_log: Vec::new(),
         }
     }
 
@@ -170,11 +163,6 @@ impl OperationContainer {
             OpEnum::Start(op) => {
                 self.start.push(Operation::new(rwc, rw, op));
                 OperationRef::from((Target::Start, self.start.len() - 1))
-            }
-            #[cfg(feature = "kroma")]
-            OpEnum::L1Block(op) => {
-                self.l1_block_log.push(Operation::new(rwc, rw, op));
-                OperationRef::from((Target::L1Block, self.l1_block_log.len() - 1))
             }
         }
     }

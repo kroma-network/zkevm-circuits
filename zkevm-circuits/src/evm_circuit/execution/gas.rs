@@ -148,7 +148,8 @@ mod test {
                 // wrong `gas_left` value for the second step, to assert that
                 // the circuit verification fails for this scenario.
                 assert_eq!(block.txs.len(), 2);
-                // BeginTx, Gas, Stop, (BaseFeeHook, RollUpFeeHook,) EndTx, EndInnerBlock, EndBlock
+                // BeginTx, Gas, Stop, (FeeDistributionHook, ProposerRewardHook,)
+                // EndTx, EndInnerBlock, EndBlock
                 #[cfg(feature = "kroma")]
                 let n_steps_in_tx = 7;
                 // BeginTx, Gas, Stop, EndTx, EndInnerBlock, EndBlock

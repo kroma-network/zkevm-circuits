@@ -24,7 +24,7 @@ lazy_static! {
   pub static ref L1_FEE_OVERHEAD_KEY: Word = Word::from(5);
   /// The slot for l1FeeScalar at L1Block.sol.
   pub static ref L1_FEE_SCALAR_KEY: Word = Word::from(6);
-  /// The slot for vRewardRatio at L1Block.sol.
+  /// The slot for validatorRewardRatio at L1Block.sol.
   pub static ref VALIDATOR_REWARD_RATIO_KEY: Word = Word::from(7);
 
   /// The denominator used to compute l1 rollup cost.
