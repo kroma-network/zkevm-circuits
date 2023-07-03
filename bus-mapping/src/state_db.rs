@@ -14,7 +14,7 @@ use crate::Error;
 #[cfg(feature = "kroma")]
 use eth_types::kroma_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
-    VALIDATOR_REWARD_RATIO_KEY,
+    VALIDATOR_REWARD_SCALAR_KEY,
 };
 
 lazy_static! {
@@ -294,12 +294,12 @@ impl StateDB {
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_SCALAR_KEY));
         }
-        let (found, validator_reward_ratio) =
-            self.get_storage(&L1_BLOCK, &VALIDATOR_REWARD_RATIO_KEY);
+        let (found, validator_reward_scalar) =
+            self.get_storage(&L1_BLOCK, &VALIDATOR_REWARD_SCALAR_KEY);
         if !found {
             return Err(Error::StorageKeyNotFound(
                 *L1_BLOCK,
-                *VALIDATOR_REWARD_RATIO_KEY,
+                *VALIDATOR_REWARD_SCALAR_KEY,
             ));
         }
 
@@ -308,20 +308,20 @@ impl StateDB {
             self.get_committed_storage(&L1_BLOCK, &L1_FEE_OVERHEAD_KEY);
         let (_, l1_fee_scalar_committed) =
             self.get_committed_storage(&L1_BLOCK, &L1_FEE_SCALAR_KEY);
-        let (_, validator_reward_ratio_committed) =
-            self.get_committed_storage(&L1_BLOCK, &VALIDATOR_REWARD_RATIO_KEY);
+        let (_, validator_reward_scalar_committed) =
+            self.get_committed_storage(&L1_BLOCK, &VALIDATOR_REWARD_SCALAR_KEY);
 
         let values = TxL1Fee {
             base_fee: *l1_base_fee,
             fee_overhead: *l1_fee_overhead,
             fee_scalar: *l1_fee_scalar,
-            validator_reward_ratio: *validator_reward_ratio,
+            validator_reward_scalar: *validator_reward_scalar,
         };
         let committed_values = TxL1Fee {
             base_fee: *l1_base_fee_committed,
             fee_overhead: *l1_fee_overhead_committed,
             fee_scalar: *l1_fee_scalar_committed,
-            validator_reward_ratio: *validator_reward_ratio_committed,
+            validator_reward_scalar: *validator_reward_scalar_committed,
         };
         Ok((values, committed_values))
     }

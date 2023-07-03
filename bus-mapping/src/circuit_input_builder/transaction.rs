@@ -440,6 +440,6 @@ pub struct TxL1Fee {
     pub fee_overhead: Word,
     /// L1 fee scalar
     pub fee_scalar: Word,
-    /// Validator Reward Ratio
-    pub validator_reward_ratio: Word,
+    /// Validator reward scalar
+    pub validator_reward_scalar: Word,
 }

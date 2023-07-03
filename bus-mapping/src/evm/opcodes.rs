@@ -15,7 +15,7 @@ use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
     evm_unimplemented,
     kroma_params::{
-        BASE_FEE_KEY, L1_BLOCK, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY, VALIDATOR_REWARD_RATIO_KEY,
+        BASE_FEE_KEY, L1_BLOCK, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY, VALIDATOR_REWARD_SCALAR_KEY,
     },
     GethExecStep, GethExecTrace, ToAddress, ToWord, Word,
 };
@@ -933,9 +933,9 @@ pub fn gen_fee_distribution_hook_ops(state: &mut CircuitInputStateRef) -> Result
 
     let gas_used = state.tx.gas - exec_step.gas_left.0;
 
-    let validator_reward_ratio = state.block.l1_fee.validator_reward_ratio;
+    let validator_reward_scalar = state.block.l1_fee.validator_reward_scalar;
     let total_reward = state.tx.gas_price * gas_used;
-    let validator_reward = (total_reward * validator_reward_ratio) / *REWARD_DENOMINATOR;
+    let validator_reward = (total_reward * validator_reward_scalar) / *REWARD_DENOMINATOR;
     let protocol_reward = total_reward - validator_reward;
 
     state.push_op(
@@ -943,11 +943,11 @@ pub fn gen_fee_distribution_hook_ops(state: &mut CircuitInputStateRef) -> Result
         RW::READ,
         StorageOp::new(
             *L1_BLOCK,
-            *VALIDATOR_REWARD_RATIO_KEY,
-            state.block.l1_fee.validator_reward_ratio,
-            state.block.l1_fee.validator_reward_ratio,
+            *VALIDATOR_REWARD_SCALAR_KEY,
+            state.block.l1_fee.validator_reward_scalar,
+            state.block.l1_fee.validator_reward_scalar,
             state.tx_ctx.id(),
-            state.block.l1_fee_committed.validator_reward_ratio,
+            state.block.l1_fee_committed.validator_reward_scalar,
         ),
     );
 
