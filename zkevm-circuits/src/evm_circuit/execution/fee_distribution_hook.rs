@@ -16,7 +16,7 @@ use crate::{
 };
 use eth_types::{
     kroma_params::{
-        L1_BLOCK, PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_RATIO_KEY,
+        L1_BLOCK, PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_SCALAR_KEY,
         VALIDATOR_REWARD_VAULT,
     },
     Field, ToLittleEndian, ToScalar, U256,
@@ -31,12 +31,12 @@ use halo2_proofs::{
 pub(crate) struct FeeDistributionHookGadget<F> {
     tx_id: Cell<F>,
     tx_gas: Cell<F>,
-    validator_reward_ratio: Word<F>,
-    validator_reward_ratio_committed: Word<F>,
+    validator_reward_scalar: Word<F>,
+    validator_reward_scalar_committed: Word<F>,
     mul_gas_used_by_tx_gas_price: MulWordByU64Gadget<F>,
     zero: Word<F>,
-    validator_reward_temp: Word<F>, // tx_gas_price * gas_used * validator_reward_ratio
-    mul_total_reward_by_reward_ratio: MulAddWordsGadget<F>,
+    validator_reward_temp: Word<F>, // tx_gas_price * gas_used * validator_reward_scalar
+    mul_total_reward_by_reward_scalar: MulAddWordsGadget<F>,
     remainder: Word<F>,
     reward_denominator: Word<F>,
     div_validator_reward_temp_by_reward_denominator: MulAddWordsGadget<F>,
@@ -64,15 +64,15 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
                 .to_scalar()
                 .expect("L1 BLOCK should be able to be converted to scalar value"),
         );
-        let validator_reward_ratio = cb.query_word_rlc();
-        let validator_reward_ratio_committed = cb.query_word_rlc();
-        let key_le_bytes: [u8; 32] = (*VALIDATOR_REWARD_RATIO_KEY).to_le_bytes();
+        let validator_reward_scalar = cb.query_word_rlc();
+        let validator_reward_scalar_committed = cb.query_word_rlc();
+        let key_le_bytes: [u8; 32] = (*VALIDATOR_REWARD_SCALAR_KEY).to_le_bytes();
         cb.account_storage_read(
             l1_block_address.expr(),
             cb.word_rlc(key_le_bytes.map(|b| b.expr())),
-            validator_reward_ratio.expr(),
+            validator_reward_scalar.expr(),
             tx_id.expr(),
-            validator_reward_ratio_committed.expr(),
+            validator_reward_scalar_committed.expr(),
         );
 
         // tx_gas_price * gas_used
@@ -83,17 +83,17 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         let zero = cb.query_word_rlc();
         cb.add_constraint("zero should be zero", sum::expr(&zero.cells));
         let validator_reward_temp = cb.query_word_rlc();
-        let mul_total_reward_by_reward_ratio = MulAddWordsGadget::construct(
+        let mul_total_reward_by_reward_scalar = MulAddWordsGadget::construct(
             cb,
             [
                 &total_reward,
-                &validator_reward_ratio,
+                &validator_reward_scalar,
                 &zero,
                 &validator_reward_temp,
             ],
         );
 
-        // gas_used * tx_gas_price * validator_reward_ratio / REWARD_DENOMINATOR
+        // gas_used * tx_gas_price * validator_reward_scalar / REWARD_DENOMINATOR
         let validator_reward = cb.query_word_rlc();
         let remainder = cb.query_word_rlc();
         // TODO: Instead of being assigned to cell, Can't REWEARD_DENOMINATOR be used directly?
@@ -167,12 +167,12 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         Self {
             tx_id,
             tx_gas,
-            validator_reward_ratio,
-            validator_reward_ratio_committed,
+            validator_reward_scalar,
+            validator_reward_scalar_committed,
             mul_gas_used_by_tx_gas_price,
             zero,
             validator_reward_temp,
-            mul_total_reward_by_reward_ratio,
+            mul_total_reward_by_reward_scalar,
             remainder,
             reward_denominator,
             div_validator_reward_temp_by_reward_denominator,
@@ -203,16 +203,16 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
         self.tx_gas
             .assign(region, offset, Value::known(F::from(tx.gas)))?;
-        let validator_reward_ratio = block.l1_fee.validator_reward_ratio;
-        self.validator_reward_ratio.assign(
+        let validator_reward_scalar = block.l1_fee.validator_reward_scalar;
+        self.validator_reward_scalar.assign(
             region,
             offset,
-            Some(validator_reward_ratio.to_le_bytes()),
+            Some(validator_reward_scalar.to_le_bytes()),
         )?;
-        self.validator_reward_ratio_committed.assign(
+        self.validator_reward_scalar_committed.assign(
             region,
             offset,
-            Some(block.l1_fee_committed.validator_reward_ratio.to_le_bytes()),
+            Some(block.l1_fee_committed.validator_reward_scalar.to_le_bytes()),
         )?;
 
         let gas_used = tx.gas - step.gas_left;
@@ -227,8 +227,8 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             total_reward,
         )?;
 
-        // tx_gas_price * gas_used * validator_reward_ratio
-        let validator_reward_temp = total_reward * validator_reward_ratio;
+        // tx_gas_price * gas_used * validator_reward_scalar
+        let validator_reward_temp = total_reward * validator_reward_scalar;
         let zero = eth_types::Word::zero();
         self.zero.assign(region, offset, Some(zero.to_le_bytes()))?;
         self.validator_reward_temp.assign(
@@ -236,18 +236,18 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             offset,
             Some(validator_reward_temp.to_le_bytes()),
         )?;
-        self.mul_total_reward_by_reward_ratio.assign(
+        self.mul_total_reward_by_reward_scalar.assign(
             region,
             offset,
             [
                 total_reward,
-                validator_reward_ratio,
+                validator_reward_scalar,
                 zero,
                 validator_reward_temp,
             ],
         )?;
 
-        // gas_used * tx_gas_price * validator_reward_ratio / REWARD_DENOMINATOR
+        // gas_used * tx_gas_price * validator_reward_scalar / REWARD_DENOMINATOR
         let (validator_reward, remainder) = validator_reward_temp.div_mod(*REWARD_DENOMINATOR);
         let protocol_reward = total_reward - validator_reward;
 

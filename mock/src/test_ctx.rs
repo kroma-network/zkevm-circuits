@@ -451,7 +451,7 @@ pub mod helpers {
         calldata.extend(padding!(vec![0x08, 0x34]));
         // l1 fee scalar: 1000000
         calldata.extend(padding!(vec![0x0f, 0x42, 0x40]));
-        // validator reward ratio: 2000
+        // validator reward scalar: 2000
         calldata.extend(padding!(vec![0x07, 0xd0]));
 
         tx.transaction_type(DEPOSIT_TX_TYPE)

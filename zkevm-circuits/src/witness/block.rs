@@ -413,14 +413,14 @@ pub fn block_convert<F: Field>(
             base_fee: block.l1_fee.base_fee,
             fee_overhead: block.l1_fee.fee_overhead,
             fee_scalar: block.l1_fee.fee_scalar,
-            validator_reward_ratio: block.l1_fee.validator_reward_ratio,
+            validator_reward_scalar: block.l1_fee.validator_reward_scalar,
         },
         #[cfg(feature = "kroma")]
         l1_fee_committed: TxL1Fee {
             base_fee: block.l1_fee_committed.base_fee,
             fee_overhead: block.l1_fee_committed.fee_overhead,
             fee_scalar: block.l1_fee_committed.fee_scalar,
-            validator_reward_ratio: block.l1_fee_committed.validator_reward_ratio,
+            validator_reward_scalar: block.l1_fee_committed.validator_reward_scalar,
         },
         ..Default::default()
     })
