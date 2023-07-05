@@ -11,11 +11,14 @@ use crate::{
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
-    table::{CallContextFieldTag, L1BlockFieldTag, TxContextFieldTag},
+    table::{CallContextFieldTag, TxContextFieldTag},
     util::Expr,
 };
 use eth_types::{
-    kroma_params::{PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_VAULT},
+    kroma_params::{
+        L1_BLOCK, PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_SCALAR_KEY,
+        VALIDATOR_REWARD_VAULT,
+    },
     Field, ToLittleEndian, ToScalar, U256,
 };
 use gadgets::util::sum;
@@ -28,14 +31,15 @@ use halo2_proofs::{
 pub(crate) struct FeeDistributionHookGadget<F> {
     tx_id: Cell<F>,
     tx_gas: Cell<F>,
-    validator_reward_ratio: Word<F>,
+    validator_reward_scalar: Word<F>,
+    validator_reward_scalar_committed: Word<F>,
     mul_gas_used_by_tx_gas_price: MulWordByU64Gadget<F>,
     zero: Word<F>,
-    validator_reward_temp: Word<F>, // tx_gas_price * gas_used * validator reward ratio
-    mul_total_reward_by_reward_ratio: MulAddWordsGadget<F>,
+    validator_reward_tmp: Word<F>, // tx_gas_price * gas_used * validator_reward_scalar
+    mul_total_reward_by_reward_scalar: MulAddWordsGadget<F>,
     remainder: Word<F>,
     reward_denominator: Word<F>,
-    div_validator_reward_temp_by_reward_denominator: MulAddWordsGadget<F>,
+    div_validator_reward_tmp_by_reward_denominator: MulAddWordsGadget<F>,
     is_remainder_lt_denominator: LtWordGadget<F>,
     protocol_reward_vault: Cell<F>,
     protocol_received_reward: UpdateBalanceGadget<F, 2, true>,
@@ -54,7 +58,22 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         let tx_gas = cb.tx_context(tx_id.expr(), TxContextFieldTag::Gas, None);
         let gas_used = tx_gas.expr() - cb.curr.state.gas_left.expr();
         let tx_gas_price = cb.tx_context_as_word(tx_id.expr(), TxContextFieldTag::GasPrice, None);
-        let validator_reward_ratio = cb.l1_block(L1BlockFieldTag::ValidatorRewardRatio);
+
+        let l1_block_address = Expression::Constant(
+            L1_BLOCK
+                .to_scalar()
+                .expect("L1 BLOCK should be able to be converted to scalar value"),
+        );
+        let validator_reward_scalar = cb.query_word_rlc();
+        let validator_reward_scalar_committed = cb.query_word_rlc();
+        let key_le_bytes: [u8; 32] = (*VALIDATOR_REWARD_SCALAR_KEY).to_le_bytes();
+        cb.account_storage_read(
+            l1_block_address.expr(),
+            cb.word_rlc(key_le_bytes.map(|b| b.expr())),
+            validator_reward_scalar.expr(),
+            tx_id.expr(),
+            validator_reward_scalar_committed.expr(),
+        );
 
         // tx_gas_price * gas_used
         let mul_gas_used_by_tx_gas_price =
@@ -63,35 +82,35 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         // TODO: Instead of being assigned to cell, Can't 0 be used directly?
         let zero = cb.query_word_rlc();
         cb.add_constraint("zero should be zero", sum::expr(&zero.cells));
-        let validator_reward_temp = cb.query_word_rlc();
-        let mul_total_reward_by_reward_ratio = MulAddWordsGadget::construct(
+        let validator_reward_tmp = cb.query_word_rlc();
+        let mul_total_reward_by_reward_scalar = MulAddWordsGadget::construct(
             cb,
             [
                 &total_reward,
-                &validator_reward_ratio,
+                &validator_reward_scalar,
                 &zero,
-                &validator_reward_temp,
+                &validator_reward_tmp,
             ],
         );
 
-        // gas_used * tx_gas_price * validator reward ratio / REWARD_DENOMINATOR
+        // gas_used * tx_gas_price * validator_reward_scalar / REWARD_DENOMINATOR
         let validator_reward = cb.query_word_rlc();
         let remainder = cb.query_word_rlc();
         // TODO: Instead of being assigned to cell, Can't REWEARD_DENOMINATOR be used directly?
         let reward_denominator = cb.query_word_rlc();
 
-        let div_validator_reward_temp_by_reward_denominator = MulAddWordsGadget::construct(
+        let div_validator_reward_tmp_by_reward_denominator = MulAddWordsGadget::construct(
             cb,
             [
                 &validator_reward,
                 &reward_denominator,
                 &remainder,
-                &validator_reward_temp,
+                &validator_reward_tmp,
             ],
         );
         cb.require_zero(
-            "div_validator_reward_temp_by_reward_denominator's overflow == 0",
-            div_validator_reward_temp_by_reward_denominator.overflow(),
+            "div_validator_reward_tmp_by_reward_denominator's overflow == 0",
+            div_validator_reward_tmp_by_reward_denominator.overflow(),
         );
         let is_remainder_lt_denominator =
             LtWordGadget::construct(cb, &remainder, &reward_denominator);
@@ -148,14 +167,15 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         Self {
             tx_id,
             tx_gas,
-            validator_reward_ratio,
+            validator_reward_scalar,
+            validator_reward_scalar_committed,
             mul_gas_used_by_tx_gas_price,
             zero,
-            validator_reward_temp,
-            mul_total_reward_by_reward_ratio,
+            validator_reward_tmp,
+            mul_total_reward_by_reward_scalar,
             remainder,
             reward_denominator,
-            div_validator_reward_temp_by_reward_denominator,
+            div_validator_reward_tmp_by_reward_denominator,
             is_remainder_lt_denominator,
             validator_reward_vault,
             validator_received_reward,
@@ -183,11 +203,16 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
         self.tx_gas
             .assign(region, offset, Value::known(F::from(tx.gas)))?;
-        let validator_reward_ratio = block.validator_reward_ratio;
-        self.validator_reward_ratio.assign(
+        let validator_reward_scalar = block.l1_fee.validator_reward_scalar;
+        self.validator_reward_scalar.assign(
             region,
             offset,
-            Some(validator_reward_ratio.to_le_bytes()),
+            Some(validator_reward_scalar.to_le_bytes()),
+        )?;
+        self.validator_reward_scalar_committed.assign(
+            region,
+            offset,
+            Some(block.l1_fee_committed.validator_reward_scalar.to_le_bytes()),
         )?;
 
         let gas_used = tx.gas - step.gas_left;
@@ -202,45 +227,44 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
             total_reward,
         )?;
 
-        // tx_gas_price * gas_used * validator reward ratio
-        let validator_reward_temp = total_reward * validator_reward_ratio;
+        // tx_gas_price * gas_used * validator_reward_scalar
+        let validator_reward_tmp = total_reward * validator_reward_scalar;
         let zero = eth_types::Word::zero();
         self.zero.assign(region, offset, Some(zero.to_le_bytes()))?;
-        self.validator_reward_temp.assign(
+        self.validator_reward_tmp.assign(
             region,
             offset,
-            Some(validator_reward_temp.to_le_bytes()),
+            Some(validator_reward_tmp.to_le_bytes()),
         )?;
-        self.mul_total_reward_by_reward_ratio.assign(
+        self.mul_total_reward_by_reward_scalar.assign(
             region,
             offset,
             [
                 total_reward,
-                validator_reward_ratio,
+                validator_reward_scalar,
                 zero,
-                validator_reward_temp,
+                validator_reward_tmp,
             ],
         )?;
 
-        // gas_used * tx_gas_price * validator reward ratio / REWARD_DENOMINATOR
-        let (validator_reward, remainder) = validator_reward_temp.div_mod(*REWARD_DENOMINATOR);
+        // gas_used * tx_gas_price * validator_reward_scalar / REWARD_DENOMINATOR
+        let (validator_reward, remainder) = validator_reward_tmp.div_mod(*REWARD_DENOMINATOR);
         let protocol_reward = total_reward - validator_reward;
 
         self.remainder
             .assign(region, offset, Some(remainder.to_le_bytes()))?;
         self.reward_denominator
             .assign(region, offset, Some(REWARD_DENOMINATOR.to_le_bytes()))?;
-        self.div_validator_reward_temp_by_reward_denominator
-            .assign(
-                region,
-                offset,
-                [
-                    validator_reward,
-                    *REWARD_DENOMINATOR,
-                    remainder,
-                    validator_reward_temp,
-                ],
-            )?;
+        self.div_validator_reward_tmp_by_reward_denominator.assign(
+            region,
+            offset,
+            [
+                validator_reward,
+                *REWARD_DENOMINATOR,
+                remainder,
+                validator_reward_tmp,
+            ],
+        )?;
         self.is_remainder_lt_denominator
             .assign(region, offset, remainder, *REWARD_DENOMINATOR)?;
 

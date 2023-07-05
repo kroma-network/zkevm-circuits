@@ -9,18 +9,15 @@ use crate::{
             math_gadget::{
                 ConstantDivisionGadget, IsEqualGadget, MinMaxGadget, MulWordByU64Gadget,
             },
-            CachedRegion, Cell, Word,
+            CachedRegion, Cell,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
-    table::{
-        CallContextFieldTag, L1BlockFieldTag, RwTableTag, TxContextFieldTag, TxReceiptFieldTag,
-    },
+    table::{CallContextFieldTag, RwTableTag, TxContextFieldTag, TxReceiptFieldTag},
     util::Expr,
 };
 use eth_types::{
-    evm_types::MAX_REFUND_QUOTIENT_OF_GAS_USED, geth_types::DEPOSIT_TX_TYPE, Field, ToLittleEndian,
-    ToScalar,
+    evm_types::MAX_REFUND_QUOTIENT_OF_GAS_USED, geth_types::DEPOSIT_TX_TYPE, Field, ToScalar,
 };
 use halo2_proofs::{circuit::Value, plonk::Error};
 use strum::EnumCount;
@@ -33,10 +30,6 @@ pub(crate) struct EndDepositTxGadget<F> {
     current_cumulative_gas_used: Cell<F>,
     is_first_tx: IsEqualGadget<F>,
     is_persistent: Cell<F>,
-    l1_base_fee: Word<F>,
-    l1_fee_overhead: Word<F>,
-    l1_fee_scalar: Word<F>,
-    validator_reward_ratio: Word<F>,
     max_refund: ConstantDivisionGadget<F, N_BYTES_GAS>,
     refund: Cell<F>,
     effective_refund: MinMaxGadget<F, N_BYTES_GAS>,
@@ -130,25 +123,6 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             gas_used + current_cumulative_gas_used.expr(),
         );
 
-        let l1_base_fee = cb.query_word_rlc();
-        let l1_fee_overhead = cb.query_word_rlc();
-        let l1_fee_scalar = cb.query_word_rlc();
-        let validator_reward_ratio = cb.query_word_rlc();
-        cb.condition(is_first_tx.expr(), |cb| {
-            cb.l1_block_lookup(1.expr(), L1BlockFieldTag::L1BaseFee, l1_base_fee.expr());
-            cb.l1_block_lookup(
-                1.expr(),
-                L1BlockFieldTag::L1FeeOverhead,
-                l1_fee_overhead.expr(),
-            );
-            cb.l1_block_lookup(1.expr(), L1BlockFieldTag::L1FeeScalar, l1_fee_scalar.expr());
-            cb.l1_block_lookup(
-                1.expr(),
-                L1BlockFieldTag::ValidatorRewardRatio,
-                validator_reward_ratio.expr(),
-            );
-        });
-
         cb.condition(
             cb.next.execution_state_selector([
                 ExecutionState::BeginTx,
@@ -163,7 +137,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
                 );
 
                 cb.require_step_state_transition(StepStateTransition {
-                    rw_counter: Delta(9.expr() + 3.expr() * is_first_tx.expr()),
+                    rw_counter: Delta(9.expr() - 1.expr() * is_first_tx.expr()),
                     ..StepStateTransition::any()
                 });
             },
@@ -173,7 +147,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             cb.next.execution_state_selector([ExecutionState::EndBlock]),
             |cb| {
                 cb.require_step_state_transition(StepStateTransition {
-                    rw_counter: Delta(8.expr() + 3.expr() * is_first_tx.expr()),
+                    rw_counter: Delta(8.expr() - 1.expr() * is_first_tx.expr()),
                     ..StepStateTransition::any()
                 });
             },
@@ -186,10 +160,6 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             current_cumulative_gas_used,
             is_first_tx,
             is_persistent,
-            l1_base_fee,
-            l1_fee_overhead,
-            l1_fee_scalar,
-            validator_reward_ratio,
             max_refund,
             refund,
             effective_refund,
@@ -245,18 +215,6 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
             region,
             offset,
             Value::known(F::from(call.is_persistent as u64)),
-        )?;
-
-        self.l1_base_fee
-            .assign(region, offset, Some(block.l1_base_fee.to_le_bytes()))?;
-        self.l1_fee_overhead
-            .assign(region, offset, Some(block.l1_fee_overhead.to_le_bytes()))?;
-        self.l1_fee_scalar
-            .assign(region, offset, Some(block.l1_fee_scalar.to_le_bytes()))?;
-        self.validator_reward_ratio.assign(
-            region,
-            offset,
-            Some(block.validator_reward_ratio.to_le_bytes()),
         )?;
 
         let (max_refund, _) = self.max_refund.assign(region, offset, gas_used as u128)?;

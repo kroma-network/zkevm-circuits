@@ -9,9 +9,6 @@ use std::collections::HashMap;
 // Step dimension
 pub(crate) const STEP_WIDTH: usize = 140;
 /// Step height
-#[cfg(feature = "kroma")]
-pub const MAX_STEP_HEIGHT: usize = 21 + 2;
-#[cfg(not(feature = "kroma"))]
 pub const MAX_STEP_HEIGHT: usize = 21;
 /// The height of the state of a step, used by gates that connect two
 /// consecutive steps. We target 1, which is also convenient for padding with
@@ -28,6 +25,9 @@ pub(crate) const N_PHASE1_COLUMNS: usize =
 // Number of copy columns
 pub(crate) const N_COPY_COLUMNS: usize = 2;
 
+#[cfg(feature = "kroma")]
+pub(crate) const N_BYTE_LOOKUPS: usize = 29;
+#[cfg(not(feature = "kroma"))]
 pub(crate) const N_BYTE_LOOKUPS: usize = 24;
 
 /// Amount of lookup columns in the EVM circuit dedicated to lookups.

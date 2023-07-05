@@ -8,11 +8,13 @@ use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "kroma")]
+use crate::circuit_input_builder::TxL1Fee;
+#[cfg(feature = "kroma")]
 use crate::Error;
 #[cfg(feature = "kroma")]
 use eth_types::kroma_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
-    VALIDATOR_REWARD_RATIO_KEY,
+    VALIDATOR_REWARD_SCALAR_KEY,
 };
 
 lazy_static! {
@@ -279,7 +281,7 @@ impl StateDB {
 
     #[cfg(feature = "kroma")]
     /// Get data from L1_BLOCK which are required to compute rewards.
-    pub fn get_l1_block(&self) -> Result<(Word, Word, Word, Word), Error> {
+    pub fn get_l1_block(&self) -> Result<(TxL1Fee, TxL1Fee), Error> {
         let (found, l1_base_fee) = self.get_storage(&L1_BLOCK, &BASE_FEE_KEY);
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *BASE_FEE_KEY));
@@ -292,20 +294,36 @@ impl StateDB {
         if !found {
             return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_SCALAR_KEY));
         }
-        let (found, validator_reward_ratio) =
-            self.get_storage(&L1_BLOCK, &VALIDATOR_REWARD_RATIO_KEY);
+        let (found, validator_reward_scalar) =
+            self.get_storage(&L1_BLOCK, &VALIDATOR_REWARD_SCALAR_KEY);
         if !found {
             return Err(Error::StorageKeyNotFound(
                 *L1_BLOCK,
-                *VALIDATOR_REWARD_RATIO_KEY,
+                *VALIDATOR_REWARD_SCALAR_KEY,
             ));
         }
-        Ok((
-            *l1_base_fee,
-            *l1_fee_overhead,
-            *l1_fee_scalar,
-            *validator_reward_ratio,
-        ))
+
+        let (_, l1_base_fee_committed) = self.get_committed_storage(&L1_BLOCK, &BASE_FEE_KEY);
+        let (_, l1_fee_overhead_committed) =
+            self.get_committed_storage(&L1_BLOCK, &L1_FEE_OVERHEAD_KEY);
+        let (_, l1_fee_scalar_committed) =
+            self.get_committed_storage(&L1_BLOCK, &L1_FEE_SCALAR_KEY);
+        let (_, validator_reward_scalar_committed) =
+            self.get_committed_storage(&L1_BLOCK, &VALIDATOR_REWARD_SCALAR_KEY);
+
+        let values = TxL1Fee {
+            base_fee: *l1_base_fee,
+            fee_overhead: *l1_fee_overhead,
+            fee_scalar: *l1_fee_scalar,
+            validator_reward_scalar: *validator_reward_scalar,
+        };
+        let committed_values = TxL1Fee {
+            base_fee: *l1_base_fee_committed,
+            fee_overhead: *l1_fee_overhead_committed,
+            fee_scalar: *l1_fee_scalar_committed,
+            validator_reward_scalar: *validator_reward_scalar_committed,
+        };
+        Ok((values, committed_values))
     }
 
     #[cfg(feature = "kroma")]
