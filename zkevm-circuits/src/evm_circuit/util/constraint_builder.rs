@@ -1,3 +1,4 @@
+use super::{rlc, CachedRegion, CellType, StoredExpression};
 use crate::{
     evm_circuit::{
         param::STACK_CAPACITY,
@@ -21,8 +22,6 @@ use halo2_proofs::{
         Expression::{self, Constant},
     },
 };
-
-use super::{rlc, CachedRegion, CellType, StoredExpression};
 
 // Max degree allowed in all expressions passing through the ConstraintBuilder.
 // It aims to cap `extended_k` to 2, which allows constraint degree to 2^2+1,

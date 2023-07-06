@@ -152,13 +152,16 @@ impl<F: Field> WordConfig<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Value;
+    use crate::evm_word::{encode, r, WordConfig};
+    use eth_types::Field;
     use halo2_proofs::{
         arithmetic::Field as Halo2Field,
-        circuit::SimpleFloorPlanner,
+        circuit::{Layouter, SimpleFloorPlanner},
         dev::{FailureLocation, MockProver, VerifyFailure},
         halo2curves::{bn256::Fr as Fp, group::ff::PrimeField},
-        plonk::{Circuit, Instance},
+        plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
+        poly::Rotation,
     };
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;

@@ -278,7 +278,9 @@ pub(crate) enum CellType {
 impl CellType {
     // The phase that given `Expression` becomes evaluateable.
     fn expr_phase<F: FieldExt>(expr: &Expression<F>) -> u8 {
-        use Expression::*;
+        use Expression::{
+            Advice, Challenge, Constant, Fixed, Instance, Negated, Product, Selector, Sum,
+        };
         match expr {
             Challenge(challenge) => challenge.phase() + 1,
             Advice(query) => query.phase(),

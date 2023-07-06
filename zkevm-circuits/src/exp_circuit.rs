@@ -557,11 +557,10 @@ impl<F: Field> Circuit<F> for ExpCircuit<F> {
 #[cfg(any(feature = "test", test))]
 /// Dev helpers
 pub mod dev {
-    use super::*;
+    use super::ExpCircuit;
+    use crate::evm_circuit::witness::Block;
     use eth_types::Field;
     use halo2_proofs::dev::MockProver;
-
-    use crate::evm_circuit::witness::Block;
 
     /// Test exponentiation circuit with the provided block witness
     pub fn test_exp_circuit<F: Field>(k: u32, block: Block<F>) {

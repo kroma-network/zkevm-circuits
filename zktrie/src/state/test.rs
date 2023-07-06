@@ -1,5 +1,6 @@
-use super::*;
-use eth_types::{Bytes, Word};
+use super::{builder, Hash, ZktrieState};
+use eth_types::{Address, Bytes, Word};
+use lazy_static::lazy_static;
 use log::{info, warn};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -47,8 +48,6 @@ fn build_state_from_sample(sample_file: &str) -> (ZktrieState, Hash) {
         trace.root_after,
     )
 }
-
-use lazy_static::lazy_static;
 
 lazy_static! {
     pub(crate) static ref TEST_SAMPLE_STR: String =
@@ -203,6 +202,7 @@ fn deserialize_example2() {
 
 #[test]
 fn witgen_init_writer() {
+    use crate::state::witness;
     use witness::WitnessGenerator;
     init();
     if TEST_SAMPLE_STR.is_empty() {
@@ -230,7 +230,9 @@ fn smt_bytes_to_hash(bt: &[u8]) -> [u8; 32] {
 
 #[test]
 fn witgen_update_one() {
+    use crate::state::witness;
     use eth_types::U256;
+    use mpt_circuits::MPTProofType;
     use witness::WitnessGenerator;
     init();
     if TEST_SAMPLE_STR.is_empty() {

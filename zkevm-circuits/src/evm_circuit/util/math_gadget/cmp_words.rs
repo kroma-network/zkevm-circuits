@@ -1,7 +1,7 @@
 use crate::{
     evm_circuit::util::{
-        self, constraint_builder::ConstraintBuilder, from_bytes, math_gadget::*, select,
-        CachedRegion,
+        self, constraint_builder::ConstraintBuilder, from_bytes, math_gadget::ComparisonGadget,
+        select, CachedRegion,
     },
     util::Expr,
 };
@@ -85,9 +85,13 @@ impl<F: Field> CmpWordsGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{test_util::*, *};
-    use eth_types::Word;
+    use super::{util, CachedRegion, CmpWordsGadget, ConstraintBuilder, Field};
+    use eth_types::{ToLittleEndian, Word};
+    use gadgets::util::Expr;
     use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
+    use util::math_gadget::test_util::{
+        test_math_gadget_container, try_test, MathGadgetContainer, WORD_HIGH_MAX, WORD_LOW_MAX,
+    };
 
     #[derive(Clone)]
     /// CmpWordGadgetTestContainer: require(a == b if CHECK_EQ else a < b)

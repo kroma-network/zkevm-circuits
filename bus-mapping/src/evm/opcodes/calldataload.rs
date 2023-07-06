@@ -1,11 +1,10 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
     operation::{CallContextField, MemoryOp, RW},
     Error,
 };
 use eth_types::{GethExecStep, U256};
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Calldataload;
@@ -105,7 +104,11 @@ impl Opcode for Calldataload {
 
 #[cfg(test)]
 mod calldataload_tests {
-    use crate::operation::CallContextOp;
+    use crate::{
+        circuit_input_builder::ExecState,
+        mock::BlockData,
+        operation::{CallContextField, CallContextOp, MemoryOp, StackOp, RW},
+    };
     use eth_types::{
         bytecode,
         evm_types::{OpcodeId, StackAddress},
@@ -119,10 +122,6 @@ mod calldataload_tests {
         tx_idx,
     };
     use rand::random;
-
-    use crate::{circuit_input_builder::ExecState, mock::BlockData, operation::StackOp};
-
-    use super::*;
 
     fn rand_bytes(size: usize) -> Vec<u8> {
         (0..size).map(|_| random()).collect::<Vec<u8>>()

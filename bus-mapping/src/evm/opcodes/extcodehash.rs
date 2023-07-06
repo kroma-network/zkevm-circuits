@@ -78,18 +78,21 @@ impl Opcode for Extcodehash {
 
 #[cfg(test)]
 mod extcodehash_tests {
-    use super::*;
+    use super::Error;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
-        operation::{AccountOp, CallContextOp, StackOp, RW},
+        operation::{
+            AccountField, AccountOp, CallContextField, CallContextOp, StackOp,
+            TxAccessListAccountOp, RW,
+        },
         state_db::CodeDB,
     };
     use eth_types::{
         address, bytecode,
         evm_types::{OpcodeId, StackAddress},
         geth_types::GethData,
-        Bytecode, Bytes, Word, U256,
+        Bytecode, Bytes, ToWord, Word, U256,
     };
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};

@@ -432,12 +432,18 @@ impl<'a> YamlStateTestBuilder<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::Compiler;
     use crate::{
         config::TestSuite,
-        statetest::{run_test, CircuitsConfig, StateTestError},
+        statetest::{
+            run_test, AccountMatch, CircuitsConfig, Env, StateTest, StateTestError,
+            YamlStateTestBuilder,
+        },
     };
-    use eth_types::{address, U64};
+    use anyhow::Result;
+    use eth_types::{address, geth_types::Account, H256, U256, U64};
+    use ethers_core::types::Bytes;
+    use std::collections::HashMap;
 
     const TEMPLATE: &str = r#"
 arith:

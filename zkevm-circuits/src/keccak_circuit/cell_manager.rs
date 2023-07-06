@@ -1,4 +1,5 @@
-use crate::keccak_circuit::{util::extract_field, KeccakRegion};
+use super::keccak_packed_multi::KeccakRegion;
+use crate::keccak_circuit::util::extract_field;
 use gadgets::util::Expr;
 use halo2_proofs::{
     arithmetic::FieldExt,

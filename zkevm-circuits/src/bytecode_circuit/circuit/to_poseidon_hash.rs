@@ -709,10 +709,7 @@ pub fn unroll_to_hash_input<F: Field, const BYTES_IN_FIELD: usize, const INPUT_L
 #[cfg(any(feature = "test", test))]
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    // use super::super::tests::get_randomness;
-    // use crate::{bytecode_circuit::dev::test_bytecode_circuit_unrolled,
-    // util::DEFAULT_RAND}; use eth_types::Bytecode;
+    use crate::bytecode_circuit::circuit::to_poseidon_hash::unroll_to_hash_input;
     use halo2_proofs::halo2curves::bn256::Fr;
 
     #[test]

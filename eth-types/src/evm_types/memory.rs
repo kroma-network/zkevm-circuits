@@ -367,7 +367,8 @@ impl Memory {
 #[cfg(test)]
 mod memory_tests {
 
-    use super::*;
+    use super::{Error, ToBigEndian, Word};
+    use crate::evm_types::{Memory, MemoryAddress};
 
     #[test]
     fn evmword_mem_addr_conversion() -> Result<(), Error> {

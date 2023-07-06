@@ -308,9 +308,11 @@ impl<'a> JsonStateTestBuilder<'a> {
 
 #[cfg(test)]
 mod test {
-    use eth_types::U64;
-
-    use super::*;
+    use super::Compiler;
+    use crate::statetest::{AccountMatch, Env, JsonStateTestBuilder, StateTest};
+    use anyhow::Result;
+    use eth_types::{geth_types::Account, Address, Bytes, H256, U256, U64};
+    use std::{collections::HashMap, str::FromStr};
 
     const JSON: &str = r#"
 {

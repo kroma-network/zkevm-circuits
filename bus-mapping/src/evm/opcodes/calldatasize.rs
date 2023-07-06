@@ -1,12 +1,10 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
     operation::CallContextField,
     Error,
 };
-
 use eth_types::GethExecStep;
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Calldatasize;
@@ -50,7 +48,10 @@ mod calldatasize_tests {
     };
 
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext},
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
         tx_idx,
     };
     use pretty_assertions::assert_eq;

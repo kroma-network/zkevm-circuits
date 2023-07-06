@@ -132,7 +132,7 @@ impl<F: FieldExt, const N: usize> BatchedIsZeroChip<F, N> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{BatchedIsZeroChip, BatchedIsZeroConfig};
     use halo2_proofs::{
         arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -141,6 +141,7 @@ mod test {
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error, FirstPhase, Selector},
         poly::Rotation,
     };
+    use std::marker::PhantomData;
 
     #[derive(Clone, Debug)]
     struct TestCircuitConfig<const N: usize> {

@@ -1,20 +1,17 @@
 //! Transaction & TransactionContext utility module.
 
-use std::collections::BTreeMap;
-
+use super::{call::ReversionGroup, Call, CallContext, CallKind, CodeSource, ExecStep};
+use crate::{
+    state_db::{CodeDB, StateDB},
+    Error,
+};
 use eth_types::{
     evm_types::Memory, geth_types, Address, GethExecTrace, Signature, Word, H256, U64,
 };
 use ethers_core::utils::get_contract_address;
 #[cfg(feature = "kroma")]
 use geth_types::DEPOSIT_TX_TYPE;
-
-use crate::{
-    state_db::{CodeDB, StateDB},
-    Error,
-};
-
-use super::{call::ReversionGroup, Call, CallContext, CallKind, CodeSource, ExecStep};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Default)]
 /// Context of a [`Transaction`] which can mutate in an [`ExecStep`].

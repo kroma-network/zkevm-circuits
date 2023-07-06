@@ -1,3 +1,4 @@
+use super::lookups;
 use crate::evm_circuit::util::rlc;
 use eth_types::{Field, ToLittleEndian, U256};
 use halo2_proofs::{
@@ -6,8 +7,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use std::marker::PhantomData;
-
-use super::lookups;
 
 #[derive(Clone, Debug, Copy)]
 pub struct Config<const N: usize> {

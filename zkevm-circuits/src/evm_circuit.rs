@@ -3,7 +3,7 @@
 #![allow(missing_docs)]
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::*,
+    plonk::{Circuit, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 
 mod execution;
@@ -447,9 +447,8 @@ impl<F: Field> Circuit<F> for EvmCircuit<F> {
 
 #[cfg(any(feature = "test", test))]
 pub mod test {
-    use super::*;
+    use super::{detect_fixed_table_tags, EvmCircuit};
     use crate::evm_circuit::witness::Block;
-
     use eth_types::{Field, Word};
     use rand::{
         distributions::uniform::{SampleRange, SampleUniform},

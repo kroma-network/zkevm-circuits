@@ -1,6 +1,10 @@
 use crate::{
     evm_circuit::util::{
-        self, constraint_builder::ConstraintBuilder, from_bytes, math_gadget::*, CachedRegion,
+        self,
+        constraint_builder::ConstraintBuilder,
+        from_bytes,
+        math_gadget::{AddWordsGadget, LtGadget},
+        CachedRegion,
     },
     util::Expr,
 };
@@ -99,8 +103,15 @@ impl<F: Field> AbsWordGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::test_util::*, *};
+    use super::{
+        super::test_util::{
+            test_math_gadget_container, try_test, MathGadgetContainer, WORD_HIGH_MAX, WORD_LOW_MAX,
+            WORD_SIGNED_MAX, WORD_SIGNED_MIN,
+        },
+        AbsWordGadget, CachedRegion, ConstraintBuilder, Field,
+    };
     use eth_types::{Word, U256};
+    use gadgets::util::Expr;
     use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]

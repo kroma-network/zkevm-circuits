@@ -1,3 +1,4 @@
+use super::{step::step_convert, Call, ExecStep};
 use crate::{
     evm_circuit::{step::ExecutionState, util::rlc},
     table::TxContextFieldTag,
@@ -25,12 +26,9 @@ use halo2_proofs::{
     circuit::Value,
     halo2curves::{group::ff::PrimeField, secp256k1},
 };
-
 use mock::MockTransaction;
 use num::Integer;
 use num_bigint::BigUint;
-
-use super::{step::step_convert, Call, ExecStep};
 
 /// Transaction in a witness block
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

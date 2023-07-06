@@ -1240,7 +1240,7 @@ impl fmt::Display for OpcodeId {
 
 #[cfg(test)]
 mod opcode_ids_tests {
-    use super::*;
+    use crate::{evm_types::OpcodeId, Error};
 
     #[test]
     fn push_n() {

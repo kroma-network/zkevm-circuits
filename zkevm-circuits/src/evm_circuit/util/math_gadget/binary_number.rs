@@ -1,11 +1,10 @@
+use crate::evm_circuit::util::{constraint_builder::ConstraintBuilder, CachedRegion, Cell};
 use eth_types::Field;
 use gadgets::{binary_number::AsBits, util::Expr};
 use halo2_proofs::{
     circuit::Value,
     plonk::{Error, Expression},
 };
-
-use crate::evm_circuit::util::{constraint_builder::ConstraintBuilder, CachedRegion, Cell};
 
 #[derive(Clone, Debug)]
 pub struct BinaryNumberGadget<F, const N: usize> {

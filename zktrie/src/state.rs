@@ -3,14 +3,11 @@
 use bus_mapping::state_db::{Account, StateDB};
 use eth_types::{Address, Hash, Word, H256};
 use mpt_circuits::MPTProofType;
+use std::{cell::RefCell, collections::HashMap, fmt, io::Error, rc::Rc};
 
-use std::{collections::HashMap, io::Error};
 pub use zktrie::{Hash as ZkTrieHash, ZkMemoryDb, ZkTrie, ZkTrieNode};
-
 pub mod builder;
 pub mod witness;
-
-use std::{cell::RefCell, fmt, rc::Rc};
 
 /// turn a integer (expressed by field) into MPTProofType
 pub fn as_proof_type(v: i32) -> MPTProofType {

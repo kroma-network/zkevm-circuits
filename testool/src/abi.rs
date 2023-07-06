@@ -72,7 +72,8 @@ pub fn encode_funccall(spec: &str) -> Result<Bytes> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::abi::encode_funccall;
+    use anyhow::Result;
 
     #[test]
     fn test_abi_encoding() -> Result<()> {

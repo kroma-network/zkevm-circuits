@@ -78,7 +78,7 @@ impl Opcode for ErrorReturnDataOutOfBound {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::ExecError;
     use crate::{circuit_input_builder::ExecState, mock::BlockData, operation::RW};
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, word};
     use mock::{

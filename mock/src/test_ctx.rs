@@ -1,26 +1,15 @@
 //! Mock types and functions to generate Test enviroments for ZKEVM tests
 
+use self::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
 use crate::{eth, MockAccount, MockBlock, MockTransaction};
 use eth_types::{
     geth_types::{Account, BlockConstants, GethData},
     BigEndianHash, Block, Bytecode, Error, GethExecTrace, Transaction, Word, H256,
 };
 use external_tracer::{trace, TraceConfig};
-use helpers::*;
 use itertools::Itertools;
 
 pub use external_tracer::LoggerConfig;
-
-#[cfg(feature = "kroma")]
-use eth_types::{
-    geth_types::DEPOSIT_TX_TYPE,
-    kroma_l1_block::BYTECODE,
-    kroma_params::{
-        L1_BLOCK, PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, SYSTEM_TX_CALLER, VALIDATOR_REWARD_VAULT,
-    },
-    Bytes,
-};
-
 #[cfg(feature = "kroma")]
 pub const DEPOSIT_TX_GAS: u64 = 1000000u64;
 #[cfg(not(feature = "kroma"))]
@@ -343,8 +332,18 @@ pub fn gen_geth_traces(
 /// Collection of helper functions which contribute to specific rutines on the
 /// builder pattern used to construct [`TestContext`]s.
 pub mod helpers {
-    use super::*;
-    use crate::MOCK_ACCOUNTS;
+    use super::{eth, Bytecode, MockAccount, MockTransaction};
+    use crate::{test_ctx::DEPOSIT_TX_GAS, MOCK_ACCOUNTS};
+    #[cfg(feature = "kroma")]
+    use eth_types::{
+        geth_types::DEPOSIT_TX_TYPE,
+        kroma_l1_block::BYTECODE,
+        kroma_params::{
+            L1_BLOCK, PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, SYSTEM_TX_CALLER,
+            VALIDATOR_REWARD_VAULT,
+        },
+        Bytes, Word,
+    };
 
     /// Generate a simple setup which adds balance to two default accounts from
     /// [`static@MOCK_ACCOUNTS`]:

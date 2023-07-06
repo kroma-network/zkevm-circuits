@@ -1,6 +1,7 @@
 //! Utility traits, functions used in the crate.
 
-use super::param::*;
+use super::param::{BIT_SIZE, NUM_BITS_PER_WORD};
+use crate::keccak_circuit::param::BIT_COUNT;
 use eth_types::{Field, ToScalar, Word};
 use halo2_proofs::{circuit::Value, halo2curves::FieldExt};
 use std::env::var;
@@ -306,7 +307,10 @@ pub(crate) mod to_bytes {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::keccak_circuit::{
+        param::BIT_COUNT,
+        util::{get_num_bits_per_lookup_impl, into_bits, pack},
+    };
     use halo2_proofs::halo2curves::bn256::Fr as F;
 
     #[test]
