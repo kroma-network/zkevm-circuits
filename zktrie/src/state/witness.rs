@@ -9,11 +9,12 @@ use halo2_proofs::halo2curves::group::ff::PrimeField;
 use mpt_circuits::serde::{
     AccountData as SMTAccount, Hash as SMTHash, HexBytes, SMTNode, SMTPath, SMTTrace, StateData,
 };
-use std::collections::HashMap;
-use zktrie::{ZkTrie, ZkTrieNode};
-
 use num_bigint::BigUint;
-use std::io::{Error as IoError, Read};
+use std::{
+    collections::HashMap,
+    io::{Error as IoError, Read},
+};
+use zktrie::{ZkTrie, ZkTrieNode};
 
 impl From<AccountData> for SMTAccount {
     fn from(acc: AccountData) -> Self {

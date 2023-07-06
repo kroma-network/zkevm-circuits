@@ -1,5 +1,7 @@
 use crate::evm_circuit::util::{
-    constraint_builder::ConstraintBuilder, math_gadget::*, sum, CachedRegion,
+    constraint_builder::ConstraintBuilder,
+    math_gadget::{IsZeroGadget, LtGadget},
+    sum, CachedRegion,
 };
 use eth_types::Field;
 use halo2_proofs::plonk::{Error, Expression};
@@ -50,10 +52,15 @@ impl<F: Field, const N_BYTES: usize> ComparisonGadget<F, N_BYTES> {
 
 #[cfg(test)]
 mod tests {
-    use super::{test_util::*, *};
-    use crate::evm_circuit::util::Cell;
-    use eth_types::*;
-    use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
+    use super::ComparisonGadget;
+    use crate::evm_circuit::util::{
+        constraint_builder::ConstraintBuilder,
+        math_gadget::test_util::{test_math_gadget_container, try_test, MathGadgetContainer},
+        CachedRegion, Cell,
+    };
+    use eth_types::{Field, ToScalar, Word, U256};
+    use gadgets::util::Expr;
+    use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]
     /// ComparisonTestContainer: require(a == b if CHECK_EQ else a < b)

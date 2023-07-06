@@ -194,8 +194,13 @@ impl<F: Field> MulAddWords512Gadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::test_util::*, *};
-    use eth_types::Word;
+    use super::{
+        super::test_util::{
+            test_math_gadget_container, try_test, MathGadgetContainer, WORD_HIGH_MAX, WORD_LOW_MAX,
+        },
+        util, CachedRegion, ConstraintBuilder, Field, MulAddWords512Gadget,
+    };
+    use eth_types::{ToLittleEndian, Word};
     use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]

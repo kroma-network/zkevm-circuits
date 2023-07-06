@@ -88,11 +88,13 @@ impl Opcode for Balance {
 
 #[cfg(test)]
 mod balance_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
-        operation::{AccountOp, CallContextOp, StackOp, RW},
+        operation::{
+            AccountField, AccountOp, CallContextField, CallContextOp, StackOp,
+            TxAccessListAccountOp, RW,
+        },
         state_db::CodeDB,
     };
     use eth_types::{

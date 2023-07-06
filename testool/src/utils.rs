@@ -181,7 +181,8 @@ pub fn bytecode_of(code: &str) -> anyhow::Result<Bytecode> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::utils::MainnetFork;
+
     #[test]
     fn networks() {
         assert!(MainnetFork::in_network_range(&[String::from(">=Istanbul")])

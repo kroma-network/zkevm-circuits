@@ -85,8 +85,14 @@ impl<F: Field, const N: usize> BatchedIsZeroGadget<F, N> {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::test_util::*, *};
-    use eth_types::*;
+    use super::{
+        super::test_util::{
+            test_math_gadget_container, try_test, MathGadgetContainer, Value, WORD_LOW_MAX,
+        },
+        BatchedIsZeroGadget, CachedRegion, Cell, ConstraintBuilder, Expression, Field,
+    };
+    use eth_types::{ToScalar, Word};
+    use gadgets::util::Expr;
     use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]

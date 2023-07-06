@@ -358,8 +358,7 @@ macro_rules! bytecode_internal {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::Bytecode;
+    use crate::{bytecode::OpcodeWithData, Bytecode};
     use std::str::FromStr;
 
     #[test]

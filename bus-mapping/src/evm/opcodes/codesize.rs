@@ -1,11 +1,9 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
     Error,
 };
-
 use eth_types::GethExecStep;
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Codesize;
@@ -36,6 +34,11 @@ impl Opcode for Codesize {
 
 #[cfg(test)]
 mod codesize_tests {
+    use crate::{
+        circuit_input_builder::ExecState,
+        mock::BlockData,
+        operation::{StackOp, RW},
+    };
     use eth_types::{
         bytecode,
         evm_types::{OpcodeId, StackAddress},
@@ -48,12 +51,6 @@ mod codesize_tests {
             SimpleTestContext,
         },
         tx_idx,
-    };
-
-    use crate::{
-        circuit_input_builder::ExecState,
-        mock::BlockData,
-        operation::{StackOp, RW},
     };
 
     fn test_ok(large: bool) {

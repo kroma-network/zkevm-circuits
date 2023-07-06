@@ -1,6 +1,9 @@
 use crate::{
     evm_circuit::util::{
-        self, constraint_builder::ConstraintBuilder, math_gadget::*, sum, CachedRegion,
+        self,
+        constraint_builder::ConstraintBuilder,
+        math_gadget::{IsEqualGadget, IsZeroGadget, LtWordGadget, MulAddWordsGadget},
+        sum, CachedRegion,
     },
     util::Expr,
 };
@@ -99,8 +102,12 @@ impl<F: Field> ModGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{test_util::*, *};
-    use eth_types::{Word, U256, U512};
+    use super::{util, CachedRegion, ConstraintBuilder, Field, ModGadget};
+    use crate::evm_circuit::util::math_gadget::test_util::{
+        test_math_gadget_container, try_test, MathGadgetContainer, WORD_CELL_MAX, WORD_HIGH_MAX,
+        WORD_LOW_MAX,
+    };
+    use eth_types::{ToLittleEndian, Word, U256, U512};
     use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]

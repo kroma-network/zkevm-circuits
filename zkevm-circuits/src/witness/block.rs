@@ -1,24 +1,24 @@
-use ethers_core::types::Signature;
-use std::collections::{BTreeMap, HashMap};
-
-#[cfg(any(feature = "test", test))]
-use crate::evm_circuit::{detect_fixed_table_tags, EvmCircuit};
-#[cfg(feature = "test")]
-use crate::tx_circuit::TX_LEN;
-
-use crate::{evm_circuit::util::rlc, table::BlockContextFieldTag};
-use bus_mapping::{
-    circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent, TxL1Fee},
-    Error,
-};
-use eth_types::{Address, Field, ToLittleEndian, ToScalar, Word, U256};
-use halo2_proofs::circuit::Value;
-
 use super::{
     mpt::ZktrieState as MptState, step::step_convert, tx::tx_convert, Bytecode, ExecStep,
     MptUpdates, RwMap, Transaction,
 };
-use crate::util::{Challenges, DEFAULT_RAND};
+#[cfg(any(feature = "test", test))]
+use crate::evm_circuit::{detect_fixed_table_tags, EvmCircuit};
+#[cfg(feature = "test")]
+use crate::tx_circuit::TX_LEN;
+use crate::{
+    evm_circuit::util::rlc,
+    table::BlockContextFieldTag,
+    util::{Challenges, DEFAULT_RAND},
+};
+use bus_mapping::{
+    circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent, TxL1Fee},
+    Error,
+};
+use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word, U256};
+use ethers_core::types::Signature;
+use halo2_proofs::circuit::Value;
+use std::collections::{BTreeMap, HashMap};
 
 /// max range of prev blocks allowed inside BLOCKHASH opcode
 #[cfg(any(feature = "scroll", feature = "kroma"))]
@@ -270,8 +270,6 @@ impl BlockContext {
     }
 
     fn block_hash_assignments<F: Field>(&self, randomness: Value<F>) -> Vec<[Value<F>; 3]> {
-        use eth_types::ToWord;
-
         #[cfg(all(not(feature = "kroma"), not(feature = "scroll")))]
         let history_hashes: &[U256] = &self.history_hashes;
         #[cfg(any(feature = "scroll", feature = "kroma"))]

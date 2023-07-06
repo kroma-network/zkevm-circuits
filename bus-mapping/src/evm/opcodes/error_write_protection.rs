@@ -5,7 +5,6 @@ use crate::{
     operation::CallContextField,
     Error,
 };
-
 use eth_types::GethExecStep;
 
 #[derive(Debug, Copy, Clone)]

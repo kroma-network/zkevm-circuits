@@ -1,19 +1,17 @@
 //! utils for build state trie
 
-use eth_types::{Address, Bytes, Word, H256, U256, U64};
-use std::{
-    convert::TryFrom,
-    io::{Error, ErrorKind, Read},
-};
-
 use bus_mapping::state_db::CodeDB;
+use eth_types::{Address, Bytes, Word, H256, U256, U64};
 use halo2_proofs::{
     arithmetic::FieldExt,
     halo2curves::{bn256::Fr, group::ff::PrimeField},
 };
-use mpt_circuits::hash::Hashable;
-
 use lazy_static::lazy_static;
+use mpt_circuits::hash::Hashable;
+use std::{
+    convert::TryFrom,
+    io::{Error, ErrorKind, Read},
+};
 
 lazy_static! {
     pub(crate) static ref HASH_SCHEME_DONE: bool = {

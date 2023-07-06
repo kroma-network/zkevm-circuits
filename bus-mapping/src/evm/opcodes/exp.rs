@@ -1,10 +1,9 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep, ExpEvent, ExpStep},
     Error,
 };
 use eth_types::{GethExecStep, U256};
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Exponentiation;
@@ -70,9 +69,8 @@ impl Opcode for Exponentiation {
 
 #[cfg(test)]
 mod tests {
-    use eth_types::U256;
-
     use super::exp_by_squaring;
+    use eth_types::U256;
 
     #[test]
     fn test_exp_by_squaring() {

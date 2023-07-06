@@ -248,7 +248,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGSloadSstoreGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::cal_sload_gas_cost_for_assignment;
     use crate::{
         evm_circuit::{test::rand_bytes, util::common_gadget::cal_sstore_gas_cost_for_assignment},
         test_util::CircuitTestBuilder,

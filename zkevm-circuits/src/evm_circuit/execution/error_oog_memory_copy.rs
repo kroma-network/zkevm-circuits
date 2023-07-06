@@ -237,7 +237,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGMemoryCopyGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{GasCost, OpcodeId};
     use crate::{
         evm_circuit::test::{rand_bytes, rand_word},
         test_util::CircuitTestBuilder,

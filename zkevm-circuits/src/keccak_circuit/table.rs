@@ -1,4 +1,5 @@
-use super::{param::*, util::*};
+use super::util::{get_degree, into_bits, pack};
+use crate::keccak_circuit::{param::BIT_SIZE, util::get_num_bits_per_lookup_impl};
 use eth_types::Field;
 use halo2_proofs::{
     circuit::{Layouter, Value},
@@ -129,12 +130,17 @@ pub(crate) fn load_lookup_table<F: Field>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{load_lookup_table, load_normalize_table_impl};
+    use crate::keccak_circuit::{
+        param::{BIT_COUNT, CHI_BASE_LOOKUP_TABLE, CHI_EXT_LOOKUP_TABLE},
+        util::get_num_bits_per_lookup_impl,
+    };
+    use eth_types::Field;
     use halo2_proofs::{
-        circuit::SimpleFloorPlanner,
+        circuit::{Layouter, SimpleFloorPlanner},
         dev::{CellValue, MockProver},
         halo2curves::bn256::Fr as F,
-        plonk::{Circuit, ConstraintSystem},
+        plonk::{Circuit, ConstraintSystem, Error, TableColumn},
     };
     use itertools::Itertools;
     use std::iter::zip;

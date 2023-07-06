@@ -110,9 +110,12 @@ impl<F: Field> ByteSizeGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::test_util::*, *};
+    use super::{
+        super::test_util::{test_math_gadget_container, try_test, MathGadgetContainer},
+        ByteSizeGadget, CachedRegion, ConstraintBuilder, Expr, Field,
+    };
     use crate::evm_circuit::util;
-    use eth_types::Word;
+    use eth_types::{ToLittleEndian, Word};
     use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]

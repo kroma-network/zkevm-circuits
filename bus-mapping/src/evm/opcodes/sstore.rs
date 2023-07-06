@@ -112,17 +112,16 @@ impl Opcode for Sstore {
 
 #[cfg(test)]
 mod sstore_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
-        operation::{CallContextOp, StackOp, RW},
+        operation::{CallContextField, CallContextOp, StackOp, StorageOp, TxRefundOp, RW},
     };
     use eth_types::{
         bytecode,
         evm_types::{OpcodeId, StackAddress},
         geth_types::GethData,
-        Word,
+        ToWord, Word,
     };
     use mock::{
         test_ctx::{

@@ -84,7 +84,7 @@ impl Opcode for Extcodesize {
 
 #[cfg(test)]
 mod extcodesize_tests {
-    use super::*;
+    use super::{AccountField, CallContextField, TxAccessListAccountOp};
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
@@ -95,7 +95,7 @@ mod extcodesize_tests {
         bytecode,
         evm_types::{OpcodeId, StackAddress},
         geth_types::{Account, GethData},
-        Bytecode, U256,
+        Bytecode, ToWord, U256,
     };
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};

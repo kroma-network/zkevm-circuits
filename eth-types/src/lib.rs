@@ -452,8 +452,13 @@ macro_rules! word_map {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::evm_types::{memory::Memory, opcode_ids::OpcodeId, stack::Stack};
+    use crate::{
+        evm_types::{
+            memory::Memory, opcode_ids::OpcodeId, stack::Stack, Gas, GasCost, ProgramCounter,
+            Storage,
+        },
+        GethExecStep, GethExecTrace,
+    };
 
     #[test]
     fn deserialize_geth_exec_trace2() {
@@ -593,8 +598,8 @@ mod tests {
 
 #[cfg(test)]
 mod eth_types_test {
-    use super::*;
-    use crate::{Error, Word};
+    use crate::{geth_types, Error, ToBigEndian, ToWord, Word};
+    use ethers_core::types::Address;
     use std::str::FromStr;
 
     #[test]

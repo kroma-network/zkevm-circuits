@@ -874,7 +874,10 @@ impl<F: Field> Circuit<F> for CopyCircuit<F> {
 /// Dev helpers
 #[cfg(any(feature = "test", test))]
 pub mod dev {
-    use crate::{copy_circuit::*, witness::Block};
+    use super::{CopyCircuit, ExternalData};
+    use crate::witness::Block;
+    use bus_mapping::circuit_input_builder::CopyEvent;
+    use eth_types::Field;
     use halo2_proofs::dev::{MockProver, VerifyFailure};
 
     /// Test copy circuit from copy events and test data

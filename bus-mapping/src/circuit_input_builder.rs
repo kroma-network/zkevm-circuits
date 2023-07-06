@@ -11,11 +11,8 @@ mod tracer_tests;
 mod transaction;
 
 use self::access::gen_state_access_trace;
-pub use self::block::BlockHead;
 #[cfg(feature = "kroma")]
-use crate::evm::opcodes::gen_end_deposit_tx_ops;
-#[cfg(feature = "kroma")]
-use crate::evm::opcodes::gen_kroma_ops;
+use crate::evm::opcodes::{gen_end_deposit_tx_ops, gen_kroma_ops};
 use crate::{
     error::Error,
     evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
@@ -23,10 +20,6 @@ use crate::{
     rpc::GethClient,
     state_db::{self, CodeDB, StateDB},
 };
-
-pub use access::{Access, AccessSet, AccessValue, CodeSource};
-pub use block::{Block, BlockContext};
-pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
 #[cfg(feature = "kroma")]
 use eth_types::kroma_params;
@@ -40,21 +33,25 @@ use eth_types::{
 use ethers_core::{
     k256::ecdsa::SigningKey,
     types::{Bytes, NameOrAddress, Signature, TransactionRequest},
+    utils::keccak256,
 };
 use ethers_providers::JsonRpcClient;
-pub use execution::{
-    CopyDataType, CopyEvent, CopyStep, ExecState, ExecStep, ExpEvent, ExpStep, NumberOrHash,
-};
 use hex::decode_to_slice;
-
-use ethers_core::utils::keccak256;
-pub use input_state_ref::CircuitInputStateRef;
 use itertools::Itertools;
 use log::warn;
 use std::{
     collections::{BTreeMap, HashMap},
     iter,
 };
+
+pub use self::block::BlockHead;
+pub use access::{Access, AccessSet, AccessValue, CodeSource};
+pub use block::{Block, BlockContext};
+pub use call::{Call, CallContext, CallKind};
+pub use execution::{
+    CopyDataType, CopyEvent, CopyStep, ExecState, ExecStep, ExpEvent, ExpStep, NumberOrHash,
+};
+pub use input_state_ref::CircuitInputStateRef;
 pub use transaction::{Transaction, TransactionContext, TxL1Fee};
 
 /// Circuit Setup Parameters

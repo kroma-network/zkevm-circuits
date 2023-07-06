@@ -915,12 +915,12 @@ impl<F: Field> Circuit<F> for BytecodeCircuit<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
         bytecode_circuit::{
-            bytecode_unroller::{unroll, BytecodeRow},
+            bytecode_unroller::{unroll, BytecodeRow, UnrolledBytecode},
             dev::test_bytecode_circuit_unrolled,
         },
+        table::BytecodeFieldTag,
         util::is_push,
     };
     use bus_mapping::{evm::OpcodeId, state_db::CodeDB};

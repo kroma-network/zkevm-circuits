@@ -1,14 +1,9 @@
 //! Implementation of an in-memory key-value database to represent the
 //! Ethereum State Trie.
 
-use crate::precompile::is_precompiled;
-use eth_types::{geth_types, Address, Hash, Word, H256, U256};
-use ethers_core::utils::keccak256;
-use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
-
 #[cfg(feature = "kroma")]
 use crate::circuit_input_builder::TxL1Fee;
+use crate::precompile::is_precompiled;
 #[cfg(feature = "kroma")]
 use crate::Error;
 #[cfg(feature = "kroma")]
@@ -16,6 +11,10 @@ use eth_types::kroma_params::{
     BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
     VALIDATOR_REWARD_SCALAR_KEY,
 };
+use eth_types::{geth_types, Address, Hash, Word, H256, U256};
+use ethers_core::utils::keccak256;
+use lazy_static::lazy_static;
+use std::collections::{HashMap, HashSet};
 
 lazy_static! {
     static ref ACCOUNT_ZERO: Account = Account::zero();
@@ -366,8 +365,8 @@ impl StateDB {
 
 #[cfg(test)]
 mod statedb_tests {
-    use super::*;
-    use eth_types::address;
+    use crate::state_db::{Account, StateDB};
+    use eth_types::{address, Word};
 
     #[test]
     fn statedb() {

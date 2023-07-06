@@ -147,13 +147,6 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
         let insufficient_balance = call.value > caller_balance && is_call_or_callcode;
         let is_depth_ok = geth_step.depth < 1025;
 
-        // log::debug!(
-        //    "insufficient_balance: {}, call type: {:?}, sender_account: {:?} ",
-        //    insufficient_balance,
-        //    call.kind,
-        //    call.caller_address
-        //);
-
         // read balance of caller to compare to value for insufficient_balance checking
         // in circuit, also use for callcode successful case check balance is
         // indeed larger than transfer value. for call opcode, it does in

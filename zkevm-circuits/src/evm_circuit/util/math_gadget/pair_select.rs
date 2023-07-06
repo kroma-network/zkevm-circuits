@@ -59,9 +59,15 @@ impl<F: Field> PairSelectGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::test_util::*, *};
-    use eth_types::*;
-    use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
+    use super::{super::test_util::MathGadgetContainer, PairSelectGadget};
+    use crate::evm_circuit::util::{
+        constraint_builder::ConstraintBuilder,
+        math_gadget::test_util::{test_math_gadget_container, try_test, WORD_LOW_MAX},
+        CachedRegion, Cell,
+    };
+    use eth_types::{Field, ToScalar, Word};
+    use gadgets::util::Expr;
+    use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]
     /// PairSelectionTestContainer: require(v == a if SELECT_A else b)

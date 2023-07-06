@@ -1,12 +1,10 @@
-use ethers_core::utils::rlp::{self, Encodable};
-use halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
-
-use crate::{evm_circuit::witness::Receipt, impl_expr};
-
 use super::{
     common::{handle_address, handle_bytes, handle_prefix, handle_u256},
     witness_gen::{RlpDataType, RlpWitnessGen, RlpWitnessRow},
 };
+use crate::{evm_circuit::witness::Receipt, impl_expr};
+use ethers_core::utils::rlp::{self, Encodable};
+use halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
 
 /// Tags used to tags rows in the RLP circuit for a tx receipt.
 #[derive(Clone, Copy, Debug)]

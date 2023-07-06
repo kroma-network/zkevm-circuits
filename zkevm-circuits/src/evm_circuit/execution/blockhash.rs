@@ -141,7 +141,10 @@ impl<F: Field> ExecutionGadget<F> for BlockHashGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, U256};
-    use mock::test_ctx::{helpers::*, SimpleTestContext};
+    use mock::test_ctx::{
+        helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+        SimpleTestContext,
+    };
 
     fn test_ok(block_number: U256, current_block_number: u64) {
         let code = bytecode! {

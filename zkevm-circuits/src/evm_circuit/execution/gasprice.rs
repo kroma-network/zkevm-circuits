@@ -90,8 +90,10 @@ impl<F: Field> ExecutionGadget<F> for GasPriceGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, Word};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext},
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
         tx_idx,
     };
 

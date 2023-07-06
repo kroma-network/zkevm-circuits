@@ -256,8 +256,13 @@ mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{bytecode, ToWord, Word};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::setup_kroma_required_accounts;
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext, TestContext3_1},
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, system_deposit_tx},
+            SimpleTestContext, TestContext3_1,
+        },
         tx_idx,
     };
 

@@ -218,10 +218,9 @@ impl<F: Field> ExecutionGadget<F> for SignedComparatorGadget<F> {
 
 #[cfg(test)]
 mod test {
+    use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, evm_types::OpcodeId, Word};
     use mock::test_ctx::SimpleTestContext;
-
-    use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
 
     fn test_ok(pairs: Vec<(OpcodeId, Word, Word)>) {
         let mut bytecode = bytecode! {};

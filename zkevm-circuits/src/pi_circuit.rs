@@ -1443,11 +1443,10 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_INNER_
 
 #[cfg(test)]
 mod pi_circuit_test {
-
-    use super::*;
+    use super::{PiCircuit, PiTestCircuit};
+    use crate::{util::SubCircuit, witness::Block};
+    use eth_types::Field;
     use halo2_proofs::dev::{MockProver, VerifyFailure};
-    // use rand_chacha::ChaCha20Rng;
-    // use rand::SeedableRng;
 
     fn run<
         F: Field,
@@ -1472,16 +1471,6 @@ mod pi_circuit_test {
         };
         prover.verify()
     }
-
-    // #[test]
-    // fn test_default_pi() {
-    //     const MAX_TXS: usize = 2;
-    //     const MAX_CALLDATA: usize = 8;
-    //     let public_data = PublicData::default();
-    //
-    //     let k = 16;
-    //     assert_eq!(run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data), Ok(()));
-    // }
 
     #[cfg(feature = "scroll")]
     #[test]

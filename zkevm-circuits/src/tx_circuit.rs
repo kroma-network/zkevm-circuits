@@ -2011,7 +2011,7 @@ impl<F: Field> Circuit<F> for TxCircuit<F> {
 
 #[cfg(test)]
 mod tx_circuit_tests {
-    use super::*;
+    use super::{Field, Transaction, TxCircuit};
     use crate::util::log2_ceil;
     #[cfg(feature = "reject-eip2718")]
     use eth_types::address;

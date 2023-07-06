@@ -1,18 +1,15 @@
 #![allow(missing_docs)]
-use std::collections::HashMap;
-
-use bus_mapping::operation::{self, AccountField, CallContextField, TxLogField, TxReceiptField};
-use eth_types::{Address, Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
-use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr};
-use itertools::Itertools;
-
+use super::MptUpdates;
 use crate::{
     evm_circuit::util::rlc,
     table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag, TxReceiptFieldTag},
     util::build_tx_log_address,
 };
-
-use super::MptUpdates;
+use bus_mapping::operation::{self, AccountField, CallContextField, TxLogField, TxReceiptField};
+use eth_types::{Address, Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
+use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr};
+use itertools::Itertools;
+use std::collections::HashMap;
 
 /// Rw constainer for a witness block
 #[derive(Debug, Default, Clone)]

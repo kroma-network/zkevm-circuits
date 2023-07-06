@@ -230,7 +230,6 @@ impl<F: Field> StopGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{address, bytecode, Bytecode, Word};
-
     use itertools::Itertools;
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};

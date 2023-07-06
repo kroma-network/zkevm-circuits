@@ -1,10 +1,9 @@
+use super::util::{target_part_sizes, target_part_sizes_rot, WordParts};
 use crate::keccak_circuit::KeccakCircuit;
 use eth_types::Field;
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use log::error;
 use std::iter::zip;
-
-use super::util::{target_part_sizes, target_part_sizes_rot, WordParts};
 
 fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, success: bool) {
     let circuit = KeccakCircuit::new(2usize.pow(k), inputs);
