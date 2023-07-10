@@ -5,12 +5,15 @@ use crate::{
     AccessList, Address, Block, Bytes, Error, GethExecTrace, Hash, ToBigEndian, ToLittleEndian,
     Word, U64,
 };
-use ethers_core::types::{NameOrAddress, TransactionRequest, H256};
+use ethers_core::{
+    types::{NameOrAddress, TransactionRequest, H256},
+    utils::rlp::RlpStream,
+};
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::halo2curves::{group::ff::PrimeField, secp256k1};
 use num::Integer;
 use num_bigint::BigUint;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
 use std::{collections::HashMap, str::FromStr};
@@ -113,7 +116,7 @@ impl BlockConstants {
 }
 
 /// Definition of all of the constants related to an Ethereum transaction.
-#[derive(Debug, Default, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     /// Transaction type
     pub transaction_type: Option<U64>,
@@ -153,6 +156,9 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// Mint
     pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// Source Hash
+    pub source_hash: H256,
 
     /// Kroma Non-deposit tx
     #[cfg(feature = "kroma")]
@@ -160,7 +166,8 @@ pub struct Transaction {
     pub rollup_data_gas_cost: u64,
 }
 
-impl From<&Transaction> for crate::Transaction {
+/// Casting `GethTransaction` to `Transaction` for response
+impl From<&Transaction> for ethers_core::types::Transaction {
     fn from(tx: &Transaction) -> crate::Transaction {
         crate::Transaction {
             transaction_type: tx.transaction_type.clone(),
@@ -183,7 +190,8 @@ impl From<&Transaction> for crate::Transaction {
     }
 }
 
-impl From<&crate::Transaction> for Transaction {
+/// Casting `Transaction` for response, to `GethTransaction`
+impl From<&ethers_core::types::Transaction> for Transaction {
     fn from(tx: &crate::Transaction) -> Transaction {
         Transaction {
             transaction_type: tx.transaction_type.clone(),
@@ -204,11 +212,14 @@ impl From<&crate::Transaction> for Transaction {
             #[cfg(feature = "kroma")]
             mint: Transaction::get_mint(tx).unwrap_or_default(),
             #[cfg(feature = "kroma")]
+            source_hash: Transaction::get_source_hash(tx).unwrap_or_default(),
+            #[cfg(feature = "kroma")]
             rollup_data_gas_cost: Transaction::compute_rollup_data_gas_cost(tx),
         }
     }
 }
 
+/// Casting `GethTransaction` to `TransactionRequest`
 impl From<&Transaction> for TransactionRequest {
     fn from(tx: &Transaction) -> TransactionRequest {
         TransactionRequest {
@@ -225,16 +236,25 @@ impl From<&Transaction> for TransactionRequest {
 }
 
 impl Transaction {
-    /// Retrieve mint from `tx.other`.
-    pub fn get_mint(_tx: &crate::Transaction) -> Option<Word> {
-        #[cfg(feature = "kroma")]
-        if let Some(v) = _tx.other.get("mint") {
-            return Some(Word::from_str(v.as_str().unwrap()).unwrap());
+    /// Retrieve mint from `Transaction.other`.
+    pub fn get_mint(tx: &ethers_core::types::Transaction) -> Option<Word> {
+        if let Some(v) = tx.other.get("mint") {
+            Some(Word::from_str(v.as_str().unwrap()).unwrap())
+        } else {
+            None
         }
-        None
     }
 
-    /// Compute rollup data gas cost.
+    /// Retrieve source hash from `Transaction.other`.
+    pub fn get_source_hash(tx: &ethers_core::types::Transaction) -> Option<H256> {
+        if let Some(v) = tx.other.get("sourceHash") {
+            Some(H256::from_str(v.as_str().unwrap()).unwrap())
+        } else {
+            None
+        }
+    }
+
+    /// Compute rollup data gas cost from `ResponseTransaction`
     pub fn compute_rollup_data_gas_cost(tx: &crate::Transaction) -> u64 {
         let data = tx.rlp();
         let mut zeros = 0;
@@ -250,6 +270,85 @@ impl Transaction {
         return self.transaction_type.unwrap_or_default().as_u64() == DEPOSIT_TX_TYPE;
         #[cfg(not(feature = "kroma"))]
         return false;
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Return rlp encoded bytes, which is used to sign tx.
+    pub fn rlp_unsigned<T: Into<U64>>(&self, chain_id: T) -> Bytes {
+        match self.transaction_type.unwrap_or_default().as_u64() {
+            0 => {
+                let mut legacy_tx = TransactionRequest::new()
+                    .from(self.from)
+                    .nonce(self.nonce)
+                    .gas_price(self.gas_price)
+                    .gas(self.gas_limit)
+                    .value(self.value)
+                    .data(self.call_data.clone())
+                    .chain_id(chain_id);
+                if self.to.is_some() {
+                    legacy_tx = legacy_tx.to(NameOrAddress::Address(self.to.unwrap()));
+                }
+
+                legacy_tx.rlp()
+            }
+            DEPOSIT_TX_TYPE => {
+                // NOTE(dongchangYoo): For deposit transactions, this function returns a byte array
+                // equivalent to the output of rlp_signed(). Even though the returned bytes are not
+                // used for transaction signing, they still need to conform to the rlp-circuit rule.
+                self.rlp_signed()
+            }
+            _ => panic!("not supported transaction type"),
+        }
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Return rlp encoded bytes ,which is used to calculate transaction hash
+    pub fn rlp_signed(&self) -> Bytes {
+        let tx_type = self.transaction_type.unwrap_or_default().as_u64();
+        match tx_type {
+            0 => {
+                let mut legacy_tx = TransactionRequest::new()
+                    .from(self.from)
+                    .nonce(self.nonce)
+                    .gas_price(self.gas_price)
+                    .gas(self.gas_limit)
+                    .value(self.value)
+                    .data(self.call_data.clone());
+                if self.to.is_some() {
+                    legacy_tx = legacy_tx.to(NameOrAddress::Address(self.to.unwrap()));
+                }
+
+                let sig = ethers_core::types::Signature {
+                    r: self.r,
+                    s: self.s,
+                    v: self.v,
+                };
+
+                legacy_tx.rlp_signed(&sig)
+            }
+            #[cfg(feature = "kroma")]
+            DEPOSIT_TX_TYPE => {
+                let mut s = RlpStream::new();
+
+                s.append(&tx_type);
+
+                s.begin_list(7);
+                s.append(&self.source_hash);
+                s.append(&self.from);
+                if self.to.is_some() {
+                    s.append(&self.to.unwrap());
+                } else {
+                    s.append(&"");
+                }
+                s.append(&self.mint);
+                s.append(&self.value);
+                s.append(&self.gas_limit);
+                s.append(&self.call_data.to_vec());
+
+                s.out().freeze().into()
+            }
+            _ => panic!("not supported transaction type"),
+        }
     }
 
     /// Return the SignData associated with this Transaction.
@@ -356,5 +455,99 @@ impl GethData {
             // Therefore we need to update tx.hash.
             tx.hash = tx.hash();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        geth_types::Transaction,
+        sign_types::{pk_bytes_le, pk_bytes_swap_endianness, recover_pk},
+    };
+    use ethers_core::utils::keccak256;
+
+    pub const CHAIN_ID: u64 = 901;
+
+    #[test]
+    #[cfg(feature = "kroma")]
+    fn deposit_rlp_tx_test() {
+        let deposit_tx_raw = r#"{
+            "transaction_type": "0x7e",
+            "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+			"to": "0x4200000000000000000000000000000000000002",
+            "nonce": "0xa",
+            "gas_limit": "0xf4240",
+            "value": "0x0",
+            "gas_price": "0x0",
+            "gas_fee_cap": "0x0",
+            "gas_tip_cap": "0x0",
+            "call_data": "0xefc674eb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064a66605000000000000000000000000000000000000000000000000000000003b9aca00e121af8dafefbd3429a259370c4393d3d3f9649c82e70456713396c17a8e5e67000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000007d0",
+            "access_list": [],
+            "v": 0,
+			"r": "0x0",
+			"s": "0x0",
+            "hash": "0xba940eddf4c601ec510443b19f31ca3f354f18b844cebda8ce4c43fe5d53fa70",
+            "mint": "0x0",
+            "source_hash": "0xf829b378897e49c91f6a99693364c0d290c3d5291c2784118d046ec7ddee268b",
+            "rollup_data_gas_cost": 0
+        }"#;
+
+        let deposit_tx: Transaction = serde_json::from_str(deposit_tx_raw).unwrap();
+
+        let rlp_signed = deposit_tx.rlp_signed();
+        let rlp_unsigned = deposit_tx.rlp_unsigned(CHAIN_ID);
+
+        // in case of deposit tx, it holds (dummy rlp_unsigned)
+        assert_eq!(rlp_signed, rlp_unsigned);
+
+        let tx_hash = keccak256(rlp_signed);
+        assert_eq!(
+            hex::encode(tx_hash),
+            "09d8409de0d191d50a599d21c6ddbff4cdb8b3ecde3702c0bdf5ddda50532f7a"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "kroma")]
+    fn legacy_tx_rlp_test() {
+        let kroma_tx_raw = r#"{
+            "transaction_type": "0x0",
+            "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+			"to": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+            "nonce": "0x0",
+            "gas_limit": "0x5208",
+            "value": "0xde0b6b3a7640000",
+            "gas_price": "0x3d7b51db",
+            "gas_fee_cap": "0x0",
+            "gas_tip_cap": "0x0",
+            "call_data": "",
+            "access_list": [],
+            "v": 1837,
+			"r": "0xec98d5757fb5c2a5622957bec95460221a12de528030aba9951323a1a7a8f7a6",
+			"s": "0x5df7b45225a4dbf0ebcbb056d6affab41f69812f2d5e5c399ec013700b2d4753",
+            "hash": "0x641c4cfd56f152d7ebd6a6a85cea8e98d1487c69a00aad606b28c6f225d06c8d",
+            "source_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "mint": "0x0",
+            "rollup_data_gas_cost": 0
+        }"#;
+
+        let kroma_tx: Transaction = serde_json::from_str(kroma_tx_raw).unwrap();
+
+        let rlp_signed = kroma_tx.rlp_signed();
+        let tx_hash = keccak256(rlp_signed);
+        assert_eq!(hex::encode(tx_hash), hex::encode(kroma_tx.hash));
+
+        let rlp_unsigned = kroma_tx.rlp_unsigned(901);
+        let msg_hash = keccak256(rlp_unsigned);
+        let recover_id = ((kroma_tx.v + 1) % 2) as u8;
+
+        let pk = recover_pk(recover_id, &kroma_tx.r, &kroma_tx.s, &msg_hash).unwrap();
+        let pk_le = pk_bytes_le(&pk);
+        let pk_be = pk_bytes_swap_endianness(&pk_le);
+        let pk_hash = keccak256(pk_be);
+        assert_eq!(
+            hex::encode(pk_hash[12..].to_vec()),
+            hex::encode(kroma_tx.from)
+        );
     }
 }

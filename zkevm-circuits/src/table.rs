@@ -152,6 +152,9 @@ pub enum TxFieldTag {
     #[cfg(feature = "kroma")]
     /// Mint
     Mint,
+    #[cfg(feature = "kroma")]
+    /// Source hash
+    SourceHash,
     /// Kroma Non-deposit Tx
     #[cfg(feature = "kroma")]
     /// The gas cost that needs to be rolled up to L1.
