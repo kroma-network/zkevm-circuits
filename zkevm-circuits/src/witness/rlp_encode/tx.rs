@@ -27,6 +27,8 @@ pub enum RlpTxTag {
     GasPrice,
     /// Denotes the byte(s) for the tx’s gas.
     Gas,
+    /// Denotes the bytes for the tx’s from.
+    From,
     /// Denotes the bytes for the tx’s to.
     To,
     /// Denotes the byte(s) for the tx’s value.
@@ -59,6 +61,9 @@ pub enum RlpTxTag {
     /// Denotes the amount to mint for deposit tx.
     Mint,
     #[cfg(feature = "kroma")]
+    /// Denotes the bytes for tx’s source hash
+    SourceHash,
+    #[cfg(feature = "kroma")]
     /// Denotes the gas cost to roll up a tx.
     RollupDataGasCost,
 }
@@ -79,99 +84,194 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
         let rlp_data = rlp::encode(self);
         let mut rows = Vec::with_capacity(rlp_data.len());
 
-        let idx = handle_prefix(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::Prefix,
-            0,
-        );
-        let idx = handle_u64(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::Nonce,
-            self.nonce.into(),
-            idx,
-        );
-        let idx = handle_u256(
-            challenges.evm_word(),
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::GasPrice,
-            self.gas_price,
-            idx,
-        );
-        let idx = handle_u64(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::Gas,
-            self.gas.into(),
-            idx,
-        );
-        let idx = handle_address(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::To,
-            self.callee_address,
-            idx,
-        );
-        let idx = handle_u256(
-            challenges.evm_word(),
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::Value,
-            self.value,
-            idx,
-        );
-        let idx = handle_bytes(
-            challenges.keccak_input(),
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::DataPrefix,
-            RlpTxTag::Data,
-            &self.call_data,
-            idx,
-        );
-        let idx = handle_u64(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::ChainId,
-            self.chain_id.into(),
-            idx,
-        );
-        let idx = handle_u8(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::Zero,
-            0,
-            idx,
-        );
-        let idx = handle_u8(
-            self.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxSign,
-            RlpTxTag::Zero,
-            0,
-            idx,
-        );
+        let idx = match self.transaction_type {
+            0 => {
+                let idx = handle_prefix(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Prefix,
+                    0,
+                );
+                let idx = handle_u64(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Nonce,
+                    self.nonce.into(),
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::GasPrice,
+                    self.gas_price,
+                    idx,
+                );
+                let idx = handle_u64(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Gas,
+                    self.gas.into(),
+                    idx,
+                );
+                let idx = handle_address(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::To,
+                    self.callee_address,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Value,
+                    self.value,
+                    idx,
+                );
+                let idx = handle_bytes(
+                    challenges.keccak_input(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::DataPrefix,
+                    RlpTxTag::Data,
+                    &self.call_data,
+                    idx,
+                );
+                let idx = handle_u64(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::ChainId,
+                    self.chain_id.into(),
+                    idx,
+                );
+                let idx = handle_u8(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Zero,
+                    0,
+                    idx,
+                );
+                let idx = handle_u8(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Zero,
+                    0,
+                    idx,
+                );
+                idx
+            }
+            #[cfg(feature = "kroma")]
+            DEPOSIT_TX_TYPE => {
+                let idx = handle_u64(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::TransactionType,
+                    self.transaction_type.into(),
+                    0,
+                );
+                let idx = handle_prefix(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Prefix,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::SourceHash,
+                    self.source_hash.to_word(),
+                    idx,
+                );
+                let idx = handle_address(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::From,
+                    Some(self.caller_address),
+                    idx,
+                );
+                let idx = handle_address(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::To,
+                    self.callee_address,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Mint,
+                    self.mint,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Value,
+                    self.value,
+                    idx,
+                );
+                let idx = handle_u64(
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::Gas,
+                    self.gas.into(),
+                    idx,
+                );
+                let idx = handle_bytes(
+                    challenges.keccak_input(),
+                    self.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxSign,
+                    RlpTxTag::DataPrefix,
+                    RlpTxTag::Data,
+                    &self.call_data,
+                    idx,
+                );
+                idx
+            }
+            _ => panic!("not supported transaction type"),
+        };
 
         assert_eq!(
             idx,
@@ -224,101 +324,196 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
         let rlp_data = rlp::encode(self);
         let mut rows = Vec::with_capacity(rlp_data.len());
 
-        let idx = handle_prefix(
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::Prefix,
-            0,
-        );
-        let idx = handle_u64(
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::Nonce,
-            self.tx.nonce.into(),
-            idx,
-        );
-        let idx = handle_u256(
-            challenges.evm_word(),
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::GasPrice,
-            self.tx.gas_price,
-            idx,
-        );
-        let idx = handle_u64(
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::Gas,
-            self.tx.gas.into(),
-            idx,
-        );
-        let idx = handle_address(
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::To,
-            self.tx.callee_address,
-            idx,
-        );
-        let idx = handle_u256(
-            challenges.evm_word(),
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::Value,
-            self.tx.value,
-            idx,
-        );
-        let idx = handle_bytes(
-            challenges.keccak_input(),
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::DataPrefix,
-            RlpTxTag::Data,
-            &self.tx.call_data,
-            idx,
-        );
-        let idx = handle_u64(
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::SigV,
-            self.signature.v.into(),
-            idx,
-        );
-        let idx = handle_u256(
-            challenges.evm_word(),
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::SigR,
-            self.signature.r,
-            idx,
-        );
-        let idx = handle_u256(
-            challenges.evm_word(),
-            self.tx.id,
-            rlp_data.as_ref(),
-            &mut rows,
-            RlpDataType::TxHash,
-            RlpTxTag::SigS,
-            self.signature.s,
-            idx,
-        );
+        let idx = match self.tx.transaction_type {
+            0 => {
+                let idx = handle_prefix(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Prefix,
+                    0,
+                );
+                let idx = handle_u64(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Nonce,
+                    self.tx.nonce.into(),
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::GasPrice,
+                    self.tx.gas_price,
+                    idx,
+                );
+                let idx = handle_u64(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Gas,
+                    self.tx.gas.into(),
+                    idx,
+                );
+                let idx = handle_address(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::To,
+                    self.tx.callee_address,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Value,
+                    self.tx.value,
+                    idx,
+                );
+                let idx = handle_bytes(
+                    challenges.keccak_input(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::DataPrefix,
+                    RlpTxTag::Data,
+                    &self.tx.call_data,
+                    idx,
+                );
+                let idx = handle_u64(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::SigV,
+                    self.signature.v.into(),
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::SigR,
+                    self.signature.r,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::SigS,
+                    self.signature.s,
+                    idx,
+                );
+                idx
+            }
+            #[cfg(feature = "kroma")]
+            DEPOSIT_TX_TYPE => {
+                let idx = handle_u64(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::TransactionType,
+                    self.tx.transaction_type.into(),
+                    0,
+                );
+                let idx = handle_prefix(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Prefix,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::SourceHash,
+                    self.tx.source_hash.to_word(),
+                    idx,
+                );
+                let idx = handle_address(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::From,
+                    Some(self.tx.caller_address),
+                    idx,
+                );
+                let idx = handle_address(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::To,
+                    self.tx.callee_address,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Mint,
+                    self.tx.mint,
+                    idx,
+                );
+                let idx = handle_u256(
+                    challenges.evm_word(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Value,
+                    self.tx.value,
+                    idx,
+                );
+                let idx = handle_u64(
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::Gas,
+                    self.tx.gas.into(),
+                    idx,
+                );
+                let idx = handle_bytes(
+                    challenges.keccak_input(),
+                    self.tx.id,
+                    rlp_data.as_ref(),
+                    &mut rows,
+                    RlpDataType::TxHash,
+                    RlpTxTag::DataPrefix,
+                    RlpTxTag::Data,
+                    &self.tx.call_data,
+                    idx,
+                );
+                idx
+            }
+            _ => panic!("not supported transaction type"),
+        };
 
         assert_eq!(
             idx,

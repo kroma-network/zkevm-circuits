@@ -6,7 +6,7 @@ use crate::{
     Error,
 };
 use eth_types::{
-    evm_types::Memory, geth_types, Address, GethExecTrace, Signature, Word, H256, U64,
+    evm_types::Memory, geth_types, Address, GethExecTrace, Hash, Signature, Word, H256, U64,
 };
 use ethers_core::utils::get_contract_address;
 #[cfg(feature = "kroma")]
@@ -213,6 +213,10 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// Mint
     pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// Source Hash
+    pub source_hash: Hash,
+
     /// Kroma non-deposit tx.
     #[cfg(feature = "kroma")]
     /// Rollup data gas cost
@@ -240,6 +244,8 @@ impl From<&Transaction> for geth_types::Transaction {
             hash: tx.hash,
             #[cfg(feature = "kroma")]
             mint: tx.mint,
+            #[cfg(feature = "kroma")]
+            source_hash: tx.source_hash,
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: tx.rollup_data_gas_cost,
             ..Default::default()
@@ -271,6 +277,8 @@ impl Transaction {
             hash: Default::default(),
             #[cfg(feature = "kroma")]
             mint: Word::zero(),
+            #[cfg(feature = "kroma")]
+            source_hash: Hash::zero(),
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: Default::default(),
         }
@@ -365,6 +373,9 @@ impl Transaction {
             },
             #[cfg(feature = "kroma")]
             mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            source_hash: eth_types::geth_types::Transaction::get_source_hash(eth_tx)
+                .unwrap_or_default(),
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: if transaction_type != DEPOSIT_TX_TYPE {
                 eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(eth_tx)
