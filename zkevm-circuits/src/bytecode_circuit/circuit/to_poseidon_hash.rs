@@ -71,8 +71,8 @@ impl<F: Field, const BYTES_IN_FIELD: usize> ToHashBlockCircuitConfig<F, BYTES_IN
         let is_row_tag_byte =
             |meta: &mut VirtualCells<F>| meta.query_advice(bytecode_table.tag, Rotation::cur());
 
-        // Does the current row have bytecode field tag == Length (Now header)?
-        let is_row_tag_length = |meta: &mut VirtualCells<F>| {
+        // Does the current row have bytecode field tag == Header?
+        let is_row_tag_header = |meta: &mut VirtualCells<F>| {
             not::expr(meta.query_advice(bytecode_table.tag, Rotation::cur()))
         };
 
@@ -264,10 +264,10 @@ impl<F: Field, const BYTES_IN_FIELD: usize> ToHashBlockCircuitConfig<F, BYTES_IN
             );
 
             // Conditions:
-            // - Length (Now Header) tag
+            // - Header tag
             cb.gate(and::expr(vec![
                 meta.query_fixed(q_enable, Rotation::cur()),
-                is_row_tag_length(meta),
+                is_row_tag_header(meta),
             ]))
         });
 
