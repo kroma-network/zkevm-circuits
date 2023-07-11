@@ -37,7 +37,7 @@ impl<F: Field> ExecutionGadget<F> for CodesizeGadget<F> {
 
         let code_hash = cb.curr.state.code_hash.clone();
         let codesize = cb.query_cell();
-        cb.bytecode_length(code_hash.expr(), codesize.expr());
+        cb.bytecode_header(code_hash.expr(), codesize.expr());
 
         cb.require_equal(
             "Constraint: bytecode length lookup == codesize",

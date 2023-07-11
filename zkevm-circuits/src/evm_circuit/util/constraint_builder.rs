@@ -656,9 +656,9 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         )
     }
 
-    pub(crate) fn bytecode_length(&mut self, code_hash: Expression<F>, value: Expression<F>) {
+    pub(crate) fn bytecode_header(&mut self, code_hash: Expression<F>, value: Expression<F>) {
         self.add_lookup(
-            "Bytecode (length)",
+            "Bytecode (header)",
             Lookup::Bytecode {
                 hash: code_hash,
                 tag: BytecodeFieldTag::Header.expr(),
