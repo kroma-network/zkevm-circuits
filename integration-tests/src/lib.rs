@@ -46,31 +46,31 @@ lazy_static! {
     pub static ref L2_GETH_URL: String = match env::var("L2_GETH_URL") {
         Ok(val) => val,
         Err(VarError::NotPresent) => L2_RPC_DEFAULT.to_string(),
-        Err(e) => panic!("Error in L2_GETH_URL env var: {:?}", e),
+        Err(e) => panic!("Error in L2_GETH_URL env var: {e:?}"),
     };
     /// ..
     pub static ref START_BLOCK: usize =  match env::var("START_BLOCK") {
         Ok(val) => str::parse::<usize>(&val).unwrap(),
         Err(VarError::NotPresent) => 16140010,
-        Err(e) => panic!("Error in START_BLOCK env var: {:?}", e),
+        Err(e) => panic!("Error in START_BLOCK env var: {e:?}"),
     };
     /// ..
     pub static ref END_BLOCK: usize =  match env::var("END_BLOCK") {
         Ok(val) => str::parse::<usize>(&val).unwrap(),
         Err(VarError::NotPresent) => 16140010,
-        Err(e) => panic!("Error in END_BLOCK env var: {:?}", e),
+        Err(e) => panic!("Error in END_BLOCK env var: {e:?}"),
     };
     /// ..
     pub static ref TX_ID: String =  match env::var("TX_ID") {
         Ok(val) => val,
         Err(VarError::NotPresent) => "".to_string(),
-        Err(e) => panic!("Error in TX_ID env var: {:?}", e),
+        Err(e) => panic!("Error in TX_ID env var: {e:?}"),
     };
     /// ..
     pub static ref CIRCUIT: String =  match env::var("CIRCUIT") {
         Ok(val) => val,
         Err(VarError::NotPresent) => "super".to_string(),
-        Err(e) => panic!("Error in CIRCUIT env var: {:?}", e),
+        Err(e) => panic!("Error in CIRCUIT env var: {e:?}"),
     };
 
 }

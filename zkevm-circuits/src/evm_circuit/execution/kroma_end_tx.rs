@@ -69,7 +69,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         // Add effective_refund * tx_gas_price back to caller's balance
         let mul_gas_price_by_refund = MulWordByU64Gadget::construct(
             cb,
-            tx_gas_price.clone(),
+            tx_gas_price,
             effective_refund.min() + cb.curr.state.gas_left.expr(),
         );
         let gas_fee_refund = UpdateBalanceGadget::construct(

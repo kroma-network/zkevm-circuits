@@ -55,7 +55,7 @@ impl From<ProviderError> for Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -176,6 +176,6 @@ pub(crate) fn get_step_reported_error(op: &OpcodeId, error: &str) -> ExecError {
     } else if error.starts_with(GETH_ERR_STACK_UNDERFLOW) {
         ExecError::StackUnderflow
     } else {
-        panic!("Unknown GethExecStep.error: {}", error);
+        panic!("Unknown GethExecStep.error: {error}");
     }
 }

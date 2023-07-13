@@ -987,7 +987,7 @@ mod sign_verify_tests {
 
         let prover = match MockProver::run(k, &circuit, vec![vec![]]) {
             Ok(prover) => prover,
-            Err(e) => panic!("{:#?}", e),
+            Err(e) => panic!("{e:#?}"),
         };
         assert_eq!(prover.verify(), Ok(()));
     }

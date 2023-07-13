@@ -480,11 +480,11 @@ pub fn gen_begin_tx_ops(
     }
 
     let mut nonce_prev = state.sdb.get_account(&caller_address).1.nonce;
-    debug_assert!(nonce_prev <= state.tx.nonce.into());
-    while nonce_prev < state.tx.nonce.into() {
+    debug_assert!(nonce_prev <= state.tx.nonce);
+    while nonce_prev < state.tx.nonce {
         // NOTE: Since increase_nonce returns the previous nonce, you need to add 1 to
         // get the new nonce.
-        nonce_prev = (state.sdb.increase_nonce(&caller_address) + 1).into();
+        nonce_prev = state.sdb.increase_nonce(&caller_address) + 1;
         log::warn!("[debug] increase nonce to {}", nonce_prev);
     }
     state.account_write(

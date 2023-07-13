@@ -81,8 +81,7 @@ impl<F: Field> ExecutionGadget<F> for ProposerRewardHookGadget<F> {
                 2 => Some((fee_scalar.expr(), fee_scalar_committed.expr())),
                 _ => None,
             };
-            if values.is_some() {
-                let (value, committed_value) = values.unwrap();
+            if let Some((value, committed_value)) = values {
                 cb.account_storage_read(
                     l1_block_address.expr(),
                     cb.word_rlc(key_le_bytes.map(|b| b.expr())),

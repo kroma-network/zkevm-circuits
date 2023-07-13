@@ -129,7 +129,7 @@ impl Default for ExecutionState {
 
 impl Display for ExecutionState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -351,7 +351,7 @@ impl ExecutionState {
 
     pub fn get_step_height(&self) -> usize {
         self.get_step_height_option()
-            .unwrap_or_else(|| panic!("Execution state unknown: {:?}", self))
+            .unwrap_or_else(|| panic!("Execution state unknown: {self:?}"))
     }
 }
 
@@ -614,7 +614,7 @@ impl<F: FieldExt> Step<F> {
         self.state.program_counter.assign(
             region,
             offset,
-            Value::known(F::from(step.program_counter as u64)),
+            Value::known(F::from(step.program_counter)),
         )?;
         self.state.stack_pointer.assign(
             region,

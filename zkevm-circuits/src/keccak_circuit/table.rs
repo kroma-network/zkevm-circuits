@@ -29,7 +29,7 @@ fn load_normalize_table_impl<F: Field>(
     assert!(range <= BIT_SIZE as u64);
     let part_size = get_num_bits_per_lookup_impl(range as usize, log_height);
     layouter.assign_table(
-        || format!("{} table", name),
+        || format!("{name} table"),
         |mut table| {
             // Iterate over all combinations of parts, each taking values in the range.
             for (offset, perm) in (0..part_size)
@@ -46,13 +46,13 @@ fn load_normalize_table_impl<F: Field>(
                     factor *= BIT_SIZE as u64;
                 }
                 table.assign_cell(
-                    || format!("{} input", name),
+                    || format!("{name} input"),
                     tables[0],
                     offset,
                     || Value::known(F::from(input)),
                 )?;
                 table.assign_cell(
-                    || format!("{} output", name),
+                    || format!("{name} output"),
                     tables[1],
                     offset,
                     || Value::known(F::from(output)),
@@ -95,7 +95,7 @@ pub(crate) fn load_lookup_table<F: Field>(
     lookup_table: &[u8],
 ) -> Result<(), Error> {
     layouter.assign_table(
-        || format!("{} table", name),
+        || format!("{name} table"),
         |mut table| {
             for (offset, perm) in (0..part_size)
                 .map(|_| 0..lookup_table.len() as u64)
@@ -111,13 +111,13 @@ pub(crate) fn load_lookup_table<F: Field>(
                     factor *= BIT_SIZE as u64;
                 }
                 table.assign_cell(
-                    || format!("{} input", name),
+                    || format!("{name} input"),
                     tables[0],
                     offset,
                     || Value::known(F::from(input)),
                 )?;
                 table.assign_cell(
-                    || format!("{} output", name),
+                    || format!("{name} output"),
                     tables[1],
                     offset,
                     || Value::known(F::from(output)),

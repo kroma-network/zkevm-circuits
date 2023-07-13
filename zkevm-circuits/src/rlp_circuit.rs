@@ -1341,14 +1341,14 @@ impl<F: Field> RlpCircuitConfig<F> {
 
                         // q_usable
                         region.assign_fixed(
-                            || format!("q_usable: {}", offset),
+                            || format!("q_usable: {offset}"),
                             self.q_usable,
                             offset,
                             || Value::known(F::one()),
                         )?;
                         // is_first
                         region.assign_advice(
-                            || format!("assign is_first {}", offset),
+                            || format!("assign is_first {offset}"),
                             self.is_first,
                             offset,
                             || Value::known(F::from((idx == 0) as u64)),
@@ -1383,7 +1383,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ("length_acc", self.length_acc, (row.length_acc)),
                         ] {
                             region.assign_advice(
-                                || format!("assign {} {}", name, offset),
+                                || format!("assign {name} {offset}"),
                                 column,
                                 offset,
                                 || Value::known(F::from(value)),
@@ -1407,7 +1407,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ),
                         ] {
                             region.assign_advice(
-                                || format!("assign {} {}", name, offset),
+                                || format!("assign {name} {offset}"),
                                 column,
                                 offset,
                                 || value,
@@ -1495,14 +1495,14 @@ impl<F: Field> RlpCircuitConfig<F> {
 
                         // q_usable
                         region.assign_fixed(
-                            || format!("q_usable: {}", offset),
+                            || format!("q_usable: {offset}"),
                             self.q_usable,
                             offset,
                             || Value::known(F::one()),
                         )?;
                         // is_first
                         region.assign_advice(
-                            || format!("assign is_first {}", offset),
+                            || format!("assign is_first {offset}"),
                             self.is_first,
                             offset,
                             || Value::known(F::from((idx == 0) as u64)),
@@ -1536,7 +1536,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ("length_acc", self.length_acc, row.length_acc),
                         ] {
                             region.assign_advice(
-                                || format!("assign {} {}", name, offset),
+                                || format!("assign {name} {offset}"),
                                 column,
                                 offset,
                                 || Value::known(F::from(value)),
@@ -1556,7 +1556,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ),
                         ] {
                             region.assign_advice(
-                                || format!("assign {} {}", name, offset),
+                                || format!("assign {name} {offset}"),
                                 column,
                                 offset,
                                 || value,
@@ -1641,14 +1641,14 @@ impl<F: Field> RlpCircuitConfig<F> {
         .into_iter()
         {
             region.assign_advice(
-                || format!("padding row, offset: {}", offset),
+                || format!("padding row, offset: {offset}"),
                 column,
                 offset,
                 || Value::known(F::zero()),
             )?;
         }
         region.assign_advice(
-            || format!("padding row, tag = Padding, offset: {}", offset),
+            || format!("padding row, tag = Padding, offset: {offset}"),
             self.rlp_table.tag,
             offset,
             || {
@@ -1658,7 +1658,7 @@ impl<F: Field> RlpCircuitConfig<F> {
             },
         )?;
         region.assign_fixed(
-            || format!("padding row, offset: {}", offset),
+            || format!("padding row, offset: {offset}"),
             self.q_usable,
             offset,
             || Value::known(F::one()),
@@ -1827,7 +1827,7 @@ mod tests {
         if err.is_err() && print_failures {
             if let Some(e) = err.err() {
                 for s in e.iter() {
-                    println!("{}", s);
+                    println!("{s}");
                 }
             }
         }

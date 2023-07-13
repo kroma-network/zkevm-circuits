@@ -771,8 +771,7 @@ mod test {
             },
             |block, _tx| block.number(0xcafeu64),
         )
-        .unwrap()
-        .into();
+        .unwrap();
 
         CircuitTestBuilder::new_from_test_ctx(ctx).run();
     }

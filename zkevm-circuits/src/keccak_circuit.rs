@@ -808,19 +808,19 @@ impl<F: Field> SubCircuitConfig<F> for KeccakCircuitConfig<F> {
         keccak_table.annotate_columns(meta);
 
         normalize_3.iter().enumerate().for_each(|(idx, &col)| {
-            meta.annotate_lookup_column(col, || format!("KECCAK_normalize_3_{}", idx))
+            meta.annotate_lookup_column(col, || format!("KECCAK_normalize_3_{idx}"))
         });
         normalize_4.iter().enumerate().for_each(|(idx, &col)| {
-            meta.annotate_lookup_column(col, || format!("KECCAK_normalize_4_{}", idx))
+            meta.annotate_lookup_column(col, || format!("KECCAK_normalize_4_{idx}"))
         });
         normalize_6.iter().enumerate().for_each(|(idx, &col)| {
-            meta.annotate_lookup_column(col, || format!("KECCAK_normalize_6_{}", idx))
+            meta.annotate_lookup_column(col, || format!("KECCAK_normalize_6_{idx}"))
         });
         chi_base_table.iter().enumerate().for_each(|(idx, &col)| {
-            meta.annotate_lookup_column(col, || format!("KECCAK_chi_base_{}", idx))
+            meta.annotate_lookup_column(col, || format!("KECCAK_chi_base_{idx}"))
         });
         pack_table.iter().enumerate().for_each(|(idx, &col)| {
-            meta.annotate_lookup_column(col, || format!("KECCAK_pack_table_{}", idx))
+            meta.annotate_lookup_column(col, || format!("KECCAK_pack_table_{idx}"))
         });
 
         log::debug!("Degree: {}", meta.degree());
@@ -910,7 +910,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             ),
         ] {
             region.assign_fixed(
-                || format!("assign {} {}", name, offset),
+                || format!("assign {name} {offset}"),
                 *column,
                 offset,
                 || Value::known(*value),
@@ -936,7 +936,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             .enumerate()
         {
             region.assign_advice(
-                || format!("assign lookup value {} {}", idx, offset),
+                || format!("assign lookup value {idx} {offset}"),
                 column.advice,
                 offset,
                 || Value::known(*bit),
@@ -945,7 +945,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
 
         // Round constant
         region.assign_fixed(
-            || format!("assign round cst {}", offset),
+            || format!("assign round cst {offset}"),
             self.round_cst,
             offset,
             || Value::known(row.round_cst),

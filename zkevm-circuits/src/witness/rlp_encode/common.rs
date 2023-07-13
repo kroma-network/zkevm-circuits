@@ -37,7 +37,7 @@ pub fn handle_prefix<F: FieldExt>(
                 index: idx + 1,
                 data_type,
                 value: *rlp_byte,
-                value_acc: Value::known(F::from(length_acc as u64)),
+                value_acc: Value::known(F::from(length_acc)),
                 value_rlc_acc: Value::known(F::zero()),
                 tag,
                 tag_length,
@@ -125,8 +125,7 @@ pub fn handle_u64<F: FieldExt>(
     if value_bytes.len() == 1 && value_bytes[0] < 0x80 {
         assert_eq!(
             rlp_data[idx], value_bytes[0],
-            "RLP data mismatch({:?}): value < 0x80",
-            tag
+            "RLP data mismatch({tag:?}): value < 0x80"
         );
         rows.push(RlpWitnessRow {
             tx_id,
@@ -145,8 +144,7 @@ pub fn handle_u64<F: FieldExt>(
         assert_eq!(
             rlp_data[idx] as usize,
             0x80 + value_bytes.len(),
-            "RLP data mismatch({:?}): len(value)",
-            tag
+            "RLP data mismatch({tag:?}): len(value)"
         );
         let tag_length = 1 + value_bytes.len();
         rows.push(RlpWitnessRow {
@@ -167,8 +165,7 @@ pub fn handle_u64<F: FieldExt>(
         for (i, value_byte) in value_bytes.iter().enumerate() {
             assert_eq!(
                 rlp_data[idx], *value_byte,
-                "RLP data mismatch({:?}): value[{}]",
-                tag, i
+                "RLP data mismatch({tag:?}): value[{i}]"
             );
             value_acc = value_acc * F::from(256) + F::from(*value_byte as u64);
             rows.push(RlpWitnessRow {
@@ -212,8 +209,7 @@ pub fn handle_u256<F: FieldExt>(
     if value_bytes.len() == 1 && value_bytes[0] < 0x80 {
         assert_eq!(
             rlp_data[idx], value_bytes[0],
-            "RLP data mismatch({:?}): value < 0x80",
-            tag
+            "RLP data mismatch({tag:?}): value < 0x80"
         );
         rows.push(RlpWitnessRow {
             tx_id: id,
@@ -232,8 +228,7 @@ pub fn handle_u256<F: FieldExt>(
         assert_eq!(
             rlp_data[idx] as usize,
             0x80 + value_bytes.len(),
-            "RLP data mismatch({:?}): len(value)",
-            tag
+            "RLP data mismatch({tag:?}): len(value)"
         );
         let tag_length = 1 + value_bytes.len();
         rows.push(RlpWitnessRow {
@@ -254,8 +249,7 @@ pub fn handle_u256<F: FieldExt>(
         for (i, value_byte) in value_bytes.iter().enumerate() {
             assert_eq!(
                 rlp_data[idx], *value_byte,
-                "RLP data mismatch({:?}): value[{}]",
-                tag, i
+                "RLP data mismatch({tag:?}): value[{i}]"
             );
             value_acc = value_acc
                 .zip(randomness)
@@ -314,8 +308,7 @@ pub fn handle_address<F: FieldExt>(
         for (i, value_byte) in value_bytes.iter().enumerate() {
             assert_eq!(
                 rlp_data[idx], *value_byte,
-                "RLP data mismatch({:?}): value[{}]",
-                tag, i
+                "RLP data mismatch({tag:?}): value[{i}]"
             );
             value_acc = value_acc * F::from(256) + F::from(*value_byte as u64);
             rows.push(RlpWitnessRow {
@@ -402,8 +395,7 @@ pub fn handle_bytes<F: FieldExt>(
         assert_eq!(
             rlp_data[idx] as usize,
             0x80 + length,
-            "RLP data mismatch({:?}): len(call_data) + 128",
-            prefix_tag
+            "RLP data mismatch({prefix_tag:?}): len(call_data) + 128"
         );
         rows.push(RlpWitnessRow {
             tx_id,
@@ -423,8 +415,7 @@ pub fn handle_bytes<F: FieldExt>(
         for (i, data_byte) in call_data.iter().enumerate() {
             assert_eq!(
                 rlp_data[idx], *data_byte,
-                "RLP data mismatch({:?}): value[{}]",
-                tag, i
+                "RLP data mismatch({tag:?}): value[{i}]"
             );
             value_acc_rlc = value_acc_rlc
                 .zip(randomness)
@@ -449,8 +440,7 @@ pub fn handle_bytes<F: FieldExt>(
         assert_eq!(
             rlp_data[idx] as usize,
             0xb7 + length_of_length,
-            "RLP data mismatch({:?}): len_of_len(call_data) + 0xb7",
-            prefix_tag
+            "RLP data mismatch({prefix_tag:?}): len_of_len(call_data) + 0xb7"
         );
         let tag_length = 1 + length_of_length;
         rows.push(RlpWitnessRow {
@@ -479,8 +469,7 @@ pub fn handle_bytes<F: FieldExt>(
         for (i, length_byte) in length_bytes.iter().enumerate() {
             assert_eq!(
                 rlp_data[idx], *length_byte,
-                "RLP data mismatch({:?}): length[{}]",
-                prefix_tag, i
+                "RLP data mismatch({prefix_tag:?}): length[{i}]"
             );
             length_acc = length_acc * 256 + (*length_byte as u64);
             rows.push(RlpWitnessRow {
@@ -488,7 +477,7 @@ pub fn handle_bytes<F: FieldExt>(
                 index: idx + 1,
                 data_type,
                 value: *length_byte,
-                value_acc: Value::known(F::from(length_acc as u64)),
+                value_acc: Value::known(F::from(length_acc)),
                 value_rlc_acc: Value::known(F::zero()),
                 tag: prefix_tag,
                 tag_length,
@@ -504,8 +493,7 @@ pub fn handle_bytes<F: FieldExt>(
         for (i, data_byte) in call_data.iter().enumerate() {
             assert_eq!(
                 rlp_data[idx], *data_byte,
-                "RLP data mismatch({:?}): data[{}]",
-                tag, i
+                "RLP data mismatch({tag:?}): data[{i}]"
             );
             value_rlc_acc = value_rlc_acc
                 .zip(randomness)

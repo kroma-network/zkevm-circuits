@@ -83,7 +83,7 @@ async fn main() {
         let path_sol = Path::new(CONTRACTS_PATH).join(contract_path);
         let compiled = Solc::default()
             .compile_source(&path_sol)
-            .unwrap_or_else(|_| panic!("solc compile error {:?}", path_sol));
+            .unwrap_or_else(|_| panic!("solc compile error {path_sol:?}"));
         if !compiled.errors.is_empty() {
             panic!("Errors compiling {:?}:\n{:#?}", &path_sol, compiled.errors)
         }
@@ -209,8 +209,7 @@ async fn main() {
             .get_transaction_count(wallets[0].address(), None)
             .await
             .expect("cannot get transaction_count");
-        let mut i = 0;
-        for wallet in &wallets[0..NUM_TXS] {
+        for (i, wallet) in wallets[0..NUM_TXS].iter().enumerate() {
             info!("send transaction {}", i);
             let tx = TransactionRequest::new()
                 .to(wallet.address())
@@ -224,12 +223,10 @@ async fn main() {
                     .expect("cannot send tx"),
             );
             nonce = nonce.checked_add(U256::one()).unwrap();
-            i += 1;
         }
         block_num = 0;
         let mut count = 0;
-        let mut i = 0;
-        for tx in pending_txs {
+        for (i, tx) in pending_txs.into_iter().enumerate() {
             info!("confirm transaction {}", i);
             let receipt = tx.await.expect("cannot confirm tx").unwrap();
             info!("block_num: {}", receipt.block_number.unwrap().as_u64());
@@ -239,7 +236,6 @@ async fn main() {
             } else if block_num == receipt.block_number.unwrap().as_u64() {
                 count += 1;
             }
-            i += 1;
         }
         if count == NUM_TXS {
             break;
@@ -271,8 +267,7 @@ async fn main() {
         }
         block_num = 0;
         let mut count = 0;
-        let mut i = 0;
-        for tx in pending_txs {
+        for (i, tx) in pending_txs.into_iter().enumerate() {
             info!("confirm transaction {}", i);
             let receipt = tx.await.expect("cannot confirm tx").unwrap();
             info!("block_num: {}", receipt.block_number.unwrap().as_u64());
@@ -282,7 +277,6 @@ async fn main() {
             } else if block_num == receipt.block_number.unwrap().as_u64() {
                 count += 1;
             }
-            i += 1;
         }
         if count == NUM_TXS {
             break;
@@ -377,9 +371,7 @@ async fn main() {
             assert_eq!(
                 receipt.status,
                 Some(U64::from(expected_status)),
-                "failed tx hash: {:?}, receipt: {:#?}",
-                tx_hash,
-                receipt
+                "failed tx hash: {tx_hash:?}, receipt: {receipt:#?}"
             );
 
             info!("block_num: {}", receipt.block_number.unwrap().as_u64());

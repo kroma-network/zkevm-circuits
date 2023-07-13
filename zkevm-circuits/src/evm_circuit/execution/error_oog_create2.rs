@@ -158,8 +158,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGCreate2Gadget<F> {
         assert_eq!(
             address_high,
             F::zero(),
-            "address overflow {} bytes",
-            N_BYTES_MEMORY_ADDRESS
+            "address overflow {N_BYTES_MEMORY_ADDRESS} bytes"
         );
         self.address_in_range_high
             .assign(region, offset, address_high)?;
@@ -167,8 +166,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGCreate2Gadget<F> {
         assert_eq!(
             size_high,
             F::zero(),
-            "size overflow {} bytes",
-            N_BYTES_MEMORY_ADDRESS
+            "size overflow {N_BYTES_MEMORY_ADDRESS} bytes"
         );
         self.size_in_range_high.assign(region, offset, size_high)?;
 
@@ -179,8 +177,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGCreate2Gadget<F> {
             .expect("address overflow u64");
         assert!(
             expanded_address < (1u64 << (N_BYTES_MEMORY_ADDRESS * 8)),
-            "expanded address overflow {} bytes",
-            N_BYTES_MEMORY_ADDRESS
+            "expanded address overflow {N_BYTES_MEMORY_ADDRESS} bytes"
         );
         self.expanded_address_in_range.assign(
             region,

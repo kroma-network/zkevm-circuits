@@ -699,7 +699,7 @@ impl<F: Field> TxCircuitConfig<F> {
             |mut table| {
                 for i in 0..(1 << 16) {
                     table.assign_cell(
-                        || format!("u16_row_{}", i),
+                        || format!("u16_row_{i}"),
                         self.u16_table,
                         i,
                         || Value::known(F::from(i as u64)),
@@ -892,7 +892,7 @@ impl<F: Field> TxCircuitConfig<F> {
 
         for (condition, value) in conditions {
             region.assign_advice(
-                || format!("lookup condition {:?}", condition),
+                || format!("lookup condition {condition:?}"),
                 self.lookup_conditions[&condition],
                 *offset,
                 || value,
@@ -2042,7 +2042,7 @@ mod tx_circuit_tests {
 
         let prover = match MockProver::run(k, &circuit, vec![vec![]]) {
             Ok(prover) => prover,
-            Err(e) => panic!("{:#?}", e),
+            Err(e) => panic!("{e:#?}"),
         };
         prover.verify()
     }

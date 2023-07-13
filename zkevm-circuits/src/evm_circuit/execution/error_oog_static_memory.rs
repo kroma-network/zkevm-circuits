@@ -213,7 +213,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGStaticMemoryGadget<F> {
 
         // TODO: sanity check, remove this after fixing #347 missing ErrGasUintOverflow
         if address_high != F::zero() || expanded_address > (1u64 << (N_BYTES_MEMORY_ADDRESS * 8)) {
-            panic!("address overflow {} bytes", N_BYTES_MEMORY_ADDRESS);
+            panic!("address overflow {N_BYTES_MEMORY_ADDRESS} bytes");
         }
 
         self.memory_expansion.assign(

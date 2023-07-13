@@ -217,7 +217,7 @@ fn witgen_init_writer() {
     info!("root: {:?}", root_init);
 
     assert_eq!(
-        format!("{:?}", root_init),
+        format!("{root_init:?}"),
         "0x2cf68fe79d67e26d05cf401118293952d507eaea98ab69bd9f3381bded8e2220"
     );
 }
