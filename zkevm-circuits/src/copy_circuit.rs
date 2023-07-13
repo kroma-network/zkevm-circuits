@@ -464,7 +464,7 @@ impl<F: Field> CopyCircuitConfig<F> {
                 if !is_read && (label == "src_addr_end" || label == "bytes_left") {
                 } else {
                     region.assign_advice(
-                        || format!("{} at row: {}", label, offset),
+                        || format!("{label} at row: {offset}"),
                         column,
                         *offset,
                         || value,

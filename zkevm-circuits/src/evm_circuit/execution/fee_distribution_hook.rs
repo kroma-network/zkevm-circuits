@@ -86,7 +86,7 @@ impl<F: Field> ExecutionGadget<F> for FeeDistributionHookGadget<F> {
         let mul_total_reward_by_reward_scalar = MulAddWordsGadget::construct(
             cb,
             [
-                &total_reward,
+                total_reward,
                 &validator_reward_scalar,
                 &zero,
                 &validator_reward_tmp,

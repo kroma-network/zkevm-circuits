@@ -551,7 +551,7 @@ impl<F: Field> PiCircuitConfig<F> {
             .enumerate()
             .map(|(i, byte)| {
                 region.assign_fixed(
-                    || format!("PI constant {}", i),
+                    || format!("PI constant {i}"),
                     self.constant,
                     i,
                     || Value::known(F::from(byte as u64)),
@@ -1149,7 +1149,7 @@ impl<F: Field> PiCircuitConfig<F> {
             {
                 for (column, value) in block_table_columns.iter().zip_eq(row) {
                     let cell = region.assign_advice(
-                        || format!("block table row {}", offset),
+                        || format!("block table row {offset}"),
                         *column,
                         offset,
                         || value,
@@ -1467,7 +1467,7 @@ mod pi_circuit_test {
 
         let prover = match MockProver::run(k, &circuit, public_inputs) {
             Ok(prover) => prover,
-            Err(e) => panic!("{:#?}", e),
+            Err(e) => panic!("{e:#?}"),
         };
         prover.verify()
     }

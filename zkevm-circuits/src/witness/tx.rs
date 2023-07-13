@@ -92,7 +92,7 @@ pub struct Transaction {
 impl Transaction {
     /// Whether tx is a system deposit tx.
     pub fn is_system_deposit(&self) -> bool {
-        return self.is_deposit() && self.id == 1;
+        self.is_deposit() && self.id == 1
     }
 
     /// Whether tx is a deposit tx.

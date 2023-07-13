@@ -496,8 +496,7 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
                 debug_assert_eq!(
                     rw.field_tag(),
                     Some(AccountFieldTag::Balance as u64),
-                    "invalid rw {:?}",
-                    rw
+                    "invalid rw {rw:?}"
                 );
                 rw.account_value_pair()
             })

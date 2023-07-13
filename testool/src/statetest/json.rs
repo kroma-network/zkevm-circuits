@@ -175,8 +175,7 @@ impl<'a> JsonStateTestBuilder<'a> {
                             state_tests.push(StateTest {
                                 path: path.to_string(),
                                 id: format!(
-                                    "{}_d{}_g{}_v{}",
-                                    test_name, idx_data, idx_gas, idx_value
+                                    "{test_name}_d{idx_data}_g{idx_gas}_v{idx_value}"
                                 ),
                                 env: env.clone(),
                                 pre: pre.clone(),

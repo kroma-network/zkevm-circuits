@@ -633,7 +633,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         )?;
         #[cfg(feature = "kroma")]
         self.is_tx_id_one
-            .assign(region, offset, F::from(tx.id as u64), F::from(1 as u64))?;
+            .assign(region, offset, F::from(tx.id as u64), F::from(1_u64))?;
         self.tx_nonce
             .assign(region, offset, Value::known(F::from(tx.nonce)))?;
         self.tx_gas

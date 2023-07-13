@@ -236,10 +236,10 @@ pub(crate) fn print_circuit_stats_by_states(
             assert_eq!(opcode, geth_step.op);
             let gas_cost = geth_step.gas_cost.0;
             table.push_row([
-                format!("{:?}", state),
-                format!("{:?}", opcode),
-                format!("{}", h),
-                format!("{}", gas_cost),
+                format!("{state:?}"),
+                format!("{opcode:?}"),
+                format!("{h}"),
+                format!("{gas_cost}"),
                 format!("{:1.3}", h as f64 / gas_cost as f64),
             ]);
         }

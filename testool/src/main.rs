@@ -166,7 +166,7 @@ fn go() -> Result<()> {
         files.sort_by(|f, s| s.cmp(f));
         let previous = if !files.is_empty() {
             let file = files.remove(0);
-            let path = format!("{}/{}", REPORT_FOLDER, file);
+            let path = format!("{REPORT_FOLDER}/{file}");
             info!("Comparing with previous results in {}", path);
             Some((file, Results::from_file(PathBuf::from(path))?))
         } else {
@@ -178,7 +178,7 @@ fn go() -> Result<()> {
         let mut results = if let Some(cache_filename) = args.cache {
             let cache_filename = if cache_filename == *"auto" {
                 let file = previous.clone().unwrap().0;
-                format!("{}/{}", REPORT_FOLDER, file)
+                format!("{REPORT_FOLDER}/{file}")
             } else {
                 cache_filename
             };
@@ -224,6 +224,6 @@ fn go() -> Result<()> {
 
 fn main() {
     if let Err(err) = go() {
-        eprintln!("Error found {}", err);
+        eprintln!("Error found {err}");
     }
 }
