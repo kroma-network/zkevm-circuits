@@ -1216,12 +1216,21 @@ impl<F: Field> TxCircuitConfig<F> {
         meta.lookup_any("tx tag in RLP Table::TxHash", |meta| {
             let rlp_tag = meta.query_fixed(rlp_tag, Rotation::cur());
 
-            let enable = and::expr(vec![
+            #[cfg(feature = "kroma")]
+            let is_deposit_expr = meta.query_advice(is_deposit_tx, Rotation::cur());
+
+            let legacy_enable = and::expr(vec![
                 meta.query_fixed(q_enable, Rotation::cur()),
                 meta.query_advice(
                     lookup_conditions[&LookupCondition::RlpHashTag],
                     Rotation::cur(),
                 ),
+                // NOTE(dongchangYoo): For example, since `GasPrice` is an rlp member of Legacy
+                // tx, so `RlpHashTag` is True. Thus, this lookup is also executed during
+                // the inspection of GasPrice in Deposit tx. As a result,
+                // is_deposit_exp=False is required.
+                #[cfg(feature = "kroma")]
+                not::expr(is_deposit_expr.clone()),
             ]);
 
             #[cfg(feature = "kroma")]
@@ -1231,14 +1240,13 @@ impl<F: Field> TxCircuitConfig<F> {
                     lookup_conditions[&LookupCondition::RlpHashTagDeposit],
                     Rotation::cur(),
                 ),
+                is_deposit_expr.clone(),
             ]);
 
+            #[cfg(not(feature = "kroma"))]
+            let enable = legacy_enable;
             #[cfg(feature = "kroma")]
-            let enable = select::expr(
-                meta.query_advice(is_deposit_tx, Rotation::cur()),
-                deposit_enable,
-                enable,
-            );
+            let enable = select::expr(is_deposit_expr, deposit_enable, legacy_enable);
 
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),

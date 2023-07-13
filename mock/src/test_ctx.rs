@@ -332,6 +332,7 @@ pub fn gen_geth_traces(
 /// Collection of helper functions which contribute to specific rutines on the
 /// builder pattern used to construct [`TestContext`]s.
 pub mod helpers {
+    use std::str::FromStr;
     use super::{eth, Bytecode, MockAccount, MockTransaction};
     use crate::{test_ctx::SYSTEM_DEPOSIT_TX_GAS, MOCK_ACCOUNTS};
     #[cfg(feature = "kroma")]
@@ -340,10 +341,11 @@ pub mod helpers {
         kroma_l1_block::BYTECODE,
         kroma_params::{
             L1_BLOCK, PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, SYSTEM_TX_CALLER,
-            VALIDATOR_REWARD_VAULT,
+            VALIDATOR_REWARD_VAULT
         },
         Bytes, Word,
     };
+    use eth_types::H256;
 
     /// Generate a simple setup which adds balance to two default accounts from
     /// [`static@MOCK_ACCOUNTS`]:

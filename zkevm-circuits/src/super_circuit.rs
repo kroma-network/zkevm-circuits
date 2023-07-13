@@ -876,7 +876,8 @@ pub(crate) mod super_circuit_tests {
     #[test]
     fn serial_test_super_circuit_1tx_1max_tx() {
         let block = block_1tx();
-        const MAX_TXS: usize = 1;
+        const MAX_TXS: usize = tx_idx!(1);
+
         const MAX_CALLDATA: usize = 300; // sum_txs_calldata=292
         const MAX_INNER_BLOCKS: usize = 1;
         let circuits_params = CircuitsParams {
@@ -899,7 +900,7 @@ pub(crate) mod super_circuit_tests {
     #[test]
     fn serial_test_super_circuit_1tx_deploy_2max_tx() {
         let block = block_1tx_deploy();
-        const MAX_TXS: usize = 2;
+        const MAX_TXS: usize = tx_idx!(2);
         const MAX_CALLDATA: usize = 400; // sum_txs_calldata=313
         const MAX_INNER_BLOCKS: usize = 1;
         const MAX_RWS: usize = 900; // total_rws=846
@@ -924,7 +925,7 @@ pub(crate) mod super_circuit_tests {
     #[test]
     fn serial_test_super_circuit_1tx_2max_tx() {
         let block = block_1tx();
-        const MAX_TXS: usize = 2;
+        const MAX_TXS: usize = tx_idx!(2);
         const MAX_CALLDATA: usize = 300; // sum_txs_calldata=292
         const MAX_INNER_BLOCKS: usize = 1;
         let circuits_params = CircuitsParams {
@@ -947,7 +948,7 @@ pub(crate) mod super_circuit_tests {
     #[test]
     fn serial_test_super_circuit_2tx_4max_tx() {
         let block = block_2tx();
-        const MAX_TXS: usize = 4;
+        const MAX_TXS: usize = tx_idx!(4);
         const MAX_CALLDATA: usize = 300; // sum_txs_calldata=292
         const MAX_INNER_BLOCKS: usize = 1;
         const MAX_RWS: usize = 900; // total_rws=824
@@ -972,13 +973,13 @@ pub(crate) mod super_circuit_tests {
     #[test]
     fn serial_test_super_circuit_2tx_2max_tx() {
         let block = block_2tx();
-        const MAX_TXS: usize = 2;
+        const MAX_TXS: usize = tx_idx!(2);
         const MAX_CALLDATA: usize = 300; // sum_txs_calldata=292
         const MAX_INNER_BLOCKS: usize = 1;
         let circuits_params = CircuitsParams {
             max_txs: MAX_TXS,
             max_calldata: MAX_CALLDATA,
-            max_rws: 800, // total_rws=782
+            max_rws: 850, // total_rws=824
             max_copy_rows: 256,
             max_exp_steps: 256,
             max_bytecode: BYTECODE.code().len() + 100, // NOTE(TomTaehoonKim): 100 is arbitrary

@@ -7,9 +7,11 @@ use eth_types::{
     kroma_params::{L1_BLOCK, SYSTEM_TX_CALLER},
     word, AccessList, Address, Bytes, Hash, Transaction, Word, U64,
 };
+#[cfg(not(feature = "kroma"))]
+use ethers_core::types::OtherFields;
 use ethers_core::{
     rand::{CryptoRng, RngCore},
-    types::{OtherFields, TransactionRequest},
+    types::TransactionRequest,
     utils::hex,
 };
 use ethers_signers::{LocalWallet, Signer};
@@ -256,7 +258,7 @@ impl Default for MockTransaction {
 
 impl From<MockTransaction> for Transaction {
     fn from(mock: MockTransaction) -> Self {
-        Transaction {
+        let mut tx = Transaction {
             hash: mock.hash.unwrap_or_default(),
             nonce: mock.nonce.into(),
             block_hash: Some(mock.block_hash),
@@ -276,8 +278,25 @@ impl From<MockTransaction> for Transaction {
             max_priority_fee_per_gas: Some(mock.max_priority_fee_per_gas),
             max_fee_per_gas: Some(mock.max_fee_per_gas),
             chain_id: Some(mock.chain_id),
+            #[cfg(feature = "kroma")]
+            other: Default::default(),
+            #[cfg(not(feature = "kroma"))]
             other: OtherFields::default(),
+        };
+
+        #[cfg(feature = "kroma")]
+        if let Some(tx_type) = tx.transaction_type {
+            if tx_type == U64::from(DEPOSIT_TX_TYPE) {
+                let mint = mock.mint;
+                let source_hash = mock.source_hash;
+
+                let mint_json_string = format!("\"mint\": \"{mint:#?}\"");
+                let source_hash_json_string = format!("\"sourceHash\": \"{source_hash:#?}\"");
+                let json_value = format!("{{{mint_json_string}, {source_hash_json_string}}}");
+                tx.other = serde_json::from_str(json_value.as_str()).unwrap();
+            }
         }
+        tx
     }
 }
 

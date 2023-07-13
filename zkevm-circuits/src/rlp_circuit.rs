@@ -328,7 +328,6 @@ impl<F: Field> RlpCircuitConfig<F> {
 
         meta.lookup_any("(tag, tag_next) in tag_ROM", |meta| {
             let is_simple_tag = meta.query_advice(is_simple_tag, Rotation::cur());
-            let is_deposit_expr = meta.query_advice(is_deposit_tx, Rotation::cur());
 
             // actual tags (from rlp_table)
             let tag = meta.query_advice(rlp_table.tag, Rotation::cur());
@@ -337,23 +336,50 @@ impl<F: Field> RlpCircuitConfig<F> {
             // expected tags (from tag_rom)
             let rom_tag = meta.query_fixed(tag_rom.tag, Rotation::cur());
             let rom_tag_next = meta.query_fixed(tag_rom.tag_next, Rotation::cur());
-            #[cfg(feature = "kroma")]
-            let rom_tag_deposit_next = meta.query_fixed(tag_rom.tag_deposit_next, Rotation::cur());
-            #[cfg(feature = "kroma")]
-            let selective_rom_tag_next =
-                select::expr(is_deposit_expr, rom_tag_deposit_next, rom_tag_next);
-
-            #[cfg(not(feature = "kroma"))]
-            let selective_rom_tag_next = rom_tag_next;
 
             // determine condition
             let q_usable = meta.query_fixed(q_usable, Rotation::cur());
             let (_, tag_idx_eq_one) = tag_index_cmp_1.expr(meta, None);
+
             let condition = and::expr(vec![q_usable, is_simple_tag, tag_idx_eq_one]);
+            #[cfg(feature = "kroma")]
+            let condition = and::expr(vec![
+                condition,
+                not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
+            ]);
 
             vec![
                 (condition.expr() * tag, rom_tag),
-                (condition * tag_next, selective_rom_tag_next),
+                (condition * tag_next, rom_tag_next),
+            ]
+        });
+
+        #[cfg(feature = "kroma")]
+        meta.lookup_any("(tag, tag_deposit_next) in tag_ROM", |meta| {
+            let is_simple_tag = meta.query_advice(is_simple_tag, Rotation::cur());
+
+            // actual tags (from rlp_table)
+            let tag = meta.query_advice(rlp_table.tag, Rotation::cur());
+            let tag_next = meta.query_advice(rlp_table.tag, Rotation::next());
+
+            // expected tags (from tag_rom)
+            let rom_tag = meta.query_fixed(tag_rom.tag, Rotation::cur());
+            let rom_tag_deposit_next = meta.query_fixed(tag_rom.tag_deposit_next, Rotation::cur());
+
+            // determine condition
+            let q_usable = meta.query_fixed(q_usable, Rotation::cur());
+            let (_, tag_idx_eq_one) = tag_index_cmp_1.expr(meta, None);
+            let is_deposit_exp = meta.query_advice(is_deposit_tx, Rotation::cur());
+            let condition = and::expr(vec![
+                q_usable,
+                is_simple_tag,
+                tag_idx_eq_one,
+                is_deposit_exp,
+            ]);
+
+            vec![
+                (condition.expr() * tag, rom_tag),
+                (condition * tag_next, rom_tag_deposit_next),
             ]
         });
 

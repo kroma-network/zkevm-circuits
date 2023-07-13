@@ -1,16 +1,17 @@
-use super::{
-    common::{handle_address, handle_bytes, handle_prefix, handle_u256, handle_u64},
-    witness_gen::{RlpDataType, RlpWitnessGen, RlpWitnessRow},
-};
+use eth_types::{geth_types::DEPOSIT_TX_TYPE, ToWord};
+use ethers_core::utils::rlp;
+use halo2_proofs::{arithmetic::FieldExt, circuit::Value, plonk::Expression};
+use strum_macros::EnumIter;
 use crate::{
     evm_circuit::witness::Transaction,
     impl_expr,
     util::Challenges,
     witness::{rlp_encode::common::handle_u8, tx::SignedTransaction},
 };
-use ethers_core::utils::rlp;
-use halo2_proofs::{arithmetic::FieldExt, circuit::Value, plonk::Expression};
-use strum_macros::EnumIter;
+use super::{
+    common::{handle_address, handle_bytes, handle_prefix, handle_u256, handle_u64},
+    witness_gen::{RlpDataType, RlpWitnessGen, RlpWitnessRow},
+};
 
 /// Tags used to tag rows in the RLP circuit for a transaction.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, EnumIter)]
