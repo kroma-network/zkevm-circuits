@@ -69,8 +69,8 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
             cb.require_zero("condition is not zero", is_condition_zero.expr());
         });
 
-        // Look up bytecode length
-        cb.bytecode_length(cb.curr.state.code_hash.expr(), code_len.expr());
+        // Look up bytecode header
+        cb.bytecode_header(cb.curr.state.code_hash.expr(), code_len.expr());
 
         // If destination is in valid range, lookup for the value.
         cb.condition(dest.lt_cap(), |cb| {

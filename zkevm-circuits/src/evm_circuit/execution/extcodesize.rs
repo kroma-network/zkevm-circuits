@@ -62,7 +62,7 @@ impl<F: Field> ExecutionGadget<F> for ExtcodesizeGadget<F> {
 
         let code_size = cb.query_word_rlc();
         cb.condition(exists.clone(), |cb| {
-            cb.bytecode_length(code_hash.expr(), from_bytes::expr(&code_size.cells));
+            cb.bytecode_header(code_hash.expr(), from_bytes::expr(&code_size.cells));
         });
         cb.condition(not_exists.expr(), |cb| {
             cb.require_zero("code_size is zero when non_exists", code_size.expr());

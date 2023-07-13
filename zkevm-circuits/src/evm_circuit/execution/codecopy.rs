@@ -66,8 +66,8 @@ impl<F: Field> ExecutionGadget<F> for CodeCopyGadget<F> {
         // Fetch the hash of bytecode running in current environment.
         let code_hash = cb.curr.state.code_hash.clone();
 
-        // Fetch the bytecode length from the bytecode table.
-        cb.bytecode_length(code_hash.expr(), code_size.expr());
+        // Fetch the bytecode header from the bytecode table.
+        cb.bytecode_header(code_hash.expr(), code_size.expr());
 
         // Calculate the next memory size and the gas cost for this memory
         // access. This also accounts for the dynamic gas required to copy bytes to

@@ -363,6 +363,22 @@ impl<F: Field> SubCircuitConfig<F> for BytecodeCircuitConfig<F> {
         // When is_byte_to_header ->
         // assert cur.index + 1 == cur.length
         // assert keccak256_table_lookup(cur.hash, cur.length, cur.value_rlc)
+        //
+        // -----------------------------------------------
+        // |   tag    | index | isCode | value  | length |
+        // -----------------------------------------------
+        // |    0     |   0   |   0    |   0    |    0   | -> The isFirst row is all set to zero
+        // |  Header  |   0   |   0    |   4    |    4   |
+        // |   Byte   |   0   |   ?    |  0x05  |    4   |
+        // |   Byte   |   1   |   ?    |  0x61  |    4   |
+        // |   Byte   |   2   |   ?    |  0xd7  |    4   |
+        // |   Byte   |   3   |   ?    |  0x28  |    4   | -> When is_byte_to_header, index + 1
+        // |  Header  |   0   |   ?    |   20   |   20   |    should match the length
+        // |   Byte   |   0   |   ?    |  0x10  |   20   |
+        // |   Byte   |   1   |   ?    |  0xaa  |   20   |
+        // |   ...    |       |        |        |        |
+        // |   Byte   |  19   |   ?    |  0xd1  |   20   |
+        // -----------------------------------------------
         meta.create_gate("Byte to Header row", |meta| {
             let mut cb = BaseConstraintBuilder::default();
 

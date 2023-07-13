@@ -340,6 +340,10 @@ impl GethData {
     /// Signs transactions with selected wallets
     pub fn sign(&mut self, wallets: &HashMap<Address, LocalWallet>) {
         for tx in self.eth_block.transactions.iter_mut() {
+            #[cfg(feature = "kroma")]
+            if tx.transaction_type == Some(U64::from(DEPOSIT_TX_TYPE)) {
+                continue;
+            }
             let wallet = wallets.get(&tx.from).unwrap();
             assert_eq!(Word::from(wallet.chain_id()), self.chain_id);
             let geth_tx: Transaction = (&*tx).into();
