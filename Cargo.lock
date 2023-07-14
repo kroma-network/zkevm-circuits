@@ -1406,7 +1406,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_02_02#5905a20b62fcd9f6c269416a39c80de7ced8fb02"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
 dependencies = [
  "group 0.12.1",
  "integer",
@@ -2592,7 +2592,7 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 [[package]]
 name = "halo2-mpt-circuits"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/mpt-circuit.git?branch=kroma-dev-0111#e0b9f0c7aae6a8fcb89df630c85a264d0b25f1fd"
+source = "git+https://github.com/kroma-network/mpt-circuit.git?rev=a5a71bf#a5a71bf18d7a5d58183c7d9d4ed0d28792aa85e7"
 dependencies = [
  "halo2_proofs",
  "hex",
@@ -2609,7 +2609,7 @@ dependencies = [
 [[package]]
 name = "halo2_base"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2-lib?branch=halo2-ecc-ecdsa-0129#89cf51f0ac452e4814e028b9a331ec613aafa726"
+source = "git+https://github.com/kroma-network/halo2-lib?rev=31e0c62#31e0c6293789e0b1acef158ec260f968e2057416"
 dependencies = [
  "ff 0.12.1",
  "halo2_proofs",
@@ -2621,14 +2621,14 @@ dependencies = [
 [[package]]
 name = "halo2_ecc"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2-lib?branch=halo2-ecc-ecdsa-0129#89cf51f0ac452e4814e028b9a331ec613aafa726"
+source = "git+https://github.com/kroma-network/halo2-lib?rev=31e0c62#31e0c6293789e0b1acef158ec260f968e2057416"
 dependencies = [
  "ark-std",
  "ff 0.12.1",
  "group 0.12.1",
  "halo2_base",
  "halo2_proofs",
- "halo2curves 0.3.1 (git+https://github.com/jonathanpwang/halo2curves.git)",
+ "halo2curves",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2641,19 +2641,19 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/kroma-network/halo2.git?branch=kroma-v0.3.0#895726e2a2910db149af2bb595255e6b1dbad7fb"
+source = "git+https://github.com/kroma-network/halo2.git?rev=9922fbb#9922fbb853201d8ad9feb82bd830a031d7c290b1"
 dependencies = [
  "ark-std",
  "blake2b_simd",
  "cfg-if 0.1.10",
  "ff 0.12.1",
  "group 0.12.1",
- "halo2curves 0.3.1 (git+https://github.com/kroma-network/halo2curves?branch=kroma-0.3.1-derive-serde)",
+ "halo2curves",
  "log",
  "num-bigint",
  "num-integer",
  "plotters",
- "poseidon 0.2.0 (git+https://github.com/kroma-network/poseidon.git?branch=kroma-dev-0220)",
+ "poseidon",
  "rand_core 0.6.4",
  "rayon",
  "sha3 0.9.1",
@@ -2664,25 +2664,8 @@ dependencies = [
 
 [[package]]
 name = "halo2curves"
-version = "0.2.1"
-source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=0.3.0#83c72d49762343ffc9576ca11a2aa615efe1029b"
-dependencies = [
- "ff 0.12.1",
- "group 0.12.1",
- "lazy_static",
- "num-bigint",
- "num-traits",
- "pasta_curves",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
-name = "halo2curves"
 version = "0.3.1"
-source = "git+https://github.com/kroma-network/halo2curves?branch=kroma-0.3.1-derive-serde#c0ac1935e5da2a620204b5b011be2c924b1e0155"
+source = "git+https://github.com/kroma-network/halo2curves?rev=c0ac193#c0ac1935e5da2a620204b5b011be2c924b1e0155"
 dependencies = [
  "ff 0.12.1",
  "group 0.12.1",
@@ -2699,26 +2682,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "halo2curves"
-version = "0.3.1"
-source = "git+https://github.com/jonathanpwang/halo2curves.git#a6437dbe92fe3fd347674ab32cc0909c605a4f89"
-dependencies = [
- "ff 0.12.1",
- "group 0.12.1",
- "lazy_static",
- "num-bigint",
- "num-traits",
- "pasta_curves",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_02_02#5905a20b62fcd9f6c269416a39c80de7ced8fb02"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
 dependencies = [
  "group 0.12.1",
  "halo2_proofs",
@@ -3078,7 +3044,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_02_02#5905a20b62fcd9f6c269416a39c80de7ced8fb02"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
 dependencies = [
  "group 0.12.1",
  "maingate",
@@ -3394,7 +3360,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_02_02#5905a20b62fcd9f6c269416a39c80de7ced8fb02"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
 dependencies = [
  "group 0.12.1",
  "halo2wrong",
@@ -4180,27 +4146,17 @@ dependencies = [
 [[package]]
 name = "poseidon"
 version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/poseidon?tag=v2022_10_22#5d29df01a95e3df6334080d28e983407f56b5da3"
+source = "git+https://github.com/kroma-network/poseidon.git?rev=00a2fe0#00a2fe049208860a5835b1f24d2a80105439b995"
 dependencies = [
  "group 0.12.1",
- "halo2curves 0.2.1",
- "subtle",
-]
-
-[[package]]
-name = "poseidon"
-version = "0.2.0"
-source = "git+https://github.com/kroma-network/poseidon.git?branch=kroma-dev-0220#834f80bcfe85945d7800074645ff055d4d1d97e9"
-dependencies = [
- "group 0.12.1",
- "halo2curves 0.3.1 (git+https://github.com/kroma-network/halo2curves?branch=kroma-0.3.1-derive-serde)",
+ "halo2curves",
  "subtle",
 ]
 
 [[package]]
 name = "poseidon-circuit"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/poseidon-circuit.git?branch=kroma-dev-0215#98a97d2d57508769e8bbfc1f32bf15395427296d"
+source = "git+https://github.com/kroma-network/poseidon-circuit.git?rev=693e985#693e985a48029d89dab84af37445179b5bbd88d2"
 dependencies = [
  "bitvec 1.0.1",
  "halo2_proofs",
@@ -5273,18 +5229,18 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/snark-verifier?branch=kroma-dev-0202#3647bd2833a0dc69b44ed0094898687971a7bddc"
+source = "git+https://github.com/kroma-network/snark-verifier?rev=738e42#738e4260706508760e1c1dcb5b531ad55803d7f2"
 dependencies = [
  "ecc",
  "halo2_proofs",
- "halo2curves 0.3.1 (git+https://github.com/kroma-network/halo2curves?branch=kroma-0.3.1-derive-serde)",
+ "halo2curves",
  "hex",
  "itertools",
  "lazy_static",
  "num-bigint",
  "num-integer",
  "num-traits",
- "poseidon 0.2.0 (git+https://github.com/privacy-scaling-explorations/poseidon?tag=v2022_10_22)",
+ "poseidon",
  "rand 0.8.5",
 ]
 
@@ -7133,7 +7089,7 @@ dependencies = [
 [[package]]
 name = "zktrie"
 version = "0.1.2"
-source = "git+https://github.com/kroma-network/zktrie.git?branch=build/update-cargo-toml#aedd8530b4f8471186c9b30c12f6a75110e0c454"
+source = "git+https://github.com/kroma-network/zktrie.git?rev=b0f3ee9#b0f3ee937287a115ea44f0c188df27e4cd29dfa0"
 dependencies = [
  "gobuild",
 ]
