@@ -109,11 +109,11 @@ impl<F: Field> Chip<F> {
             (self.config.u16, 16),
         ] {
             layouter.assign_region(
-                || format!("assign u{} fixed column", exponent),
+                || format!("assign u{exponent} fixed column"),
                 |mut region| {
                     for i in 0..(1 << exponent) {
                         region.assign_fixed(
-                            || format!("assign {} in u{} fixed column", i, exponent),
+                            || format!("assign {i} in u{exponent} fixed column"),
                             column,
                             i,
                             || Value::known(F::from(i as u64)),
@@ -130,8 +130,7 @@ impl<F: Field> Chip<F> {
                     region.assign_fixed(
                         || {
                             format!(
-                                "assign {:?} in call_context_field_tag fixed column",
-                                field_tag
+                                "assign {field_tag:?} in call_context_field_tag fixed column"
                             )
                         },
                         self.config.call_context_field_tag,

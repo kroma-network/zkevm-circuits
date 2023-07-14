@@ -38,7 +38,7 @@ impl BatchedIsZeroConfig {
             ),
         ]
         .iter()
-        .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+        .for_each(|(col, ann)| region.name_column(|| format!("{prefix}_{ann}"), *col));
     }
 }
 
@@ -132,7 +132,7 @@ impl<F: FieldExt, const N: usize> BatchedIsZeroChip<F, N> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{BatchedIsZeroChip, BatchedIsZeroConfig};
     use halo2_proofs::{
         arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -141,6 +141,7 @@ mod test {
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error, FirstPhase, Selector},
         poly::Rotation,
     };
+    use std::marker::PhantomData;
 
     #[derive(Clone, Debug)]
     struct TestCircuitConfig<const N: usize> {

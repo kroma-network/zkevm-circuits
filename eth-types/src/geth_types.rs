@@ -163,7 +163,7 @@ pub struct Transaction {
 impl From<&Transaction> for crate::Transaction {
     fn from(tx: &Transaction) -> crate::Transaction {
         crate::Transaction {
-            transaction_type: tx.transaction_type.clone(),
+            transaction_type: tx.transaction_type,
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -186,7 +186,7 @@ impl From<&Transaction> for crate::Transaction {
 impl From<&crate::Transaction> for Transaction {
     fn from(tx: &crate::Transaction) -> Transaction {
         Transaction {
-            transaction_type: tx.transaction_type.clone(),
+            transaction_type: tx.transaction_type,
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,

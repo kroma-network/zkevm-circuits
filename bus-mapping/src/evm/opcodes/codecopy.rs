@@ -1,3 +1,4 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{
         CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
@@ -5,8 +6,6 @@ use crate::{
     Error,
 };
 use eth_types::{Bytecode, GethExecStep};
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Codecopy;
@@ -114,6 +113,12 @@ fn gen_copy_event(
 
 #[cfg(test)]
 mod codecopy_tests {
+    use crate::{
+        circuit_input_builder::{CopyDataType, ExecState, NumberOrHash},
+        mock::BlockData,
+        operation::{MemoryOp, StackOp, RW},
+        state_db::CodeDB,
+    };
     use eth_types::{
         bytecode,
         evm_types::{MemoryAddress, OpcodeId, StackAddress},
@@ -126,13 +131,6 @@ mod codecopy_tests {
             SimpleTestContext,
         },
         tx_idx,
-    };
-
-    use crate::{
-        circuit_input_builder::{CopyDataType, ExecState, NumberOrHash},
-        mock::BlockData,
-        operation::{MemoryOp, StackOp, RW},
-        state_db::CodeDB,
     };
 
     #[test]

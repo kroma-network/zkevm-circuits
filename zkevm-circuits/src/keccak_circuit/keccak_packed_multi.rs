@@ -1,5 +1,16 @@
-use super::{cell_manager::*, param::*, util::*};
-use crate::{evm_circuit::util::rlc, util::Challenges};
+use super::{
+    cell_manager::{Cell, CellManager},
+    param::{
+        ABSORB_LOOKUP_RANGE, CHI_BASE_LOOKUP_RANGE, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD,
+        NUM_ROUNDS, NUM_WORDS_TO_ABSORB, RATE, RATE_IN_BITS, RHO_MATRIX, RHO_PI_LOOKUP_RANGE,
+        ROUND_CST, THETA_C_LOOKUP_RANGE,
+    },
+    util::{
+        field_xor, get_absorb_positions, get_num_bits_per_lookup, into_bits, pack, pack_u64,
+        rotate, target_part_sizes, to_bytes, unpack,
+    },
+};
+use crate::{evm_circuit::util::rlc, keccak_circuit::util::pack_with_base, util::Challenges};
 use eth_types::Field;
 use halo2_proofs::{
     arithmetic::FieldExt,

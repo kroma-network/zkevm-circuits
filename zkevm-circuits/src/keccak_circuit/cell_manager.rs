@@ -1,4 +1,5 @@
-use crate::keccak_circuit::{util::extract_field, KeccakRegion};
+use super::keccak_packed_multi::KeccakRegion;
+use crate::keccak_circuit::util::extract_field;
 use gadgets::util::Expr;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -61,7 +62,7 @@ impl<F: FieldExt> Cell<F> {
     pub(crate) fn assign(&self, region: &mut KeccakRegion<F>, offset: i32, value: F) {
         region.assign(
             self.column_idx,
-            ((offset as i32) + self.rotation) as usize,
+            (offset + self.rotation) as usize,
             value,
         );
     }
@@ -75,7 +76,7 @@ impl<F: FieldExt> Cell<F> {
 
         region.assign(
             self.column_idx,
-            ((offset as i32) + self.rotation) as usize,
+            (offset + self.rotation) as usize,
             value_f,
         );
     }

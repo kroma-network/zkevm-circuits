@@ -1,3 +1,4 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{
         CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
@@ -6,8 +7,6 @@ use crate::{
 };
 use eth_types::{GethExecStep, Word, U256};
 use ethers_core::utils::keccak256;
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Sha3;
@@ -87,6 +86,11 @@ impl Opcode for Sha3 {
 
 #[cfg(any(feature = "test", test))]
 pub mod sha3_tests {
+    use crate::{
+        circuit_input_builder::{CircuitsParams, ExecState},
+        mock::BlockData,
+        operation::{MemoryOp, StackOp, RW},
+    };
     use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, Bytecode, Word};
     use ethers_core::utils::keccak256;
     use mock::{
@@ -97,12 +101,6 @@ pub mod sha3_tests {
         tx_idx,
     };
     use rand::{random, Rng};
-
-    use crate::{
-        circuit_input_builder::{CircuitsParams, ExecState},
-        mock::BlockData,
-        operation::{MemoryOp, StackOp, RW},
-    };
 
     /// Generate bytecode for SHA3 opcode after having populated sufficient
     /// memory given the offset and size arguments for SHA3.

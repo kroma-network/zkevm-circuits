@@ -3,7 +3,7 @@
 #![allow(missing_docs)]
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::*,
+    plonk::{Circuit, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 
 mod execution;
@@ -100,7 +100,7 @@ impl<F: Field> SubCircuitConfig<F> for EvmCircuitConfig<F> {
 
         meta.annotate_lookup_any_column(byte_table[0], || "byte_range");
         fixed_table.iter().enumerate().for_each(|(idx, &col)| {
-            meta.annotate_lookup_any_column(col, || format!("fix_table_{}", idx))
+            meta.annotate_lookup_any_column(col, || format!("fix_table_{idx}"))
         });
         tx_table.annotate_columns(meta);
         rw_table.annotate_columns(meta);
@@ -447,9 +447,8 @@ impl<F: Field> Circuit<F> for EvmCircuit<F> {
 
 #[cfg(any(feature = "test", test))]
 pub mod test {
-    use super::*;
+    use super::{detect_fixed_table_tags, EvmCircuit};
     use crate::evm_circuit::witness::Block;
-
     use eth_types::{Field, Word};
     use rand::{
         distributions::uniform::{SampleRange, SampleUniform},

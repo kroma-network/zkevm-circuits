@@ -8,9 +8,15 @@ use crate::{
         TxReceiptField, TxRefundOp, RW,
     },
     state_db::CodeDB,
+    util::CHECK_MEM_STRICT,
     Error,
 };
+
 use core::fmt::Debug;
+#[cfg(feature = "kroma")]
+use eth_types::kroma_params::{
+    PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_VAULT,
+};
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
     evm_unimplemented,
@@ -20,13 +26,6 @@ use eth_types::{
     GethExecStep, GethExecTrace, ToAddress, ToWord, Word,
 };
 use ethers_core::utils::get_contract_address;
-
-use crate::util::CHECK_MEM_STRICT;
-
-#[cfg(feature = "kroma")]
-use eth_types::kroma_params::{
-    PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, REWARD_DENOMINATOR, VALIDATOR_REWARD_VAULT,
-};
 
 #[cfg(any(feature = "test", test))]
 pub use self::sha3::sha3_tests::{gen_sha3_code, MemoryKind};
@@ -481,11 +480,11 @@ pub fn gen_begin_tx_ops(
     }
 
     let mut nonce_prev = state.sdb.get_account(&caller_address).1.nonce;
-    debug_assert!(nonce_prev <= state.tx.nonce.into());
-    while nonce_prev < state.tx.nonce.into() {
+    debug_assert!(nonce_prev <= state.tx.nonce);
+    while nonce_prev < state.tx.nonce {
         // NOTE: Since increase_nonce returns the previous nonce, you need to add 1 to
         // get the new nonce.
-        nonce_prev = (state.sdb.increase_nonce(&caller_address) + 1).into();
+        nonce_prev = state.sdb.increase_nonce(&caller_address) + 1;
         log::warn!("[debug] increase nonce to {}", nonce_prev);
     }
     state.account_write(

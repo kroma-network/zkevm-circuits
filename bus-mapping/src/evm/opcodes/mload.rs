@@ -60,7 +60,6 @@ impl Opcode for Mload {
 
 #[cfg(test)]
 mod mload_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
@@ -68,13 +67,16 @@ mod mload_tests {
     };
     use eth_types::{
         bytecode,
-        evm_types::{OpcodeId, StackAddress},
+        evm_types::{MemoryAddress, OpcodeId, StackAddress},
         geth_types::GethData,
-        Word,
+        ToBigEndian, Word,
     };
     use itertools::Itertools;
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext},
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
         tx_idx,
     };
     use pretty_assertions::assert_eq;

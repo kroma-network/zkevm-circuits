@@ -278,7 +278,9 @@ pub(crate) enum CellType {
 impl CellType {
     // The phase that given `Expression` becomes evaluateable.
     fn expr_phase<F: FieldExt>(expr: &Expression<F>) -> u8 {
-        use Expression::*;
+        use Expression::{
+            Advice, Challenge, Constant, Fixed, Instance, Negated, Product, Selector, Sum,
+        };
         match expr {
             Challenge(challenge) => challenge.phase() + 1,
             Advice(query) => query.phase(),
@@ -426,7 +428,7 @@ impl<F: FieldExt> CellManager<F> {
             Some(index) => index,
             // If we reach this case, it means that all the columns of cell_type have assignments
             // taking self.height rows, so there's no more space.
-            None => panic!("not enough cells for query: {:?}", cell_type),
+            None => panic!("not enough cells for query: {cell_type:?}"),
         }
     }
 

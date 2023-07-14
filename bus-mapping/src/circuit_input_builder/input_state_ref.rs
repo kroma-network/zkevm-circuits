@@ -81,7 +81,7 @@ impl<'a> CircuitInputStateRef<'a> {
     /// Help to create a new EndTx or EndDepositTx step
     fn new_end_tx_step_helper(&self, exec_state: ExecState, prev_step: &ExecStep) -> ExecStep {
         ExecStep {
-            exec_state: exec_state,
+            exec_state,
             gas_left: if prev_step.error.is_none() {
                 let mut gas_left = prev_step.gas_left.0 - prev_step.gas_cost.0;
                 // handling for contract creation tx
@@ -605,10 +605,7 @@ impl<'a> CircuitInputStateRef<'a> {
         let mut sender_balance_prev = sender_account.balance;
         debug_assert!(
             sender_account.balance >= value + fee.unwrap_or_default(),
-            "invalid amount balance {:?} value {:?} fee {:?}",
-            sender_balance_prev,
-            value,
-            fee
+            "invalid amount balance {sender_balance_prev:?} value {value:?} fee {fee:?}"
         );
         if let Some(fee) = fee {
             let sender_balance = sender_balance_prev - fee;

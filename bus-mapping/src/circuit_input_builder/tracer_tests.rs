@@ -1,29 +1,38 @@
-use super::*;
+use super::{
+    Call, CallKind, CircuitInputBuilder, CircuitInputStateRef, CodeSource, ExecStep, Transaction,
+    TransactionContext,
+};
 use crate::{
-    circuit_input_builder::access::gen_state_access_trace,
+    circuit_input_builder::{access::gen_state_access_trace, Access, AccessSet, AccessValue},
     error::ExecError,
     geth_errors::{
         GETH_ERR_GAS_UINT_OVERFLOW, GETH_ERR_OUT_OF_GAS, GETH_ERR_STACK_OVERFLOW,
         GETH_ERR_STACK_UNDERFLOW,
     },
-    operation::RWCounter,
+    operation::{RWCounter, RW},
     state_db::Account,
 };
 use eth_types::{
     address, bytecode,
     evm_types::{stack::Stack, Gas, OpcodeId},
     geth_types::GethData,
-    word, Bytecode, Hash, ToAddress, ToWord, Word,
+    word, Address, Bytecode, GethExecStep, GethExecTrace, Hash, ToAddress, ToWord, Word,
 };
 use lazy_static::lazy_static;
 use mock::{
-    test_ctx::{helpers::*, LoggerConfig, SimpleTestContext, TestContext3_1, TestContext3_2},
+    test_ctx::{
+        helpers::{
+            account_0_code_account_1_no_code, setup_kroma_required_accounts, system_deposit_tx,
+            tx_from_1_to_0,
+        },
+        LoggerConfig, SimpleTestContext, TestContext3_1, TestContext3_2,
+    },
     tx_idx, MOCK_COINBASE,
 };
 use pretty_assertions::assert_eq;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-// Helper struct that contains a CircuitInputBuilder, a particuar tx and a
+// Helper struct that contains a CircuitInputBuilder, a particular tx and a
 // particular execution step so that we can easily get a
 // CircuitInputStateRef to have a context in order to get the error at a
 // given step.
@@ -1684,7 +1693,7 @@ fn tracer_err_stack_overflow() {
     let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(
         step.error,
-        Some(format!("{} 1024 (1023)", GETH_ERR_STACK_OVERFLOW))
+        Some(format!("{GETH_ERR_STACK_OVERFLOW} 1024 (1023)"))
     );
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);
@@ -1715,7 +1724,7 @@ fn tracer_err_stack_underflow() {
     let next_step = block.geth_traces[tx_idx!(0)].struct_logs.get(index + 1);
     assert_eq!(
         step.error,
-        Some(format!("{} (0 <=> 6)", GETH_ERR_STACK_UNDERFLOW))
+        Some(format!("{GETH_ERR_STACK_UNDERFLOW} (0 <=> 6)"))
     );
 
     let mut builder = CircuitInputBuilderTx::new(&block, step);

@@ -18,7 +18,6 @@ use crate::{
     table::CallContextFieldTag,
     util::Expr,
 };
-
 use eth_types::{evm_types::GasCost, Field, ToScalar};
 use halo2_proofs::{
     circuit::Value,

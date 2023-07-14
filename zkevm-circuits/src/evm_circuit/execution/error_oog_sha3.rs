@@ -136,7 +136,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGSha3Gadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{GasCost, OpcodeId};
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{
         bytecode, evm_types::gas_utils::memory_copier_gas_cost, Bytecode, ToWord, U256,

@@ -498,7 +498,7 @@ impl<F: Field, const BYTES_IN_FIELD: usize> ToHashBlockCircuitConfig<F, BYTES_IN
             (
                 "padding shift header",
                 self.padding_shift,
-                F::from(256 as u64).pow_vartime([BYTES_IN_FIELD as u64]),
+                F::from(256_u64).pow_vartime([BYTES_IN_FIELD as u64]),
             ),
             ("field index header", self.field_index, F::one()),
         ] {
@@ -542,7 +542,7 @@ impl<F: Field, const BYTES_IN_FIELD: usize> ToHashBlockCircuitConfig<F, BYTES_IN
                     F::from((BYTES_IN_FIELD - bytes_in_field_index) as u64)
                         .invert()
                         .unwrap_or(F::zero());
-                let padding_shift_f = F::from(256 as u64)
+                let padding_shift_f = F::from(256_u64)
                     .pow_vartime([(BYTES_IN_FIELD - bytes_in_field_index) as u64]);
                 let input_f = row.value * padding_shift_f + input_prev;
                 // relax field_border for code end
@@ -591,7 +591,7 @@ impl<F: Field, const BYTES_IN_FIELD: usize> ToHashBlockCircuitConfig<F, BYTES_IN
                     ("field index inv", self.field_index_inv, field_index_inv_f),
                 ] {
                     region.assign_advice(
-                        || format!("assign {} {}", tip, offset),
+                        || format!("assign {tip} {offset}"),
                         column,
                         offset,
                         || Value::known(val),
@@ -709,10 +709,7 @@ pub fn unroll_to_hash_input<F: Field, const BYTES_IN_FIELD: usize, const INPUT_L
 #[cfg(any(feature = "test", test))]
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    // use super::super::tests::get_randomness;
-    // use crate::{bytecode_circuit::dev::test_bytecode_circuit_unrolled,
-    // util::DEFAULT_RAND}; use eth_types::Bytecode;
+    use crate::bytecode_circuit::circuit::to_poseidon_hash::unroll_to_hash_input;
     use halo2_proofs::halo2curves::bn256::Fr;
 
     #[test]

@@ -1,3 +1,4 @@
+use super::{rlc, CachedRegion, CellType, StoredExpression};
 use crate::{
     evm_circuit::{
         param::STACK_CAPACITY,
@@ -21,8 +22,6 @@ use halo2_proofs::{
         Expression::{self, Constant},
     },
 };
-
-use super::{rlc, CachedRegion, CellType, StoredExpression};
 
 // Max degree allowed in all expressions passing through the ConstraintBuilder.
 // It aims to cap `extended_k` to 2, which allows constraint degree to 2^2+1,
@@ -740,7 +739,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         tag: RwTableTag,
         values: RwValues<F>,
     ) {
-        let name = format!("rw lookup {}", name);
+        let name = format!("rw lookup {name}");
         self.add_lookup(
             &name,
             Lookup::Rw {
@@ -801,7 +800,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         if let Some(reversion_info) = reversion_info {
             let reversible_write_counter_inc_selector = self.condition_expr();
             self.condition(not::expr(reversion_info.is_persistent()), |cb| {
-                let name = format!("{} with reversion", name);
+                let name = format!("{name} with reversion");
                 cb.rw_lookup_with_counter(
                     &name,
                     reversion_info.rw_counter_of_reversion(reversible_write_counter_inc_selector),
@@ -1517,7 +1516,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 self.in_next_step = in_next_step;
 
                 // Require the stored value to equal the value of the expression
-                let name = format!("{} (stored expression)", name);
+                let name = format!("{name} (stored expression)");
                 self.push_constraint(
                     Box::leak(name.clone().into_boxed_str()),
                     cell.expr() - expr.clone(),

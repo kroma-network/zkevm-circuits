@@ -212,9 +212,7 @@ impl TxTable {
         let sum_txs_calldata: usize = txs.iter().map(|tx| tx.call_data.len()).sum();
         assert!(
             sum_txs_calldata <= max_calldata,
-            "sum_txs_calldata <= max_calldata: sum_txs_calldata={}, max_calldata={}",
-            sum_txs_calldata,
-            max_calldata,
+            "sum_txs_calldata <= max_calldata: sum_txs_calldata={sum_txs_calldata}, max_calldata={max_calldata}",
         );
 
         fn assign_row<F: Field>(
@@ -227,14 +225,14 @@ impl TxTable {
         ) -> Result<(), Error> {
             for (index, column) in advice_columns.iter().enumerate() {
                 region.assign_advice(
-                    || format!("tx table {} row {}", msg, offset),
+                    || format!("tx table {msg} row {offset}"),
                     *column,
                     offset,
                     || row[if index > 0 { index + 1 } else { index }],
                 )?;
             }
             region.assign_fixed(
-                || format!("tx table {} row {}", msg, offset),
+                || format!("tx table {msg} row {offset}"),
                 *tag,
                 offset,
                 || row[1],
@@ -861,7 +859,7 @@ impl PoseidonTable {
                                 }))),
                         ) {
                             region.assign_advice(
-                                || format!("poseidon table row {}", offset),
+                                || format!("poseidon table row {offset}"),
                                 *column,
                                 offset,
                                 || value,
@@ -955,7 +953,7 @@ impl BytecodeTable {
                     for row in bytecode.table_assignments(challenges) {
                         for (&column, value) in bytecode_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
-                                || format!("bytecode table row {}", offset),
+                                || format!("bytecode table row {offset}"),
                                 column,
                                 offset,
                                 || value,
@@ -1089,7 +1087,7 @@ impl BlockTable {
                     for row in block_ctx.table_assignments(num_txs, cum_num_txs, challenges) {
                         for (column, value) in block_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
-                                || format!("block table row {}", offset),
+                                || format!("block table row {offset}"),
                                 *column,
                                 offset,
                                 || value,
@@ -1201,7 +1199,7 @@ impl KeccakTable {
             .iter()
             .zip(values.iter())
         {
-            region.assign_advice(|| format!("assign {}", offset), column, offset, || *value)?;
+            region.assign_advice(|| format!("assign {offset}"), column, offset, || *value)?;
         }
         Ok(())
     }
@@ -1234,7 +1232,7 @@ impl KeccakTable {
                         // let mut column_index = 0;
                         for (&column, value) in keccak_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
-                                || format!("keccak table row {}", offset),
+                                || format!("keccak table row {offset}"),
                                 column,
                                 offset,
                                 || value,
@@ -1488,7 +1486,7 @@ impl CopyTable {
                     for (tag, row, _) in Self::assignments(copy_event, *challenges) {
                         for (&column, (value, label)) in copy_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
-                                || format!("{} at row: {}", label, offset),
+                                || format!("{label} at row: {offset}"),
                                 column,
                                 offset,
                                 || value,
@@ -1671,7 +1669,7 @@ impl ExpTable {
                     for row in Self::assignments::<F>(exp_event) {
                         for (&column, value) in exp_table_columns.iter().zip_eq(row) {
                             region.assign_advice(
-                                || format!("exponentiation table row {}", offset),
+                                || format!("exponentiation table row {offset}"),
                                 column,
                                 offset,
                                 || Value::known(value),
@@ -1683,7 +1681,7 @@ impl ExpTable {
                             F::zero()
                         };
                         region.assign_fixed(
-                            || format!("exponentiation table row {}", offset),
+                            || format!("exponentiation table row {offset}"),
                             self.is_step,
                             offset,
                             || Value::known(is_step),
@@ -1696,7 +1694,7 @@ impl ExpTable {
                 let row = [F::from_u128(0); 5];
                 for (column, value) in exp_table_columns.iter().zip_eq(row) {
                     region.assign_advice(
-                        || format!("exponentiation table row {}", offset),
+                        || format!("exponentiation table row {offset}"),
                         *column,
                         offset,
                         || Value::known(value),
@@ -1852,7 +1850,7 @@ impl RlpTable {
                 let mut offset = 0;
                 for column in <RlpTable as LookupTable<F>>::advice_columns(self) {
                     region.assign_advice(
-                        || format!("empty row: {}", offset),
+                        || format!("empty row: {offset}"),
                         column,
                         offset,
                         || Value::known(F::zero()),
@@ -1866,7 +1864,7 @@ impl RlpTable {
                         .zip(row)
                     {
                         region.assign_advice(
-                            || format!("row: {}", offset),
+                            || format!("row: {offset}"),
                             *column,
                             offset,
                             || value,

@@ -4,12 +4,12 @@
 //! - Define structures that interact with operations such as [`OperationContainer`].
 pub(crate) mod container;
 
-pub use container::OperationContainer;
-pub use eth_types::evm_types::{MemoryAddress, StackAddress};
-
 use core::{cmp::Ordering, fmt, fmt::Debug};
 use eth_types::{Address, Word};
 use std::mem::swap;
+
+pub use container::OperationContainer;
+pub use eth_types::evm_types::{MemoryAddress, StackAddress};
 
 /// Marker that defines whether an Operation performs a `READ` or a `WRITE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -1063,7 +1063,11 @@ impl<T: Op> Operation<T> {
 
 #[cfg(test)]
 mod operation_tests {
-    use super::*;
+    use crate::operation::{MemoryOp, Operation, RWCounter, StackOp, RW};
+    use eth_types::{
+        evm_types::{MemoryAddress, StackAddress},
+        Word,
+    };
 
     #[test]
     fn unchecked_op_transmutations_are_safe() {

@@ -1,16 +1,15 @@
-use bus_mapping::{
-    circuit_input_builder,
-    error::{ExecError, OogError},
-    evm::OpcodeId,
-    operation,
-};
-
 use crate::{
     evm_circuit::{
         param::{N_BYTES_WORD, STACK_CAPACITY},
         step::ExecutionState,
     },
     table::RwTableTag,
+};
+use bus_mapping::{
+    circuit_input_builder,
+    error::{ExecError, OogError},
+    evm::OpcodeId,
+    operation,
 };
 
 /// Step executed in a transaction

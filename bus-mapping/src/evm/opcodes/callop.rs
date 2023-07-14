@@ -147,13 +147,6 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
         let insufficient_balance = call.value > caller_balance && is_call_or_callcode;
         let is_depth_ok = geth_step.depth < 1025;
 
-        // log::debug!(
-        //    "insufficient_balance: {}, call type: {:?}, sender_account: {:?} ",
-        //    insufficient_balance,
-        //    call.kind,
-        //    call.caller_address
-        //);
-
         // read balance of caller to compare to value for insufficient_balance checking
         // in circuit, also use for callcode successful case check balance is
         // indeed larger than transfer value. for call opcode, it does in
@@ -229,8 +222,7 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             && geth_steps[1].gas.0 != callee_gas_left + if has_value { 2300 } else { 0 }
         {
             // panic with full info
-            let info1 = format!("callee_gas_left {} gas_specified {} gas_cost {} is_warm {} has_value {} current_memory_word_size {} next_memory_word_size {}, memory_expansion_gas_cost {}",
-                    callee_gas_left, gas_specified, gas_cost, is_warm, has_value, curr_memory_word_size, next_memory_word_size, memory_expansion_gas_cost);
+            let info1 = format!("callee_gas_left {callee_gas_left} gas_specified {gas_specified} gas_cost {gas_cost} is_warm {is_warm} has_value {has_value} current_memory_word_size {curr_memory_word_size} next_memory_word_size {next_memory_word_size}, memory_expansion_gas_cost {memory_expansion_gas_cost}");
             let info2 = format!("args gas:{:?} addr:{:?} value:{:?} cd_pos:{:?} cd_len:{:?} rd_pos:{:?} rd_len:{:?}",
                         geth_step.stack.nth_last(0),
                         geth_step.stack.nth_last(1),
@@ -247,8 +239,7 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             debug_assert_eq!(
                 geth_steps[1].gas.0,
                 callee_gas_left + if has_value { 2300 } else { 0 },
-                "{}",
-                full_ctx
+                "{full_ctx}"
             );
         }
 

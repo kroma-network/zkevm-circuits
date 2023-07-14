@@ -1,4 +1,4 @@
-use crate::common::*;
+use crate::common::{State, PERMUTATION, ROTATION_CONSTANTS, ROUND_CONSTANTS};
 use itertools::Itertools;
 
 pub struct Keccak {

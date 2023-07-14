@@ -52,7 +52,10 @@ mod gasprice_tests {
     };
     use eth_types::{bytecode, evm_types::StackAddress, geth_types::GethData, Word};
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext},
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, system_deposit_tx},
+            SimpleTestContext,
+        },
         tx_idx,
     };
     use pretty_assertions::assert_eq;

@@ -464,7 +464,7 @@ impl<F: Field> CopyCircuitConfig<F> {
                 if !is_read && (label == "src_addr_end" || label == "bytes_left") {
                 } else {
                     region.assign_advice(
-                        || format!("{} at row: {}", label, offset),
+                        || format!("{label} at row: {offset}"),
                         column,
                         *offset,
                         || value,
@@ -874,7 +874,10 @@ impl<F: Field> Circuit<F> for CopyCircuit<F> {
 /// Dev helpers
 #[cfg(any(feature = "test", test))]
 pub mod dev {
-    use crate::{copy_circuit::*, witness::Block};
+    use super::{CopyCircuit, ExternalData};
+    use crate::witness::Block;
+    use bus_mapping::circuit_input_builder::CopyEvent;
+    use eth_types::Field;
     use halo2_proofs::dev::{MockProver, VerifyFailure};
 
     /// Test copy circuit from copy events and test data

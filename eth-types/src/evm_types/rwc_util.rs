@@ -35,5 +35,5 @@ pub fn end_tx_rwc(_transaction_type: u64, is_first: bool) -> usize {
     if _transaction_type == DEPOSIT_TX_TYPE && !is_first {
         return 9 - END_TX_NOT_USED_RWC_IF_DEPOSIT;
     }
-    return 9 - if is_first { 1 } else { 0 };
+    9 - if is_first { 1 } else { 0 }
 }

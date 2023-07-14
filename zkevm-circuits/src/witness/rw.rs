@@ -1,18 +1,15 @@
 #![allow(missing_docs)]
-use std::collections::HashMap;
-
-use bus_mapping::operation::{self, AccountField, CallContextField, TxLogField, TxReceiptField};
-use eth_types::{Address, Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
-use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr};
-use itertools::Itertools;
-
+use super::MptUpdates;
 use crate::{
     evm_circuit::util::rlc,
     table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag, TxReceiptFieldTag},
     util::build_tx_log_address,
 };
-
-use super::MptUpdates;
+use bus_mapping::operation::{self, AccountField, CallContextField, TxLogField, TxReceiptField};
+use eth_types::{Address, Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
+use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr};
+use itertools::Itertools;
+use std::collections::HashMap;
 
 /// Rw constainer for a witness block
 #[derive(Debug, Default, Clone)]
@@ -416,7 +413,7 @@ impl Rw {
             tag: F::from(self.tag() as u64),
             id: F::from(self.id().unwrap_or_default() as u64),
             address: self.address().unwrap_or_default().to_scalar().unwrap(),
-            field_tag: F::from(self.field_tag().unwrap_or_default() as u64),
+            field_tag: F::from(self.field_tag().unwrap_or_default()),
             storage_key: rlc::value(
                 &self.storage_key().unwrap_or_default().to_le_bytes(),
                 randomness,
@@ -437,7 +434,7 @@ impl Rw {
             tag: Value::known(F::from(self.tag() as u64)),
             id: Value::known(F::from(self.id().unwrap_or_default() as u64)),
             address: Value::known(self.address().unwrap_or_default().to_scalar().unwrap()),
-            field_tag: Value::known(F::from(self.field_tag().unwrap_or_default() as u64)),
+            field_tag: Value::known(F::from(self.field_tag().unwrap_or_default())),
             storage_key: randomness.map(|randomness| {
                 rlc::value(
                     &self.storage_key().unwrap_or_default().to_le_bytes(),

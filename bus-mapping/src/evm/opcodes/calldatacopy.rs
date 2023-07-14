@@ -161,7 +161,12 @@ mod calldatacopy_tests {
     };
 
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext, TestContext3_1},
+        test_ctx::{
+            helpers::{
+                account_0_code_account_1_no_code, setup_kroma_required_accounts, system_deposit_tx,
+            },
+            SimpleTestContext, TestContext3_1,
+        },
         tx_idx,
     };
     use pretty_assertions::assert_eq;
@@ -568,7 +573,7 @@ mod calldatacopy_tests {
         assert_eq!(copy_events[0].bytes.len(), size);
 
         for (idx, (value, is_code)) in copy_events[0].bytes.iter().enumerate() {
-            assert_eq!(value, calldata.get(offset as usize + idx).unwrap_or(&0));
+            assert_eq!(value, calldata.get(offset + idx).unwrap_or(&0));
             assert!(!is_code);
         }
     }

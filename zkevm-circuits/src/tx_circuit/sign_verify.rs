@@ -35,7 +35,6 @@ use halo2_ecc::{
         FieldChip,
     },
 };
-
 use halo2_proofs::{
     arithmetic::Field as OtherField,
     circuit::{Layouter, Value},
@@ -43,7 +42,6 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
-
 use itertools::Itertools;
 use keccak256::plain::Keccak;
 use log::error;
@@ -889,26 +887,33 @@ pub(crate) fn pub_key_hash_to_address<F: Field>(pk_hash: &[u8]) -> F {
 
 #[cfg(test)]
 mod sign_verify_tests {
-    use super::*;
-
+    use super::{SignVerifyChip, SignVerifyConfig};
+    use crate::table::KeccakTable;
     #[cfg(not(feature = "onephase"))]
     use crate::util::Challenges;
     #[cfg(feature = "onephase")]
     use crate::util::MockChallenges as Challenges;
-
     use bus_mapping::circuit_input_builder::keccak_inputs_sign_verify;
-    use eth_types::sign_types::sign;
+    use eth_types::{
+        sign_types::{sign, SignData},
+        Field,
+    };
     use halo2_proofs::{
         arithmetic::Field as HaloField,
-        circuit::SimpleFloorPlanner,
+        circuit::{Layouter, SimpleFloorPlanner},
         dev::MockProver,
-        halo2curves::{bn256::Fr, group::Curve, secp256k1},
-        plonk::Circuit,
+        halo2curves::{
+            bn256::Fr,
+            group::Curve,
+            secp256k1::{self, Secp256k1Affine},
+        },
+        plonk::{Circuit, ConstraintSystem, Error},
     };
     use pretty_assertions::assert_eq;
     use rand::{Rng, RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use sha3::{Digest, Keccak256};
+    use std::marker::PhantomData;
 
     #[derive(Clone, Debug)]
     struct TestCircuitSignVerifyConfig<F: Field> {
@@ -982,7 +987,7 @@ mod sign_verify_tests {
 
         let prover = match MockProver::run(k, &circuit, vec![vec![]]) {
             Ok(prover) => prover,
-            Err(e) => panic!("{:#?}", e),
+            Err(e) => panic!("{e:#?}"),
         };
         assert_eq!(prover.verify(), Ok(()));
     }

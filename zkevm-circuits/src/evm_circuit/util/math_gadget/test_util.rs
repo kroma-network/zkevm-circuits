@@ -1,7 +1,7 @@
-use itertools::Itertools;
-use std::marker::PhantomData;
-use strum::IntoEnumIterator;
-
+#[cfg(not(feature = "onephase"))]
+use crate::util::Challenges;
+#[cfg(feature = "onephase")]
+use crate::util::MockChallenges as Challenges;
 use crate::{
     evm_circuit::{
         param::{MAX_STEP_HEIGHT, N_PHASE2_COLUMNS, STEP_WIDTH},
@@ -11,17 +11,11 @@ use crate::{
             constraint_builder::ConstraintBuilder, rlc, CachedRegion, CellType, Expr,
             StoredExpression, LOOKUP_CONFIG,
         },
-        Advice, Column, Fixed,
+        Column, Fixed,
     },
     table::LookupTable,
 };
-
-#[cfg(not(feature = "onephase"))]
-use crate::util::Challenges;
-#[cfg(feature = "onephase")]
-use crate::util::MockChallenges as Challenges;
-
-use halo2_proofs::plonk::FirstPhase;
+use eth_types::{Field, Word, U256};
 #[cfg(feature = "onephase")]
 use halo2_proofs::plonk::FirstPhase as SecondPhase;
 #[cfg(feature = "onephase")]
@@ -30,14 +24,16 @@ use halo2_proofs::plonk::FirstPhase as ThirdPhase;
 use halo2_proofs::plonk::SecondPhase;
 #[cfg(not(feature = "onephase"))]
 use halo2_proofs::plonk::ThirdPhase;
-
-use eth_types::{Field, Word, U256};
-pub(crate) use halo2_proofs::circuit::{Layouter, Value};
 use halo2_proofs::{
     circuit::SimpleFloorPlanner,
     dev::MockProver,
-    plonk::{Circuit, ConstraintSystem, Error, Selector},
+    plonk::{Advice, Circuit, ConstraintSystem, Error, FirstPhase, Selector},
 };
+use itertools::Itertools;
+use std::marker::PhantomData;
+use strum::IntoEnumIterator;
+
+pub(crate) use halo2_proofs::circuit::{Layouter, Value};
 
 pub(crate) const WORD_LOW_MAX: Word = U256([u64::MAX, u64::MAX, 0, 0]);
 pub(crate) const WORD_HIGH_MAX: Word = U256([0, 0, u64::MAX, u64::MAX]);
@@ -160,7 +156,7 @@ impl<F: Field, G: MathGadgetContainer<F>> Circuit<F> for UnitTestMathGadgetBaseC
         for column in cell_manager.columns().iter() {
             if let CellType::Lookup(table) = column.cell_type {
                 if table == Table::Fixed {
-                    let name = format!("{:?}", table);
+                    let name = format!("{table:?}");
                     meta.lookup_any(Box::leak(name.into_boxed_str()), |meta| {
                         let table_expressions = fixed_table.table_exprs(meta);
                         vec![(

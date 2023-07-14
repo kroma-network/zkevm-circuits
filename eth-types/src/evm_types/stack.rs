@@ -140,8 +140,9 @@ impl Stack {
 
 #[cfg(test)]
 mod stack_tests {
-    use super::*;
-    use crate::word;
+    use super::Stack;
+    use crate::{evm_types::StackAddress, word, Error};
+    use std::str::FromStr;
 
     fn setup_stack(stack_value: [&str; 3]) -> Stack {
         Stack::from_vec(vec![

@@ -1,8 +1,7 @@
+use crate::{evm_circuit::util::rlc, table::BytecodeFieldTag, util::Challenges};
 use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian, Word};
 use halo2_proofs::circuit::Value;
-
-use crate::{evm_circuit::util::rlc, table::BytecodeFieldTag, util::Challenges};
 
 /// Bytecode
 #[derive(Clone, Debug)]

@@ -1,14 +1,13 @@
 //! Error module for the bus-mapping crate
 
-use core::fmt::{Display, Formatter, Result as FmtResult};
-use eth_types::{evm_types::OpcodeId, Address, GethExecStep, Word, H256};
-use ethers_providers::ProviderError;
-use std::error::Error as StdError;
-
 use crate::geth_errors::{
     GETH_ERR_GAS_UINT_OVERFLOW, GETH_ERR_OUT_OF_GAS, GETH_ERR_STACK_OVERFLOW,
     GETH_ERR_STACK_UNDERFLOW,
 };
+use core::fmt::{Display, Formatter, Result as FmtResult};
+use eth_types::{evm_types::OpcodeId, Address, GethExecStep, Word, H256};
+use ethers_providers::ProviderError;
+use std::error::Error as StdError;
 
 /// Error type for any BusMapping related failure.
 #[derive(Debug)]
@@ -56,7 +55,7 @@ impl From<ProviderError> for Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -177,6 +176,6 @@ pub(crate) fn get_step_reported_error(op: &OpcodeId, error: &str) -> ExecError {
     } else if error.starts_with(GETH_ERR_STACK_UNDERFLOW) {
         ExecError::StackUnderflow
     } else {
-        panic!("Unknown GethExecStep.error: {}", error);
+        panic!("Unknown GethExecStep.error: {error}");
     }
 }

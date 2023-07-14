@@ -180,8 +180,10 @@ mod test {
         evm_types::{GasCost, OpcodeId},
         Word,
     };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext},
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
         tx_idx,
     };
     use std::iter;

@@ -21,7 +21,7 @@ mod tests {
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
     };
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::test_ctx::TestContext;
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
     use std::env::var;

@@ -57,9 +57,9 @@ pub fn eip150_gas(gas_left: u64, gas_specified: Word) -> u64 {
 pub fn gas_used(_transaction_type: u64, gas: u64, gas_left: u64) -> u64 {
     #[cfg(feature = "kroma")]
     if _transaction_type == DEPOSIT_TX_TYPE {
-        return gas;
+        gas
     } else {
-        return gas - gas_left;
+        gas - gas_left
     }
     #[cfg(not(feature = "kroma"))]
     return gas - gas_left;

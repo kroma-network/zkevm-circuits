@@ -661,9 +661,18 @@ impl<
 
 #[cfg(test)]
 pub(crate) mod super_circuit_tests {
-    use super::*;
+    use crate::super_circuit::SuperCircuit;
+    use bus_mapping::circuit_input_builder::CircuitsParams;
+    use eth_types::{
+        address, bytecode, evm_types::OpcodeId, geth_types::GethData, kroma_l1_block::BYTECODE,
+        Bytecode, Word,
+    };
     use ethers_signers::{LocalWallet, Signer};
-    use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+    use halo2_proofs::{
+        dev::MockProver,
+        halo2curves::bn256::Fr,
+        plonk::{Circuit, ConstraintSystem},
+    };
     use log::error;
     #[cfg(feature = "kroma")]
     use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
@@ -675,11 +684,6 @@ pub(crate) mod super_circuit_tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
     use std::{collections::HashMap, env::set_var};
-
-    use eth_types::{
-        address, bytecode, evm_types::OpcodeId, geth_types::GethData, kroma_l1_block::BYTECODE,
-        Bytecode, Word,
-    };
 
     #[test]
     fn super_circuit_degree() {

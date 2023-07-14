@@ -45,7 +45,7 @@ impl FromStr for MainnetFork {
             "TangeringWhistle" => Self::TangerineWhistle,
             "Homestead" => Self::Homestead,
             "Frontier" => Self::Frontier,
-            _ => bail!(format!("Unknown network '{}'", s)),
+            _ => bail!(format!("Unknown network '{s}'")),
         })
     }
 }
@@ -75,7 +75,7 @@ impl MainnetFork {
 pub fn print_trace(trace: GethExecTrace) -> Result<()> {
     fn u256_to_str(u: &U256) -> String {
         if *u > U256::from_str("0x1000000000000000").unwrap() {
-            format!("0x{:x}", u)
+            format!("0x{u:x}")
         } else {
             u.to_string()
         }
@@ -104,7 +104,7 @@ pub fn print_trace(trace: GethExecTrace) -> Result<()> {
             let item = if count == 1 {
                 v.to_string()
             } else {
-                format!("{}[{}]", v, count)
+                format!("{v}[{count}]")
             };
 
             if current_len > len {
@@ -181,7 +181,8 @@ pub fn bytecode_of(code: &str) -> anyhow::Result<Bytecode> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::utils::MainnetFork;
+
     #[test]
     fn networks() {
         assert!(MainnetFork::in_network_range(&[String::from(">=Istanbul")])

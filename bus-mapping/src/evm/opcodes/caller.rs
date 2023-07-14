@@ -41,11 +41,10 @@ impl Opcode for Caller {
 
 #[cfg(test)]
 mod caller_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
-        operation::{CallContextOp, StackOp, RW},
+        operation::{CallContextField, CallContextOp, StackOp, RW},
     };
     use eth_types::{
         bytecode,
@@ -55,7 +54,10 @@ mod caller_tests {
     };
 
     use mock::{
-        test_ctx::{helpers::*, SimpleTestContext},
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
         tx_idx,
     };
     use pretty_assertions::assert_eq;

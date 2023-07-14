@@ -1,3 +1,4 @@
+use super::lookups;
 use crate::evm_circuit::util::rlc;
 use eth_types::{Field, ToLittleEndian, U256};
 use halo2_proofs::{
@@ -6,8 +7,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use std::marker::PhantomData;
-
-use super::lookups;
 
 #[derive(Clone, Debug, Copy)]
 pub struct Config<const N: usize> {
@@ -39,7 +38,7 @@ impl<const N: usize> Config<N> {
         let bytes = value.to_le_bytes();
         for (i, &byte) in bytes.iter().enumerate() {
             region.assign_advice(
-                || format!("byte[{}] in rlc", i),
+                || format!("byte[{i}] in rlc"),
                 self.bytes[i],
                 offset,
                 || Value::known(F::from(byte as u64)),
@@ -52,12 +51,12 @@ impl<const N: usize> Config<N> {
     pub fn annotate_columns_in_region<F: Field>(&self, region: &mut Region<F>, prefix: &str) {
         let mut annotations = Vec::new();
         for (i, _) in self.bytes.iter().enumerate() {
-            annotations.push(format!("RLC_byte{}", i));
+            annotations.push(format!("RLC_byte{i}"));
         }
         self.bytes
             .iter()
             .zip(annotations.iter())
-            .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+            .for_each(|(col, ann)| region.name_column(|| format!("{prefix}_{ann}"), *col));
     }
 }
 
