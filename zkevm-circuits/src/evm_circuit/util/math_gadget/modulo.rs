@@ -1,6 +1,9 @@
 use crate::{
     evm_circuit::util::{
-        self, constraint_builder::ConstraintBuilder, math_gadget::*, sum, CachedRegion,
+        self,
+        constraint_builder::ConstraintBuilder,
+        math_gadget::{IsEqualGadget, IsZeroGadget, LtWordGadget, MulAddWordsGadget},
+        sum, CachedRegion,
     },
     util::Expr,
 };
@@ -99,11 +102,13 @@ impl<F: Field> ModGadget<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::test_util::*;
-    use super::*;
-    use eth_types::{Word, U256, U512};
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::Error;
+    use super::{util, CachedRegion, ConstraintBuilder, Field, ModGadget};
+    use crate::evm_circuit::util::math_gadget::test_util::{
+        test_math_gadget_container, try_test, MathGadgetContainer, WORD_CELL_MAX, WORD_HIGH_MAX,
+        WORD_LOW_MAX,
+    };
+    use eth_types::{ToLittleEndian, Word, U256, U512};
+    use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]
     /// ModGadgetTestContainer: require(a % n == r)
@@ -207,7 +212,7 @@ mod tests {
                 Word::from(2),
                 Word::from(3),
                 Word::from(0),
-                /* magic number (2^256 + 2) / 3, and 2^256 + 2 is divisible by 3 */
+                // magic number (2^256 + 2) / 3, and 2^256 + 2 is divisible by 3
                 U256::try_from(U512([2, 0, 0, 0, 1, 0, 0, 0]) / U512::from(3)).unwrap(),
             ],
             false,

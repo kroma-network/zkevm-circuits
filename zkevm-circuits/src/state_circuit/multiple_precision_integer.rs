@@ -1,5 +1,4 @@
-use super::lookups;
-use super::{N_LIMBS_ACCOUNT_ADDRESS, N_LIMBS_RW_COUNTER};
+use super::{lookups, N_LIMBS_ACCOUNT_ADDRESS, N_LIMBS_RW_COUNTER};
 use crate::util::Expr;
 use eth_types::{Address, Field};
 use halo2_proofs::{
@@ -68,7 +67,7 @@ impl Config<Address, N_LIMBS_ACCOUNT_ADDRESS> {
     ) -> Result<(), Error> {
         for (i, &limb) in value.to_limbs().iter().enumerate() {
             region.assign_advice(
-                || format!("limb[{}] in address mpi", i),
+                || format!("limb[{i}] in address mpi"),
                 self.limbs[i],
                 offset,
                 || Value::known(F::from(limb as u64)),
@@ -81,12 +80,12 @@ impl Config<Address, N_LIMBS_ACCOUNT_ADDRESS> {
     pub fn annotate_columns_in_region<F: Field>(&self, region: &mut Region<F>, prefix: &str) {
         let mut annotations = Vec::new();
         for (i, _) in self.limbs.iter().enumerate() {
-            annotations.push(format!("MPI_limbs_address_{}", i));
+            annotations.push(format!("MPI_limbs_address_{i}"));
         }
         self.limbs
             .iter()
             .zip(annotations.iter())
-            .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+            .for_each(|(col, ann)| region.name_column(|| format!("{prefix}_{ann}"), *col));
     }
 }
 
@@ -99,7 +98,7 @@ impl Config<u32, N_LIMBS_RW_COUNTER> {
     ) -> Result<(), Error> {
         for (i, &limb) in value.to_limbs().iter().enumerate() {
             region.assign_advice(
-                || format!("limb[{}] in u32 mpi", i),
+                || format!("limb[{i}] in u32 mpi"),
                 self.limbs[i],
                 offset,
                 || Value::known(F::from(limb as u64)),
@@ -112,12 +111,12 @@ impl Config<u32, N_LIMBS_RW_COUNTER> {
     pub fn annotate_columns_in_region<F: Field>(&self, region: &mut Region<F>, prefix: &str) {
         let mut annotations = Vec::new();
         for (i, _) in self.limbs.iter().enumerate() {
-            annotations.push(format!("MPI_limbs_u32_{}", i));
+            annotations.push(format!("MPI_limbs_u32_{i}"));
         }
         self.limbs
             .iter()
             .zip(annotations.iter())
-            .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+            .for_each(|(col, ann)| region.name_column(|| format!("{prefix}_{ann}"), *col));
     }
 }
 

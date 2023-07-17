@@ -1,12 +1,10 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
     operation::CallContextField,
     Error,
 };
-
 use eth_types::GethExecStep;
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Returndatasize;
@@ -48,9 +46,8 @@ impl Opcode for Returndatasize {
 
 #[cfg(test)]
 mod returndatasize_tests {
-    use crate::circuit_input_builder::CircuitsParams;
     use crate::{
-        circuit_input_builder::ExecState,
+        circuit_input_builder::{CircuitsParams, ExecState},
         mock::BlockData,
         operation::{CallContextField, CallContextOp, StackOp, RW},
     };
@@ -60,7 +57,13 @@ mod returndatasize_tests {
         geth_types::GethData,
         word, Word,
     };
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -111,7 +114,7 @@ mod returndatasize_tests {
             STOP
         };
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -123,7 +126,7 @@ mod returndatasize_tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
-                max_rws: 512,
+                max_rws: 1600,
                 ..Default::default()
             },
         )
@@ -132,13 +135,13 @@ mod returndatasize_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::RETURNDATASIZE))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
         assert_eq!(
             {
                 let operation =

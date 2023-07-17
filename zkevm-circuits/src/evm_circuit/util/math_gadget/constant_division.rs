@@ -1,7 +1,7 @@
 use crate::{
     evm_circuit::util::{
-        constraint_builder::ConstraintBuilder, math_gadget::*, transpose_val_ret, CachedRegion,
-        Cell, CellType,
+        constraint_builder::ConstraintBuilder, math_gadget::RangeCheckGadget, transpose_val_ret,
+        CachedRegion, Cell, CellType,
     },
     util::Expr,
 };
@@ -98,11 +98,15 @@ impl<F: Field, const N_BYTES: usize> ConstantDivisionGadget<F, N_BYTES> {
 
 #[cfg(test)]
 mod tests {
-    use super::test_util::*;
-    use super::*;
-    use eth_types::*;
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::Error;
+    use super::ConstantDivisionGadget;
+    use crate::evm_circuit::util::{
+        constraint_builder::ConstraintBuilder,
+        math_gadget::test_util::{test_math_gadget_container, try_test, MathGadgetContainer},
+        CachedRegion, Cell,
+    };
+    use eth_types::{Field, ToLittleEndian, Word};
+    use gadgets::util::Expr;
+    use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]
     /// ConstantDivisionTestContainer:

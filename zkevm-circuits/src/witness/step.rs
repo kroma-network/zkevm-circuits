@@ -1,16 +1,15 @@
-use bus_mapping::{
-    circuit_input_builder,
-    error::{ExecError, OogError},
-    evm::OpcodeId,
-    operation,
-};
-
 use crate::{
     evm_circuit::{
         param::{N_BYTES_WORD, STACK_CAPACITY},
         step::ExecutionState,
     },
     table::RwTableTag,
+};
+use bus_mapping::{
+    circuit_input_builder,
+    error::{ExecError, OogError},
+    evm::OpcodeId,
+    operation,
 };
 
 /// Step executed in a transaction
@@ -20,6 +19,8 @@ pub struct ExecStep {
     pub call_index: usize,
     /// The indices in the RW trace incurred in this step
     pub rw_indices: Vec<(RwTableTag, usize)>,
+    /// Number of rw operations performed via a copy event in this step.
+    pub copy_rw_counter_delta: u64,
     /// The execution state for the step
     pub execution_state: ExecutionState,
     /// The Read/Write counter before the step
@@ -34,8 +35,10 @@ pub struct ExecStep {
     pub gas_cost: u64,
     /// The memory size in bytes
     pub memory_size: u64,
-    /// The counter for reversible writes
+    /// The counter for reversible writes at the beginning of the step
     pub reversible_write_counter: usize,
+    /// The number of reversible writes from this step
+    pub reversible_write_counter_delta: usize,
     /// The counter for log index within tx
     pub log_id: usize,
     /// The opcode corresponds to the step
@@ -64,12 +67,15 @@ impl From<&ExecError> for ExecutionState {
             ExecError::Depth => ExecutionState::ErrorDepth,
             ExecError::InsufficientBalance => ExecutionState::ErrorInsufficientBalance,
             ExecError::ContractAddressCollision => ExecutionState::ErrorContractAddressCollision,
+            ExecError::NonceUintOverflow => ExecutionState::ErrorNonceUintOverflow,
             ExecError::InvalidCreationCode => ExecutionState::ErrorInvalidCreationCode,
             ExecError::InvalidJump => ExecutionState::ErrorInvalidJump,
             ExecError::ReturnDataOutOfBounds => ExecutionState::ErrorReturnDataOutOfBound,
-            ExecError::CodeStoreOutOfGas => ExecutionState::ErrorOutOfGasCodeStore,
-            ExecError::MaxCodeSizeExceeded => ExecutionState::ErrorMaxCodeSizeExceeded,
+            ExecError::CodeStoreOutOfGas | ExecError::MaxCodeSizeExceeded => {
+                ExecutionState::ErrorCodeStore
+            }
             ExecError::PrecompileFailed => ExecutionState::ErrorPrecompileFailed,
+            ExecError::GasUintOverflow => ExecutionState::ErrorGasUintOverflow,
             ExecError::OutOfGas(oog_error) => match oog_error {
                 OogError::Constant => ExecutionState::ErrorOutOfGasConstant,
                 OogError::StaticMemoryExpansion => {
@@ -80,11 +86,10 @@ impl From<&ExecError> for ExecutionState {
                 }
                 OogError::MemoryCopy => ExecutionState::ErrorOutOfGasMemoryCopy,
                 OogError::AccountAccess => ExecutionState::ErrorOutOfGasAccountAccess,
-                OogError::CodeStore => ExecutionState::ErrorOutOfGasCodeStore,
+                OogError::CodeStore => ExecutionState::ErrorCodeStore,
                 OogError::Log => ExecutionState::ErrorOutOfGasLOG,
                 OogError::Exp => ExecutionState::ErrorOutOfGasEXP,
                 OogError::Sha3 => ExecutionState::ErrorOutOfGasSHA3,
-                OogError::ExtCodeCopy => ExecutionState::ErrorOutOfGasEXTCODECOPY,
                 OogError::Call => ExecutionState::ErrorOutOfGasCall,
                 OogError::SloadSstore => ExecutionState::ErrorOutOfGasSloadSstore,
                 OogError::Create2 => ExecutionState::ErrorOutOfGasCREATE2,
@@ -98,6 +103,11 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
     fn from(step: &circuit_input_builder::ExecStep) -> Self {
         if let Some(error) = step.error.as_ref() {
             log::debug!("step err {:?}", error);
+            #[cfg(feature = "kroma")]
+            if !step.exec_state.is_kroma_step() {
+                return error.into();
+            }
+            #[cfg(not(feature = "kroma"))]
             return error.into();
         }
         match step.exec_state {
@@ -194,6 +204,18 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
             circuit_input_builder::ExecState::BeginTx => ExecutionState::BeginTx,
             circuit_input_builder::ExecState::EndTx => ExecutionState::EndTx,
             circuit_input_builder::ExecState::EndBlock => ExecutionState::EndBlock,
+            #[cfg(feature = "kroma")]
+            circuit_input_builder::ExecState::BeginDepositTx => ExecutionState::BeginDepositTx,
+            #[cfg(feature = "kroma")]
+            circuit_input_builder::ExecState::EndDepositTx => ExecutionState::EndDepositTx,
+            #[cfg(feature = "kroma")]
+            circuit_input_builder::ExecState::FeeDistributionHook => {
+                ExecutionState::FeeDistributionHook
+            }
+            #[cfg(feature = "kroma")]
+            circuit_input_builder::ExecState::ProposerRewardHook => {
+                ExecutionState::ProposerRewardHook
+            }
         }
     }
 }
@@ -223,6 +245,7 @@ pub(super) fn step_convert(step: &circuit_input_builder::ExecStep, block_num: u6
                 (tag, x.as_usize())
             })
             .collect(),
+        copy_rw_counter_delta: step.copy_rw_counter_delta,
         execution_state: ExecutionState::from(step),
         rw_counter: usize::from(step.rwc),
         program_counter: usize::from(step.pc) as u64,
@@ -235,6 +258,7 @@ pub(super) fn step_convert(step: &circuit_input_builder::ExecStep, block_num: u6
         },
         memory_size: step.memory_size as u64,
         reversible_write_counter: step.reversible_write_counter,
+        reversible_write_counter_delta: step.reversible_write_counter_delta,
         log_id: step.log_id,
         block_num,
     }

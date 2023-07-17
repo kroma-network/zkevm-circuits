@@ -4,13 +4,13 @@ name: Lints
 on:
   pull_request:
     types: [synchronize, opened, reopened, ready_for_review]
-    # Ignore when target branch is `main` and source branch is scroll-stable.
-    # It could avoid running twice. Since scroll-stable is set as `push` below.
+    # Ignore when target branch is `main` and source branch is develop.
+    # It could avoid running twice. Since develop is set as `push` below.
     branches-ignore:
       - main
   push:
     branches:
-      - scroll-stable
+      - develop
 
 env:
   CARGO_NET_GIT_FETCH_WITH_CLI: true
@@ -44,9 +44,6 @@ jobs:
         with:
           components: clippy
           override: false
-      # https://github.com/actions/cache/issues/133#issuecomment-599102035
-      - name: Delete old cache
-        run: sudo rm -rf ../../../go/pkg/mod/* &>/dev/null
       # Go cache for building geth-utils
       - name: Go cache
         uses: actions/cache@v3

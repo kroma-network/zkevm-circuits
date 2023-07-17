@@ -7,7 +7,8 @@ use crate::{
             and,
             common_gadget::RestoreContextGadget,
             constraint_builder::{
-                ConstraintBuilder, StepStateTransition, Transition::Delta, Transition::Same,
+                ConstraintBuilder, StepStateTransition,
+                Transition::{Delta, Same},
             },
             math_gadget::{IsEqualGadget, IsZeroGadget, LtGadget},
             memory_gadget::{address_high, address_low, MemoryExpansionGadget},
@@ -19,8 +20,7 @@ use crate::{
     util::Expr,
 };
 use eth_types::{evm_types::OpcodeId, Field, ToLittleEndian};
-use halo2_proofs::circuit::Value;
-use halo2_proofs::plonk::Error;
+use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorOOGStaticMemoryGadget<F> {
@@ -145,7 +145,6 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGStaticMemoryGadget<F> {
                 0.expr(),
                 0.expr(),
                 0.expr(),
-                0.expr(),
             )
         });
 
@@ -214,7 +213,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGStaticMemoryGadget<F> {
 
         // TODO: sanity check, remove this after fixing #347 missing ErrGasUintOverflow
         if address_high != F::zero() || expanded_address > (1u64 << (N_BYTES_MEMORY_ADDRESS * 8)) {
-            panic!("address overflow {} bytes", N_BYTES_MEMORY_ADDRESS);
+            panic!("address overflow {N_BYTES_MEMORY_ADDRESS} bytes");
         }
 
         self.memory_expansion.assign(
@@ -249,8 +248,16 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGStaticMemoryGadget<F> {
 mod tests {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, word, Bytecode, ToWord};
-    use mock::test_ctx::helpers::account_0_code_account_1_no_code;
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{
+        eth,
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, setup_kroma_required_accounts},
+            SimpleTestContext, TestContext3_1,
+        },
+        tx_idx, MOCK_ACCOUNTS,
+    };
 
     #[test]
     fn test() {
@@ -281,11 +288,13 @@ mod tests {
     }
 
     fn test_root(code: Bytecode) {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(word!("0xFFFF"));
@@ -311,15 +320,19 @@ mod tests {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).code(code_a);
                 accs[1].address(MOCK_ACCOUNTS[1]).code(code);
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(eth(1));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[2].address)
                     .to(accs[0].address)
                     .gas(word!("0xFFFF"));

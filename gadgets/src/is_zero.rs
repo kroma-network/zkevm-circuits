@@ -17,8 +17,7 @@ use crate::util::Expr;
 /// implement `IsZero`.
 pub trait IsZeroInstruction<F: Field> {
     /// Given a `value` to be checked if it is zero:
-    ///   - witnesses `inv0(value)`, where `inv0(x)` is 0 when `x` = 0, and
-    ///     `1/x` otherwise
+    ///   - witnesses `inv0(value)`, where `inv0(x)` is 0 when `x` = 0, and `1/x` otherwise
     fn assign(
         &self,
         region: &mut Region<'_, F>,
@@ -48,7 +47,7 @@ impl<F: Field> IsZeroConfig<F> {
     pub fn annotate_columns_in_region(&self, region: &mut Region<F>, prefix: &str) {
         [(self.value_inv, "GADGETS_IS_ZERO_inverse_witness")]
             .iter()
-            .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+            .for_each(|(col, ann)| region.name_column(|| format!("{prefix}_{ann}"), *col));
     }
 }
 

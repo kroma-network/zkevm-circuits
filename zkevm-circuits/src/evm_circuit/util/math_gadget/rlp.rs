@@ -1,16 +1,14 @@
+use super::IsZeroGadget;
+use crate::evm_circuit::{
+    param::{N_BYTES_ACCOUNT_ADDRESS, N_BYTES_U64, N_BYTES_WORD},
+    util::{constraint_builder::ConstraintBuilder, CachedRegion, Cell, RandomLinearCombination},
+};
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, Word};
 use gadgets::util::{and, expr_from_bytes, not, select, sum, Expr};
 use halo2_proofs::{
     circuit::Value,
     plonk::{Error, Expression},
 };
-
-use crate::evm_circuit::{
-    param::{N_BYTES_ACCOUNT_ADDRESS, N_BYTES_U64, N_BYTES_WORD},
-    util::{constraint_builder::ConstraintBuilder, CachedRegion, Cell, RandomLinearCombination},
-};
-
-use super::IsZeroGadget;
 
 #[derive(Clone, Debug)]
 pub struct RlpU64Gadget<F> {
@@ -339,13 +337,14 @@ impl<F: Field, const IS_CREATE2: bool> ContractCreateGadget<F, IS_CREATE2> {
 
 #[cfg(test)]
 mod test {
-    use super::super::test_util::*;
-    use super::ContractCreateGadget;
+    use super::{
+        super::test_util::{test_math_gadget_container, try_test, MathGadgetContainer, Value},
+        ContractCreateGadget,
+    };
+    use crate::evm_circuit::util::{constraint_builder::ConstraintBuilder, CachedRegion, Cell};
     use eth_types::{Field, ToAddress, ToLittleEndian, ToWord, Word};
     use gadgets::util::{not, Expr};
     use halo2_proofs::halo2curves::bn256::Fr;
-
-    use crate::evm_circuit::util::{constraint_builder::ConstraintBuilder, CachedRegion, Cell};
 
     #[derive(Clone)]
     struct ContractCreateGadgetContainer<F, const IS_CREATE2: bool> {

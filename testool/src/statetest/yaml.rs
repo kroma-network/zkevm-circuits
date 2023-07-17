@@ -1,14 +1,12 @@
-use super::parse;
-use super::spec::{AccountMatch, Env, StateTest};
-use crate::utils::MainnetFork;
-use crate::Compiler;
+use super::{
+    parse,
+    spec::{AccountMatch, Env, StateTest},
+};
+use crate::{utils::MainnetFork, Compiler};
 use anyhow::{bail, Context, Result};
-use eth_types::{geth_types::Account, Address, Bytes, H256, U256};
-use ethers_core::k256::ecdsa::SigningKey;
-use ethers_core::utils::secret_key_to_address;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::str::FromStr;
+use eth_types::{geth_types::Account, Address, Bytes, H256, U256, U64};
+use ethers_core::{k256::ecdsa::SigningKey, utils::secret_key_to_address};
+use std::{collections::HashMap, convert::TryInto, str::FromStr};
 use yaml_rust::Yaml;
 
 type Label = String;
@@ -113,6 +111,8 @@ impl<'a> YamlStateTestBuilder<'a> {
             let secret_key = Self::parse_bytes(&yaml_transaction["secretKey"])?;
             let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
 
+            let transaction_type = Self::parse_u64(&yaml_transaction["transactionType"])?;
+
             // parse expects (account states before executing the transaction)
             let mut expects = Vec::new();
             for expect in yaml_test["expect"].as_vec().context("as_vec")?.iter() {
@@ -161,7 +161,7 @@ impl<'a> YamlStateTestBuilder<'a> {
                                 if !data_refs.contains_label(label) {
                                     continue;
                                 }
-                                data_label = format!("({})", label);
+                                data_label = format!("({label})");
                             } else if !data_refs.contains_index(idx_data) {
                                 continue;
                             }
@@ -178,8 +178,7 @@ impl<'a> YamlStateTestBuilder<'a> {
                             tests.push(StateTest {
                                 path: path.to_string(),
                                 id: format!(
-                                    "{}_d{}{}_g{}_v{}",
-                                    test_name, idx_data, data_label, idx_gas, idx_value
+                                    "{test_name}_d{idx_data}{data_label}_g{idx_gas}_v{idx_value}"
                                 ),
                                 env: env.clone(),
                                 pre: pre.clone(),
@@ -191,6 +190,7 @@ impl<'a> YamlStateTestBuilder<'a> {
                                 gas_price,
                                 nonce,
                                 value: *value,
+                                transaction_type: Some(U64::from(transaction_type)),
                                 data: data.0.clone(),
                                 exception: *exception,
                             });
@@ -250,7 +250,7 @@ impl<'a> YamlStateTestBuilder<'a> {
                 nonce: if acc_nonce.is_badvalue() {
                     None
                 } else {
-                    Some(Self::parse_u256(acc_nonce)?)
+                    Some(Self::parse_u64(acc_nonce)?)
                 },
                 storage,
             };
@@ -292,7 +292,7 @@ impl<'a> YamlStateTestBuilder<'a> {
         if let Some(as_str) = yaml.as_str() {
             parse::parse_address(as_str)
         } else if let Some(as_i64) = yaml.as_i64() {
-            let hex = format!("{:0>40}", as_i64);
+            let hex = format!("{as_i64:0>40}");
             Ok(Address::from_slice(&hex::decode(hex)?))
         } else if let Yaml::Real(as_real) = yaml {
             Ok(Address::from_str(as_real)?)
@@ -339,9 +339,9 @@ impl<'a> YamlStateTestBuilder<'a> {
         let as_str = if let Some(as_str) = yaml.as_str() {
             as_str.to_string()
         } else if let Some(as_int) = yaml.as_i64() {
-            format!("0x{:x}", as_int)
+            format!("0x{as_int:x}")
         } else {
-            bail!(format!("code '{:?}' not an str", yaml));
+            bail!(format!("code '{yaml:?}' not an str"));
         };
         parse::parse_code(self.compiler, &as_str)
     }
@@ -431,12 +431,18 @@ impl<'a> YamlStateTestBuilder<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::config::TestSuite;
-    use crate::statetest::run_test;
-    use crate::statetest::CircuitsConfig;
-    use crate::statetest::StateTestError;
-    use eth_types::address;
+    use super::Compiler;
+    use crate::{
+        config::TestSuite,
+        statetest::{
+            run_test, AccountMatch, CircuitsConfig, Env, StateTest, StateTestError,
+            YamlStateTestBuilder,
+        },
+    };
+    use anyhow::Result;
+    use eth_types::{address, geth_types::Account, H256, U256, U64};
+    use ethers_core::types::Bytes;
+    use std::collections::HashMap;
 
     const TEMPLATE: &str = r#"
 arith:
@@ -460,6 +466,7 @@ arith:
       nonce: '0'
       storage: {}
   transaction:
+    transactionType: '0'
     data:
     - :raw 0x00
     - :label data1 :raw 0x01
@@ -577,12 +584,7 @@ arith:
 
         let ccccc = address!("cccccccccccccccccccccccccccccccccccccccc");
         let check_ccccc_balance = |id: &str, v: u64| {
-            assert_eq!(
-                tcs[id].result[&ccccc].balance,
-                Some(U256::from(v)),
-                "{}",
-                id
-            )
+            assert_eq!(tcs[id].result[&ccccc].balance, Some(U256::from(v)), "{id}")
         };
 
         check_ccccc_balance("arith_d0_g0_v0", 1000000000001);
@@ -624,6 +626,7 @@ arith:
             gas_price: U256::from(10u64),
             nonce: U256::zero(),
             value: U256::one(),
+            transaction_type: Some(U64::one()),
             data: Bytes::from(&[0]),
             pre: HashMap::from([
                 (
@@ -632,7 +635,7 @@ arith:
                         address: ccccc,
                         balance: U256::from(1000000000000u64),
                         code: Bytes::from(&[0x60, 0x01, 0x00]),
-                        nonce: U256::zero(),
+                        nonce: U64::zero(),
 
                         storage: HashMap::from([(U256::zero(), U256::one())]),
                     },
@@ -643,7 +646,7 @@ arith:
                         address: a94f5,
                         balance: U256::from(1000000000000u64),
                         code: Bytes::default(),
-                        nonce: U256::zero(),
+                        nonce: U64::zero(),
 
                         storage: HashMap::new(),
                     },
@@ -654,7 +657,7 @@ arith:
                 AccountMatch {
                     address: ccccc,
                     balance: Some(U256::from(1000000000001u64)),
-                    nonce: Some(U256::from(0)),
+                    nonce: Some(0),
                     code: Some(Bytes::from(&[0x60, 0x01, 0x00])),
                     storage: HashMap::from([(U256::zero(), U256::one())]),
                 },
@@ -767,8 +770,8 @@ arith:
                 CircuitsConfig::default()
             ),
             Err(StateTestError::NonceMismatch {
-                expected: U256::from(2),
-                found: U256::from(0)
+                expected: 2,
+                found: 0
             })
         );
 

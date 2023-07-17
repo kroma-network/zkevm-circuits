@@ -4,28 +4,26 @@ use crate::{
         param::N_BYTES_PROGRAM_COUNTER,
         step::ExecutionState,
         util::{
-            common_gadget::CommonErrorGadget,
+            common_gadget::{CommonErrorGadget, WordByteCapGadget},
             constraint_builder::ConstraintBuilder,
-            from_bytes,
-            math_gadget::{IsEqualGadget, IsZeroGadget, LtGadget},
-            CachedRegion, Cell, RandomLinearCombination,
+            math_gadget::{IsEqualGadget, IsZeroGadget},
+            CachedRegion, Cell,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
     util::Expr,
 };
-use eth_types::{evm_types::OpcodeId, Field, ToLittleEndian, Word};
+use eth_types::{evm_types::OpcodeId, Field, U256};
 
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorInvalidJumpGadget<F> {
     opcode: Cell<F>,
-    destination: RandomLinearCombination<F, N_BYTES_PROGRAM_COUNTER>,
-    code_length: Cell<F>,
+    dest: WordByteCapGadget<F, N_BYTES_PROGRAM_COUNTER>,
+    code_len: Cell<F>,
     value: Cell<F>,
     is_code: Cell<F>,
-    within_range: LtGadget<F, N_BYTES_PROGRAM_COUNTER>,
     is_jump_dest: IsEqualGadget<F>,
     is_jumpi: IsEqualGadget<F>,
     phase2_condition: Cell<F>,
@@ -39,7 +37,9 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
     const EXECUTION_STATE: ExecutionState = ExecutionState::ErrorInvalidJump;
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
-        let destination = cb.query_word_rlc();
+        let code_len = cb.query_cell();
+        let dest = WordByteCapGadget::construct(cb, code_len.expr());
+
         let opcode = cb.query_cell();
         let value = cb.query_cell();
         let is_code = cb.query_cell();
@@ -61,7 +61,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
         let is_condition_zero = IsZeroGadget::construct(cb, phase2_condition.expr());
 
         // Pop the value from the stack
-        cb.stack_pop(destination.expr());
+        cb.stack_pop(dest.original_word());
 
         cb.condition(is_jumpi.expr(), |cb| {
             cb.stack_pop(phase2_condition.expr());
@@ -69,18 +69,14 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
             cb.require_zero("condition is not zero", is_condition_zero.expr());
         });
 
-        // look up bytecode length
-        let code_length = cb.query_cell();
-        cb.bytecode_length(cb.curr.state.code_hash.expr(), code_length.expr());
-        let dest_value = from_bytes::expr(&destination.cells);
+        // Look up bytecode header
+        cb.bytecode_header(cb.curr.state.code_hash.expr(), code_len.expr());
 
-        let within_range = LtGadget::construct(cb, dest_value.expr(), code_length.expr());
-        //if not out of range, check `dest` is invalid
-        cb.condition(within_range.expr(), |cb| {
-            // if not out of range, Lookup real value
+        // If destination is in valid range, lookup for the value.
+        cb.condition(dest.lt_cap(), |cb| {
             cb.bytecode_lookup(
                 cb.curr.state.code_hash.expr(),
-                dest_value.clone(),
+                dest.valid_value(),
                 is_code.expr(),
                 value.expr(),
             );
@@ -92,13 +88,13 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
 
         let common_error_gadget =
             CommonErrorGadget::construct(cb, opcode.expr(), 3.expr() + is_jumpi.expr());
+
         Self {
             opcode,
-            destination,
-            code_length,
+            dest,
+            code_len,
             value,
             is_code,
-            within_range,
             is_jump_dest,
             is_jumpi,
             phase2_condition,
@@ -118,39 +114,33 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
     ) -> Result<(), Error> {
         let opcode = step.opcode.unwrap();
         let is_jumpi = opcode == OpcodeId::JUMPI;
-
         self.opcode
             .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
-        let destination = block.rws[step.rw_indices[0]].stack_value();
+
         let condition = if is_jumpi {
             block.rws[step.rw_indices[1]].stack_value()
         } else {
-            Word::zero()
+            U256::zero()
         };
         let condition_rlc = region.word_rlc(condition);
-        self.destination.assign(
-            region,
-            offset,
-            Some(
-                destination.to_le_bytes()[..N_BYTES_PROGRAM_COUNTER]
-                    .try_into()
-                    .unwrap(),
-            ),
-        )?;
 
         let code = block
             .bytecodes
             .get(&call.code_hash)
             .expect("could not find current environment's bytecode");
-        let code_length = code.bytes.len() as u64;
-        self.code_length
-            .assign(region, offset, Value::known(F::from(code_length)))?;
+        let code_len = code.bytes.len() as u64;
+        self.code_len
+            .assign(region, offset, Value::known(F::from(code_len)))?;
+
+        let dest = block.rws[step.rw_indices[0]].stack_value();
+        self.dest.assign(region, offset, dest, F::from(code_len))?;
 
         // set default value in case can not find value, is_code from bytecode table
+        let dest = u64::try_from(dest).unwrap_or(code_len);
         let mut code_pair = [0u8, 0u8];
-        if destination.as_u64() < code_length {
+        if dest < code_len {
             // get real value from bytecode table
-            code_pair = code.get(destination.as_usize());
+            code_pair = code.get(dest as usize);
         }
 
         self.value
@@ -162,13 +152,6 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
             offset,
             F::from(code_pair[0] as u64),
             F::from(OpcodeId::JUMPDEST.as_u64()),
-        )?;
-
-        self.within_range.assign(
-            region,
-            offset,
-            F::from(destination.as_u64()),
-            F::from(code_length),
         )?;
 
         self.is_jumpi.assign(
@@ -200,12 +183,17 @@ impl<F: Field> ExecutionGadget<F> for ErrorInvalidJumpGadget<F> {
 mod test {
 
     use crate::test_util::CircuitTestBuilder;
-    use eth_types::bytecode::Bytecode;
-    use eth_types::evm_types::OpcodeId;
-    use eth_types::geth_types::Account;
-    use eth_types::{address, bytecode, Address, ToWord, Word};
+    use eth_types::{
+        address, bytecode, bytecode::Bytecode, evm_types::OpcodeId, geth_types::Account, Address,
+        ToWord, Word,
+    };
 
-    use mock::TestContext;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        test_ctx::{SimpleTestContext, TestContext3_1},
+        tx_idx,
+    };
 
     fn test_invalid_jump(destination: usize, out_of_range: bool) {
         let mut bytecode = bytecode! {
@@ -223,7 +211,7 @@ mod test {
         });
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -244,6 +232,19 @@ mod test {
         test_internal_jump_error(false);
         // test jumpi error in internal call
         test_internal_jump_error(true);
+    }
+
+    #[test]
+    fn invalid_jump_dest_overflow() {
+        let bytecode = bytecode! {
+            PUSH32(Word::MAX)
+            JUMP
+        };
+
+        CircuitTestBuilder::new_from_test_ctx(
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
+        )
+        .run();
     }
 
     // internal call test
@@ -380,25 +381,29 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account) {
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
                 accs[1]
                     .address(caller.address)
                     .code(caller.code)
-                    .nonce(caller.nonce)
+                    .nonce(caller.nonce.as_u64())
                     .balance(caller.balance);
                 accs[2]
                     .address(callee.address)
                     .code(callee.code)
-                    .nonce(callee.nonce)
+                    .nonce(callee.nonce.as_u64())
                     .balance(callee.balance);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into());
@@ -427,7 +432,7 @@ mod test {
         });
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

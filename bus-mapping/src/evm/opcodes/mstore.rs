@@ -1,8 +1,9 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
-use eth_types::evm_types::MemoryAddress;
-use eth_types::{GethExecStep, ToBigEndian, ToLittleEndian};
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    Error,
+};
+use eth_types::{evm_types::MemoryAddress, GethExecStep, ToBigEndian, ToLittleEndian};
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
 /// corresponding to the [`OpcodeId::MSTORE`](crate::evm::OpcodeId::MSTORE)
@@ -77,7 +78,6 @@ impl<const IS_MSTORE8: bool> Opcode for Mstore<IS_MSTORE8> {
 
 #[cfg(test)]
 mod mstore_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
@@ -87,10 +87,16 @@ mod mstore_tests {
         bytecode,
         evm_types::{MemoryAddress, OpcodeId, StackAddress},
         geth_types::GethData,
-        Word,
+        ToBigEndian, Word,
     };
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -104,7 +110,7 @@ mod mstore_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -118,12 +124,13 @@ mod mstore_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .filter(|step| step.exec_state == ExecState::Op(OpcodeId::MSTORE))
             .nth(1)
             .unwrap();
+        let call_id = builder.block.txs()[tx_idx!(0)].calls[0].call_id;
 
         assert_eq!(
             [0, 1]
@@ -132,11 +139,11 @@ mod mstore_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022u32), Word::from(0x100u64))
+                    &StackOp::new(call_id, StackAddress::from(1022u32), Word::from(0x100u64))
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023u32), Word::from(0x1234u64))
+                    &StackOp::new(call_id, StackAddress::from(1023u32), Word::from(0x1234u64))
                 )
             ]
         );
@@ -153,7 +160,7 @@ mod mstore_tests {
                 .enumerate()
                 .map(|(idx, byte)| (
                     RW::WRITE,
-                    MemoryOp::new(1, MemoryAddress(idx + 0x100), byte)
+                    MemoryOp::new(call_id, MemoryAddress(idx + 0x100), byte)
                 ))
                 .collect_vec()
         )
@@ -170,7 +177,7 @@ mod mstore_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -184,11 +191,12 @@ mod mstore_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::MSTORE8))
             .unwrap();
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         assert_eq!(
             [0, 1]
@@ -197,11 +205,11 @@ mod mstore_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022u32), Word::from(0x100u64))
+                    &StackOp::new(call_id, StackAddress::from(1022u32), Word::from(0x100u64))
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023u32), Word::from(0x1234))
+                    &StackOp::new(call_id, StackAddress::from(1023u32), Word::from(0x1234))
                 )
             ]
         );
@@ -209,7 +217,10 @@ mod mstore_tests {
         let memory_op = &builder.block.container.memory[step.bus_mapping_instance[2].as_usize()];
         assert_eq!(
             (memory_op.rw(), memory_op.op()),
-            (RW::WRITE, &MemoryOp::new(1, MemoryAddress(0x100), 0x34))
+            (
+                RW::WRITE,
+                &MemoryOp::new(call_id, MemoryAddress(0x100), 0x34)
+            )
         )
     }
 }

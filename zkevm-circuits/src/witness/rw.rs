@@ -1,19 +1,15 @@
 #![allow(missing_docs)]
-use std::collections::HashMap;
-
+use super::MptUpdates;
+use crate::{
+    evm_circuit::util::rlc,
+    table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag, TxReceiptFieldTag},
+    util::build_tx_log_address,
+};
 use bus_mapping::operation::{self, AccountField, CallContextField, TxLogField, TxReceiptField};
 use eth_types::{Address, Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
-use halo2_proofs::circuit::Value;
-use halo2_proofs::halo2curves::bn256::Fr;
+use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr};
 use itertools::Itertools;
-
-use crate::evm_circuit::util::rlc;
-use crate::table::{
-    AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag, TxReceiptFieldTag,
-};
-use crate::util::build_tx_log_address;
-
-use super::MptUpdates;
+use std::collections::HashMap;
 
 /// Rw constainer for a witness block
 #[derive(Debug, Default, Clone)]
@@ -41,7 +37,7 @@ impl RwMap {
             debug_assert_eq!(idx, rw_counter - 1);
         }
     }
-    /// ..
+    /// Check value in the same way like StateCircuit
     pub fn check_value(&self) {
         let mock_rand = Fr::from(0x1000u64);
         let err_msg_first = "first access reads don't change value";
@@ -321,6 +317,34 @@ impl Rw {
         }
     }
 
+    pub fn account_balance_pair(&self) -> (Word, Word) {
+        self.account_value_pair_field_tag(AccountFieldTag::Balance)
+    }
+    pub fn account_codehash_pair(&self) -> (Word, Word) {
+        self.account_value_pair_field_tag(AccountFieldTag::CodeHash)
+    }
+    pub fn account_nonce_pair(&self) -> (Word, Word) {
+        self.account_value_pair_field_tag(AccountFieldTag::Nonce)
+    }
+
+    pub fn account_value_pair_field_tag(
+        &self,
+        required_field_tag: AccountFieldTag,
+    ) -> (Word, Word) {
+        match self {
+            Self::Account {
+                value,
+                value_prev,
+                field_tag,
+                ..
+            } => {
+                debug_assert_eq!(*field_tag, required_field_tag, "invalid rw {:?}", &self);
+                (*value, *value_prev)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     pub fn aux_pair(&self) -> (usize, Word) {
         match self {
             Self::AccountStorage {
@@ -389,7 +413,7 @@ impl Rw {
             tag: F::from(self.tag() as u64),
             id: F::from(self.id().unwrap_or_default() as u64),
             address: self.address().unwrap_or_default().to_scalar().unwrap(),
-            field_tag: F::from(self.field_tag().unwrap_or_default() as u64),
+            field_tag: F::from(self.field_tag().unwrap_or_default()),
             storage_key: rlc::value(
                 &self.storage_key().unwrap_or_default().to_le_bytes(),
                 randomness,
@@ -410,7 +434,7 @@ impl Rw {
             tag: Value::known(F::from(self.tag() as u64)),
             id: Value::known(F::from(self.id().unwrap_or_default() as u64)),
             address: Value::known(self.address().unwrap_or_default().to_scalar().unwrap()),
-            field_tag: Value::known(F::from(self.field_tag().unwrap_or_default() as u64)),
+            field_tag: Value::known(F::from(self.field_tag().unwrap_or_default())),
             storage_key: randomness.map(|randomness| {
                 rlc::value(
                     &self.storage_key().unwrap_or_default().to_le_bytes(),

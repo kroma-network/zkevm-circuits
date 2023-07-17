@@ -1,8 +1,9 @@
 use anyhow::{anyhow, bail, Context};
-use eth_types::{geth_types::Account, Address, Bytes, Word, H256, U256};
-use ethers_core::k256::ecdsa::SigningKey;
-use ethers_core::utils::secret_key_to_address;
+use eth_types::{geth_types::Account, Address, Bytes, Word, H256, U256, U64};
+use ethers_core::{k256::ecdsa::SigningKey, utils::secret_key_to_address};
 use std::{collections::HashMap, str::FromStr};
+
+use super::parse::parse_u64;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Env {
@@ -20,7 +21,7 @@ pub struct AccountMatch {
     pub address: Address,
     pub balance: Option<U256>,
     pub code: Option<Bytes>,
-    pub nonce: Option<U256>,
+    pub nonce: Option<u64>,
     pub storage: HashMap<U256, U256>,
 }
 
@@ -31,7 +32,7 @@ impl TryInto<Account> for AccountMatch {
             address: self.address,
             balance: self.balance.context("balance")?,
             code: self.code.context("code")?,
-            nonce: self.nonce.context("nonce")?,
+            nonce: self.nonce.context("nonce")?.into(),
             storage: self.storage,
         })
     }
@@ -51,6 +52,7 @@ pub struct StateTest {
     pub gas_price: U256,
     pub nonce: U256,
     pub value: U256,
+    pub transaction_type: Option<U64>,
     pub data: Bytes,
     pub pre: HashMap<Address, Account>,
     pub result: StateTestResult,
@@ -66,7 +68,7 @@ impl std::fmt::Display for StateTest {
             let k = if k.is_empty() {
                 k.to_string()
             } else {
-                format!("{} :", k)
+                format!("{k} :")
             };
             let max_len = max_len - k.len();
             for i in 0..=v.len() / max_len {
@@ -120,7 +122,7 @@ impl std::fmt::Display for StateTest {
                 state.insert("nonce".to_string(), format!("{}", pre.nonce));
                 state.insert("code".to_string(), hex::encode(&pre.code).to_string());
                 for (key, value) in &pre.storage {
-                    let (k, v) = (format!("slot {}", key), format!("{}", value));
+                    let (k, v) = (format!("slot {key}"), format!("{value}"));
                     state.insert(k, v);
                 }
             }
@@ -128,23 +130,23 @@ impl std::fmt::Display for StateTest {
                 let none = String::from("∅");
                 if let Some(balance) = result.balance {
                     let pre = state.get("balance").unwrap_or(&none);
-                    let text = format!("{} → {}", pre, balance);
+                    let text = format!("{pre} → {balance}");
                     state.insert("balance".to_string(), text);
                 }
                 if let Some(code) = &result.code {
                     let pre = state.get("code").unwrap_or(&none);
-                    let text = format!("{} → {}", pre, code);
+                    let text = format!("{pre} → {code}");
                     state.insert("code".to_string(), text);
                 }
                 if let Some(nonce) = &result.nonce {
                     let pre = state.get("nonce").unwrap_or(&none);
-                    let text = format!("{} → {}", pre, nonce);
+                    let text = format!("{pre} → {nonce}");
                     state.insert("nonce".to_string(), text);
                 }
                 for (key, value) in &result.storage {
-                    let (k, v) = (format!("slot {}", key), format!("{}", value));
+                    let (k, v) = (format!("slot {key}"), format!("{value}"));
                     let pre = state.get(&k).unwrap_or(&none);
-                    let text = format!("{} → {}", pre, v);
+                    let text = format!("{pre} → {v}");
                     state.insert(k, text);
                 }
             }
@@ -154,9 +156,9 @@ impl std::fmt::Display for StateTest {
             for k in keys {
                 text.push_str(&format(state.get(k).unwrap(), k));
             }
-            table.add_row(row![format!("{:?}", addr), text]);
+            table.add_row(row![format!("{addr:?}"), text]);
         }
-        write!(f, "{}", table)?;
+        write!(f, "{table}")?;
 
         Ok(())
     }
@@ -196,6 +198,7 @@ impl StateTest {
         };
         let data = hex::decode(tx.next().unwrap_or(""))?;
         let value = parse_u256(tx.next().unwrap_or("0"))?;
+        let transaction_type = Some(U64::from(parse_u64(tx.next().unwrap_or("1")).unwrap()));
         let gas_limit = u64::from_str(tx.next().unwrap_or("10000000"))?;
         let secret_key = Bytes::from(&[1u8; 32]);
         let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
@@ -207,10 +210,8 @@ impl StateTest {
             from,
             Account {
                 address: from,
-                nonce: U256::zero(),
                 balance: U256::from(10).pow(18.into()),
-                code: Bytes::default(),
-                storage: HashMap::new(),
+                ..Default::default()
             },
         );
 
@@ -224,7 +225,7 @@ impl StateTest {
                 .next()
                 .ok_or_else(|| anyhow!("Invalid account"))?
                 .replace("0x", "");
-            let address = format!("{:0>40}", address);
+            let address = format!("{address:0>40}");
             let address = Address::from_str(&address)?;
             if !is_create && to.is_none() {
                 to = Some(address);
@@ -244,7 +245,7 @@ impl StateTest {
                 address,
                 Account {
                     address,
-                    nonce: U256::one(),
+                    nonce: U64::one(),
                     code: Bytes::from(code.code()),
                     balance,
                     storage,
@@ -271,6 +272,7 @@ impl StateTest {
             gas_price: U256::one(),
             nonce: U256::zero(),
             value,
+            transaction_type,
             data: data.into(),
             pre,
             result: HashMap::new(),

@@ -13,7 +13,11 @@ use num_bigint::BigUint;
 use serde::{Serialize, Serializer};
 use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
+
+#[cfg(feature = "kroma")]
+/// Kroma deposit transaction type
+pub const DEPOSIT_TX_TYPE: u64 = 0x7e;
 
 /// Definition of all of the data related to an account.
 #[serde_as]
@@ -22,7 +26,8 @@ pub struct Account {
     /// Address
     pub address: Address,
     /// nonce
-    pub nonce: Word,
+    /// U64 type is required to serialize into proper hex with 0x prefix
+    pub nonce: U64,
     /// Balance
     pub balance: Word,
     /// EVM Code
@@ -110,6 +115,8 @@ impl BlockConstants {
 /// Definition of all of the constants related to an Ethereum transaction.
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Transaction {
+    /// Transaction type
+    pub transaction_type: Option<U64>,
     /// Sender address
     pub from: Address,
     /// Recipient address (None for contract creation)
@@ -118,7 +125,7 @@ pub struct Transaction {
     pub nonce: Word,
     /// Gas Limit / Supplied gas
     pub gas_limit: Word,
-    /// Transfered value
+    /// Transferred value
     pub value: Word,
     /// Gas Price
     pub gas_price: Word,
@@ -142,11 +149,21 @@ pub struct Transaction {
 
     /// Transaction hash
     pub hash: H256,
+    /// Kroma Deposit tx
+    #[cfg(feature = "kroma")]
+    /// Mint
+    pub mint: Word,
+
+    /// Kroma Non-deposit tx
+    #[cfg(feature = "kroma")]
+    /// Rollup data gas cost
+    pub rollup_data_gas_cost: u64,
 }
 
 impl From<&Transaction> for crate::Transaction {
     fn from(tx: &Transaction) -> crate::Transaction {
         crate::Transaction {
+            transaction_type: tx.transaction_type,
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -169,6 +186,7 @@ impl From<&Transaction> for crate::Transaction {
 impl From<&crate::Transaction> for Transaction {
     fn from(tx: &crate::Transaction) -> Transaction {
         Transaction {
+            transaction_type: tx.transaction_type,
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -183,6 +201,10 @@ impl From<&crate::Transaction> for Transaction {
             r: tx.r,
             s: tx.s,
             hash: tx.hash,
+            #[cfg(feature = "kroma")]
+            mint: Transaction::get_mint(tx).unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: Transaction::compute_rollup_data_gas_cost(tx),
         }
     }
 }
@@ -203,18 +225,57 @@ impl From<&Transaction> for TransactionRequest {
 }
 
 impl Transaction {
+    /// Retrieve mint from `tx.other`.
+    pub fn get_mint(_tx: &crate::Transaction) -> Option<Word> {
+        #[cfg(feature = "kroma")]
+        if let Some(v) = _tx.other.get("mint") {
+            return Some(Word::from_str(v.as_str().unwrap()).unwrap());
+        }
+        None
+    }
+
+    /// Compute rollup data gas cost.
+    pub fn compute_rollup_data_gas_cost(tx: &crate::Transaction) -> u64 {
+        let data = tx.rlp();
+        let mut zeros = 0;
+        let mut non_zeros = 0;
+        data.iter()
+            .for_each(|x| if *x == 0 { zeros += 1 } else { non_zeros += 1 });
+        zeros * 4 + non_zeros * 16
+    }
+
+    /// Whether this Transaction is a deposit transaction.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return self.transaction_type.unwrap_or_default().as_u64() == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kroma"))]
+        return false;
+    }
+
     /// Return the SignData associated with this Transaction.
     pub fn sign_data(&self, chain_id: u64) -> Result<SignData, Error> {
         let sig_r_le = self.r.to_le_bytes();
         let sig_s_le = self.s.to_le_bytes();
-        let sig_r = ct_option_ok_or(
-            secp256k1::Fq::from_repr(sig_r_le),
-            Error::Signature(libsecp256k1::Error::InvalidSignature),
-        )?;
-        let sig_s = ct_option_ok_or(
-            secp256k1::Fq::from_repr(sig_s_le),
-            Error::Signature(libsecp256k1::Error::InvalidSignature),
-        )?;
+        #[cfg(not(feature = "kroma"))]
+        let zero_signature = false;
+        #[cfg(feature = "kroma")]
+        let zero_signature = self.is_deposit();
+        let sig_r = if zero_signature {
+            secp256k1::Fq::zero()
+        } else {
+            ct_option_ok_or(
+                secp256k1::Fq::from_repr(sig_r_le),
+                Error::Signature(libsecp256k1::Error::InvalidSignature),
+            )?
+        };
+        let sig_s = if zero_signature {
+            secp256k1::Fq::zero()
+        } else {
+            ct_option_ok_or(
+                secp256k1::Fq::from_repr(sig_s_le),
+                Error::Signature(libsecp256k1::Error::InvalidSignature),
+            )?
+        };
         // msg = rlp([nonce, gasPrice, gas, to, value, data, chain_id, 0, 0])
         let mut req: TransactionRequest = self.into();
         if req.to.is_some() {
@@ -237,7 +298,11 @@ impl Transaction {
             .try_into()
             .expect("hash length isn't 32 bytes");
         let v = ((self.v + 1) % 2) as u8;
-        let pk = recover_pk(v, &self.r, &self.s, &msg_hash)?;
+        let pk = if zero_signature {
+            halo2_proofs::halo2curves::secp256k1::Secp256k1Affine::generator()
+        } else {
+            recover_pk(v, &self.r, &self.s, &msg_hash)?
+        };
         // msg_hash = msg_hash % q
         let msg_hash = BigUint::from_bytes_be(msg_hash.as_slice());
         let msg_hash = msg_hash.mod_floor(&*SECP256K1_Q);
@@ -275,6 +340,10 @@ impl GethData {
     /// Signs transactions with selected wallets
     pub fn sign(&mut self, wallets: &HashMap<Address, LocalWallet>) {
         for tx in self.eth_block.transactions.iter_mut() {
+            #[cfg(feature = "kroma")]
+            if tx.transaction_type == Some(U64::from(DEPOSIT_TX_TYPE)) {
+                continue;
+            }
             let wallet = wallets.get(&tx.from).unwrap();
             assert_eq!(Word::from(wallet.chain_id()), self.chain_id);
             let geth_tx: Transaction = (&*tx).into();

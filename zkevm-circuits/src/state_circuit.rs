@@ -9,7 +9,7 @@ mod test;
 
 use crate::{
     evm_circuit::{param::N_BYTES_WORD, util::rlc},
-    table::{AccountFieldTag, LookupTable, MptTable, ProofType, RwTable, RwTableTag},
+    table::{AccountFieldTag, LookupTable, MPTProofType, MptTable, RwTable, RwTableTag},
     util::{Challenges, Expr, SubCircuit, SubCircuitConfig},
     witness::{self, MptUpdates, Rw, RwMap},
 };
@@ -30,7 +30,7 @@ use multiple_precision_integer::{Chip as MpiChip, Config as MpiConfig, Queries a
 use random_linear_combination::{Chip as RlcChip, Config as RlcConfig, Queries as RlcQueries};
 #[cfg(test)]
 use std::collections::HashMap;
-use std::{iter::once, marker::PhantomData};
+use std::marker::PhantomData;
 
 #[cfg(feature = "onephase")]
 use halo2_proofs::plonk::FirstPhase as SecondPhase;
@@ -62,8 +62,8 @@ pub struct StateCircuitConfig<F> {
     // others, it is 0.
     initial_value: Column<Advice>,
     // For Rw::AccountStorage, identify non-existing if both committed value and
-    // new value are zero. Will do lookup for ProofType::StorageDoesNotExist if
-    // non-existing, otherwise do lookup for ProofType::StorageChanged.
+    // new value are zero. Will do lookup for MPTProofType::NonExistingStorageProof if
+    // non-existing, otherwise do lookup for MPTProofType::StorageMod.
     is_non_exist: BatchedIsZeroConfig,
     // Intermediary witness used to reduce mpt lookup expression degree
     mpt_proof_type: Column<Advice>,
@@ -132,6 +132,7 @@ impl<F: Field> SubCircuitConfig<F> for StateCircuitConfig<F> {
             |meta| meta.query_fixed(selector, Rotation::cur()),
             |meta| {
                 [
+                    meta.query_advice(rw_table.field_tag, Rotation::cur()),
                     meta.query_advice(initial_value, Rotation::cur()),
                     meta.query_advice(rw_table.value, Rotation::cur()),
                 ]
@@ -232,8 +233,6 @@ impl<F: Field> StateCircuitConfig<F> {
             padding_length
         );
         let rows_len = rows.len();
-        let rows = rows.iter();
-        let prev_rows = once(None).chain(rows.clone().map(Some));
 
         let mut state_root =
             randomness.map(|randomness| rlc::value(&updates.old_root().to_le_bytes(), randomness));
@@ -243,7 +242,7 @@ impl<F: Field> StateCircuitConfig<F> {
         // annotate columns
         self.annotate_circuit_in_region(region);
 
-        for (offset, (row, prev_row)) in rows.zip(prev_rows).enumerate() {
+        for (offset, row) in rows.iter().enumerate() {
             if offset == 0 || offset + 1 >= padding_length {
                 log::trace!("state circuit assign offset:{} row:{:?}", offset, row);
             }
@@ -275,7 +274,8 @@ impl<F: Field> StateCircuitConfig<F> {
                     .assign(region, offset, randomness, storage_key)?;
             }
 
-            if let Some(prev_row) = prev_row {
+            if offset > 0 {
+                let prev_row = &rows[offset - 1];
                 let index = self
                     .lexicographic_ordering
                     .assign(region, offset, row, prev_row)?;
@@ -325,34 +325,38 @@ impl<F: Field> StateCircuitConfig<F> {
             )?;
 
             // Identify non-existing if both committed value and new value are zero.
-            let committed_value_value = randomness.map(|randomness| {
+            let is_non_exist_inputs = randomness.map(|randomness| {
                 let (_, committed_value) = updates
                     .get(row)
                     .map(|u| u.value_assignments(randomness))
                     .unwrap_or_default();
                 let value = row.value_assignment(randomness);
-                [committed_value, value]
+                [
+                    F::from(row.field_tag().unwrap_or_default()),
+                    committed_value,
+                    value,
+                ]
             });
             BatchedIsZeroChip::construct(self.is_non_exist.clone()).assign(
                 region,
                 offset,
-                committed_value_value,
+                is_non_exist_inputs,
             )?;
-            let mpt_proof_type = committed_value_value.map(|pair| {
+            let mpt_proof_type = is_non_exist_inputs.map(|[_field_tag, committed_value, value]| {
                 F::from(match row {
                     Rw::AccountStorage { .. } => {
-                        if pair[0].is_zero_vartime() && pair[1].is_zero_vartime() {
-                            ProofType::StorageDoesNotExist as u64
+                        if committed_value.is_zero_vartime() && value.is_zero_vartime() {
+                            MPTProofType::NonExistingStorageProof as u64
                         } else {
-                            ProofType::StorageChanged as u64
+                            MPTProofType::StorageMod as u64
                         }
                     }
                     Rw::Account { field_tag, .. } => {
-                        if pair[0].is_zero_vartime()
-                            && pair[1].is_zero_vartime()
+                        if committed_value.is_zero_vartime()
+                            && value.is_zero_vartime()
                             && matches!(field_tag, AccountFieldTag::CodeHash)
                         {
-                            ProofType::AccountDoesNotExist as u64
+                            MPTProofType::NonExistingAccountProof as u64
                         } else {
                             *field_tag as u64
                         }
@@ -447,7 +451,7 @@ impl SortKeysConfig {
         self.id.annotate_columns_in_region(region, prefix);
         self.storage_key.annotate_columns_in_region(region, prefix);
         self.rw_counter.annotate_columns_in_region(region, prefix);
-        region.name_column(|| format!("{}_field_tag", prefix), self.field_tag);
+        region.name_column(|| format!("{prefix}_field_tag"), self.field_tag);
     }
 }
 
@@ -705,8 +709,10 @@ fn queries<F: Field>(meta: &mut VirtualCells<'_, F>, c: &StateCircuitConfig<F>) 
 
 #[cfg(test)]
 mod state_circuit_stats {
-    use crate::evm_circuit::step::ExecutionState;
-    use crate::stats::{bytecode_prefix_op_big_rws, print_circuit_stats_by_states};
+    use crate::{
+        evm_circuit::step::ExecutionState,
+        stats::{bytecode_prefix_op_big_rws, print_circuit_stats_by_states},
+    };
 
     /// Prints the stats of State circuit per execution state.  See
     /// `print_circuit_stats_by_states` for more details.

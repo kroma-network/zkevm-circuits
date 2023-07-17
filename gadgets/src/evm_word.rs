@@ -110,7 +110,7 @@ impl<F: Field> WordConfig<F> {
             |mut meta| {
                 for byte in 0..=u8::MAX {
                     meta.assign_fixed(
-                        || format!("load {}", byte),
+                        || format!("load {byte}"),
                         self.byte_lookup,
                         byte.into(),
                         || Value::known(F::from(byte as u64)),
@@ -137,7 +137,7 @@ impl<F: Field> WordConfig<F> {
 
             let byte_field_elem = byte.map(|byte| F::from(byte as u64));
             let cell = region.assign_advice(
-                || format!("assign byte {}", idx),
+                || format!("assign byte {idx}"),
                 *column,
                 offset,
                 || byte_field_elem,
@@ -152,13 +152,16 @@ impl<F: Field> WordConfig<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Value;
+    use crate::evm_word::{encode, r, WordConfig};
+    use eth_types::Field;
     use halo2_proofs::{
         arithmetic::Field as Halo2Field,
-        circuit::SimpleFloorPlanner,
+        circuit::{Layouter, SimpleFloorPlanner},
         dev::{FailureLocation, MockProver, VerifyFailure},
         halo2curves::{bn256::Fr as Fp, group::ff::PrimeField},
-        plonk::{Circuit, Instance},
+        plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
+        poly::Rotation,
     };
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;

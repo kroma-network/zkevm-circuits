@@ -1,8 +1,8 @@
 //! BatchedIsZero chip works as follows:
 //!
 //! Given a list of `values` to be checked if they are all zero:
-//! - nonempty_witness = `inv(value)` for some non-zero `value` from `values` if
-//!   it exists, `0` otherwise
+//! - nonempty_witness = `inv(value)` for some non-zero `value` from `values` if it exists, `0`
+//!   otherwise
 //! - is_zero: 1 if all `values` are `0`, `0` otherwise
 
 use eth_types::Field;
@@ -38,7 +38,7 @@ impl BatchedIsZeroConfig {
             ),
         ]
         .iter()
-        .for_each(|(col, ann)| region.name_column(|| format!("{}_{}", prefix, ann), *col));
+        .for_each(|(col, ann)| region.name_column(|| format!("{prefix}_{ann}"), *col));
     }
 }
 
@@ -132,7 +132,7 @@ impl<F: FieldExt, const N: usize> BatchedIsZeroChip<F, N> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{BatchedIsZeroChip, BatchedIsZeroConfig};
     use halo2_proofs::{
         arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -141,6 +141,7 @@ mod test {
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error, FirstPhase, Selector},
         poly::Rotation,
     };
+    use std::marker::PhantomData;
 
     #[derive(Clone, Debug)]
     struct TestCircuitConfig<const N: usize> {

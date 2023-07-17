@@ -4,12 +4,10 @@ use crate::{
     },
     evm::Opcode,
     operation::{AccountField, AccountOp, CallContextField, MemoryOp, RW},
+    state_db::CodeDB,
     Error,
 };
-use eth_types::{
-    evm_types::gas_utils::memory_expansion_gas_cost, Bytecode, GethExecStep, ToBigEndian, ToWord,
-    Word, H160, H256,
-};
+use eth_types::{Bytecode, GethExecStep, ToBigEndian, ToWord, Word, H160, H256};
 use ethers_core::utils::{get_create2_address, keccak256, rlp};
 
 #[derive(Debug, Copy, Clone)]
@@ -23,10 +21,10 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
 
-        let offset = geth_step.stack.nth_last(1)?.as_usize();
+        // Get low Uint64 of offset.
+        let offset = geth_step.stack.nth_last(1)?.low_u64() as usize;
         let length = geth_step.stack.nth_last(2)?.as_usize();
 
-        let curr_memory_word_size = state.call_ctx()?.memory_word_size();
         if length != 0 {
             state
                 .call_ctx_mut()?
@@ -51,6 +49,13 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
         } else {
             state.create_address()?
         };
+
+        let callee_account = &state.sdb.get_account(&address).1.clone();
+        let callee_exists = !callee_account.is_empty();
+        if !callee_exists && callee.value.is_zero() {
+            state.sdb.get_account_mut(&address).1.storage.clear();
+        }
+
         state.stack_write(
             &mut exec_step,
             geth_step.stack.nth_last_filled(n_pop - 1),
@@ -61,11 +66,11 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             },
         )?;
 
-        let mut initialization_code = vec![];
-        if length > 0 {
-            initialization_code =
-                handle_copy(state, &mut exec_step, state.call()?.call_id, offset, length)?;
-        }
+        let (initialization_code, code_hash) = if length > 0 {
+            handle_copy(state, &mut exec_step, state.call()?.call_id, offset, length)?
+        } else {
+            (vec![], CodeDB::empty_code_hash())
+        };
 
         let tx_id = state.tx_ctx.id();
         let caller = state.call()?.clone();
@@ -90,7 +95,6 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
         let caller_nonce = state.sdb.get_nonce(&caller.address);
         state.push_op_reversible(
             &mut exec_step,
-            RW::WRITE,
             AccountOp {
                 address: caller.address,
                 field: AccountField::Nonce,
@@ -116,9 +120,17 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
         }
 
         debug_assert!(state.sdb.get_nonce(&callee.address) == 0);
+        state.transfer(
+            &mut exec_step,
+            callee.caller_address,
+            callee.address,
+            true,
+            true,
+            callee.value,
+        )?;
+
         state.push_op_reversible(
             &mut exec_step,
-            RW::WRITE,
             AccountOp {
                 address: callee.address,
                 field: AccountField::Nonce,
@@ -127,20 +139,9 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             },
         )?;
 
-        state.transfer(
-            &mut exec_step,
-            callee.caller_address,
-            callee.address,
-            callee.value,
-        )?;
-
-        let memory_expansion_gas_cost =
-            memory_expansion_gas_cost(curr_memory_word_size, next_memory_word_size);
-
         // Per EIP-150, all but one 64th of the caller's gas is sent to the
         // initialization call.
-        let caller_gas_left =
-            (geth_step.gas.0 - geth_step.gas_cost.0 - memory_expansion_gas_cost) / 64;
+        let caller_gas_left = (geth_step.gas.0 - geth_step.gas_cost.0) / 64;
 
         for (field, value) in [
             (
@@ -168,7 +169,6 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             caller.depth.to_word(),
         );
 
-        let code_hash = keccak256(&initialization_code);
         for (field, value) in [
             (CallContextField::CallerId, caller.call_id.into()),
             (CallContextField::IsSuccess, callee.is_success.to_word()),
@@ -190,7 +190,8 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             (CallContextField::IsRoot, false.to_word()),
             (CallContextField::IsStatic, false.to_word()),
             (CallContextField::IsCreate, true.to_word()),
-            (CallContextField::CodeHash, Word::from(code_hash)),
+            (CallContextField::CodeHash, code_hash.to_word()),
+            (CallContextField::Value, callee.value),
         ] {
             state.call_context_write(&mut exec_step, callee.call_id, field, value);
         }
@@ -202,13 +203,13 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
                 get_create2_address(
                     caller.address,
                     salt.to_be_bytes().to_vec(),
-                    initialization_code.clone()
+                    initialization_code
                 )
             );
             std::iter::once(0xffu8)
                 .chain(caller.address.to_fixed_bytes())
                 .chain(salt.to_be_bytes())
-                .chain(keccak256(&initialization_code))
+                .chain(code_hash.to_fixed_bytes())
                 .collect::<Vec<_>>()
         } else {
             let mut stream = rlp::RlpStream::new();
@@ -226,6 +227,13 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
         state.block.sha3_inputs.push(keccak_input);
 
         if length == 0 {
+            for (field, value) in [
+                (CallContextField::LastCalleeId, 0.into()),
+                (CallContextField::LastCalleeReturnDataOffset, 0.into()),
+                (CallContextField::LastCalleeReturnDataLength, 0.into()),
+            ] {
+                state.call_context_write(&mut exec_step, caller.call_id, field, value);
+            }
             state.handle_return(geth_step)?;
         }
 
@@ -239,9 +247,9 @@ fn handle_copy(
     callee_id: usize,
     offset: usize,
     length: usize,
-) -> Result<Vec<u8>, Error> {
+) -> Result<(Vec<u8>, H256), Error> {
     let initialization_bytes = state.call_ctx()?.memory.0[offset..offset + length].to_vec();
-    let dst_id = NumberOrHash::Hash(H256(keccak256(&initialization_bytes)));
+    let code_hash = CodeDB::hash(&initialization_bytes);
     let bytes: Vec<_> = Bytecode::from(initialization_bytes.clone())
         .code
         .iter()
@@ -258,18 +266,21 @@ fn handle_copy(
         );
     }
 
-    state.push_copy(CopyEvent {
-        rw_counter_start,
-        src_type: CopyDataType::Memory,
-        src_id: NumberOrHash::Number(callee_id),
-        src_addr: offset.try_into().unwrap(),
-        src_addr_end: (offset + length).try_into().unwrap(),
-        dst_type: CopyDataType::Bytecode,
-        dst_id,
-        dst_addr: 0,
-        log_id: None,
-        bytes,
-    });
+    state.push_copy(
+        step,
+        CopyEvent {
+            rw_counter_start,
+            src_type: CopyDataType::Memory,
+            src_id: NumberOrHash::Number(callee_id),
+            src_addr: offset.try_into().unwrap(),
+            src_addr_end: (offset + length).try_into().unwrap(),
+            dst_type: CopyDataType::Bytecode,
+            dst_id: NumberOrHash::Hash(code_hash),
+            dst_addr: 0,
+            log_id: None,
+            bytes,
+        },
+    );
 
-    Ok(initialization_bytes)
+    Ok((initialization_bytes, code_hash))
 }

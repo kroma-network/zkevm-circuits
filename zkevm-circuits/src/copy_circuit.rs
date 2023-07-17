@@ -3,8 +3,7 @@
 //! etc.
 
 use bus_mapping::circuit_input_builder::{CopyDataType, CopyEvent, NumberOrHash};
-use eth_types::Field;
-use eth_types::Word;
+use eth_types::{Field, Word};
 use gadgets::{
     binary_number::BinaryNumberChip,
     less_than::{LtChip, LtConfig, LtInstruction},
@@ -16,10 +15,8 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-use std::collections::HashMap;
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 
-use crate::witness::{Bytecode, RwMap, Transaction};
 #[cfg(feature = "onephase")]
 use halo2_proofs::plonk::FirstPhase as SecondPhase;
 #[cfg(not(feature = "onephase"))]
@@ -32,6 +29,7 @@ use crate::{
     },
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness,
+    witness::{Bytecode, RwMap, Transaction},
 };
 
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
@@ -466,7 +464,7 @@ impl<F: Field> CopyCircuitConfig<F> {
                 if !is_read && (label == "src_addr_end" || label == "bytes_left") {
                 } else {
                     region.assign_advice(
-                        || format!("{} at row: {}", label, offset),
+                        || format!("{label} at row: {offset}"),
                         column,
                         *offset,
                         || value,
@@ -501,7 +499,7 @@ impl<F: Field> CopyCircuitConfig<F> {
                 )?;
             }
 
-            //tag
+            // tag
             tag_chip.assign(region, *offset, tag)?;
 
             // lt chip
@@ -876,8 +874,10 @@ impl<F: Field> Circuit<F> for CopyCircuit<F> {
 /// Dev helpers
 #[cfg(any(feature = "test", test))]
 pub mod dev {
-    use crate::copy_circuit::*;
+    use super::{CopyCircuit, ExternalData};
     use crate::witness::Block;
+    use bus_mapping::circuit_input_builder::CopyEvent;
+    use eth_types::Field;
     use halo2_proofs::dev::{MockProver, VerifyFailure};
 
     /// Test copy circuit from copy events and test data
@@ -918,18 +918,29 @@ pub mod dev {
 #[cfg(test)]
 mod tests {
     use super::dev::test_copy_circuit_from_block;
-    use crate::evm_circuit::test::rand_bytes;
-    use crate::evm_circuit::witness::block_convert;
-    use bus_mapping::evm::{gen_sha3_code, MemoryKind};
+    use crate::{
+        copy_circuit::CopyCircuit,
+        evm_circuit::{test::rand_bytes, witness::block_convert},
+    };
     use bus_mapping::{
         circuit_input_builder::{CircuitInputBuilder, CircuitsParams},
+        evm::{gen_sha3_code, MemoryKind},
         mock::BlockData,
     };
     use eth_types::{bytecode, geth_types::GethData, ToWord, Word};
-    use halo2_proofs::dev::VerifyFailure;
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use mock::test_ctx::helpers::account_0_code_account_1_no_code;
-    use mock::{TestContext, MOCK_ACCOUNTS};
+    use halo2_proofs::{
+        dev::{MockProver, VerifyFailure},
+        halo2curves::bn256::Fr,
+    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        test_ctx::{
+            helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext0_0,
+            TestContext3_1,
+        },
+        tx_idx, MOCK_ACCOUNTS,
+    };
     use pretty_assertions::assert_eq;
 
     fn gen_calldatacopy_data() -> CircuitInputBuilder {
@@ -942,11 +953,13 @@ mod tests {
             STOP
         };
         let calldata = rand_bytes(length);
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .input(calldata.into());
@@ -979,7 +992,7 @@ mod tests {
             CODECOPY
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -999,9 +1012,9 @@ mod tests {
             STOP
         };
         let code_ext = rand_bytes(0x0fffusize);
-        let test_ctx = TestContext::<3, 1>::new(
+        let test_ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[1]).code(code.clone());
 
                 accs[1].address(external_address).code(code_ext.clone());
@@ -1009,9 +1022,13 @@ mod tests {
                 accs[2]
                     .address(MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -1026,12 +1043,12 @@ mod tests {
 
     fn gen_sha3_data() -> CircuitInputBuilder {
         let (code, _) = gen_sha3_code(0x20, 0x200, MemoryKind::EqualToSize);
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
-                max_rws: 2000,
+                max_rws: 2500,
                 max_copy_rows: 0x200 * 2 + 2,
                 ..Default::default()
             },
@@ -1054,7 +1071,7 @@ mod tests {
             LOG1
             STOP
         };
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
         let block: GethData = test_ctx.into();
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -1074,7 +1091,11 @@ mod tests {
     fn copy_circuit_valid_codecopy() {
         let builder = gen_codecopy_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(10, block), Ok(()));
+        #[cfg(feature = "kroma")]
+        let k = 13;
+        #[cfg(not(feature = "kroma"))]
+        let k = 10;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]
@@ -1095,7 +1116,11 @@ mod tests {
     fn copy_circuit_valid_tx_log() {
         let builder = gen_tx_log_data();
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
-        assert_eq!(test_copy_circuit_from_block(10, block), Ok(()));
+        #[cfg(feature = "kroma")]
+        let k = 13;
+        #[cfg(not(feature = "kroma"))]
+        let k = 10;
+        assert_eq!(test_copy_circuit_from_block(k, block), Ok(()));
     }
 
     #[test]
@@ -1173,11 +1198,56 @@ mod tests {
             builder.block.copy_events[0].bytes[0].0.wrapping_add(1);
 
         let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
+        #[cfg(feature = "kroma")]
+        let k = 14;
+        #[cfg(not(feature = "kroma"))]
+        let k = 10;
 
         assert_error_matches(
-            test_copy_circuit_from_block(10, block),
+            test_copy_circuit_from_block(k, block),
             vec!["Memory lookup", "TxLog lookup"],
         );
+    }
+
+    #[test]
+    fn variadic_size_check() {
+        let builder = gen_tx_log_data();
+        let block1 = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
+
+        let block: GethData = TestContext0_0::new(
+            None,
+            |mut accs| {
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 0);
+            },
+            |mut txs, _| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+            },
+            |b, _| b,
+        )
+        .unwrap()
+        .into();
+        let mut builder =
+            BlockData::new_from_geth_data_with_params(block.clone(), CircuitsParams::default())
+                .new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
+        let block2 = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
+
+        let circuit =
+            CopyCircuit::<Fr>::new(block1.copy_events, block1.circuits_params.max_copy_rows);
+        let prover1 = MockProver::<Fr>::run(14, &circuit, vec![]).unwrap();
+
+        let circuit = CopyCircuit::<Fr>::new(
+            block2.copy_events.clone(),
+            block2.circuits_params.max_copy_rows,
+        );
+        let prover2 = MockProver::<Fr>::run(14, &circuit, vec![]).unwrap();
+
+        assert_eq!(prover1.fixed(), prover2.fixed());
+        assert_eq!(prover1.permutation(), prover2.permutation());
     }
 
     fn assert_error_matches(result: Result<(), Vec<VerifyFailure>>, names: Vec<&str>) {
@@ -1201,8 +1271,10 @@ mod tests {
 
 #[cfg(test)]
 mod copy_circuit_stats {
-    use crate::evm_circuit::step::ExecutionState;
-    use crate::stats::{bytecode_prefix_op_big_rws, print_circuit_stats_by_states};
+    use crate::{
+        evm_circuit::step::ExecutionState,
+        stats::{bytecode_prefix_op_big_rws, print_circuit_stats_by_states},
+    };
 
     /// Prints the stats of Copy circuit per execution state.  See
     /// `print_circuit_stats_by_states` for more details.

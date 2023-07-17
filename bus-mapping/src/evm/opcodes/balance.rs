@@ -1,7 +1,9 @@
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::evm::Opcode;
-use crate::operation::{AccountField, CallContextField, TxAccessListAccountOp, RW};
-use crate::Error;
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    evm::Opcode,
+    operation::{AccountField, CallContextField, TxAccessListAccountOp},
+    Error,
+};
 use eth_types::{GethExecStep, ToAddress, ToWord, H256, U256};
 
 #[derive(Debug, Copy, Clone)]
@@ -45,7 +47,6 @@ impl Opcode for Balance {
         let is_warm = state.sdb.check_account_in_access_list(&address);
         state.push_op_reversible(
             &mut exec_step,
-            RW::WRITE,
             TxAccessListAccountOp {
                 tx_id: state.tx_ctx.id(),
                 address,
@@ -63,21 +64,15 @@ impl Opcode for Balance {
         } else {
             H256::zero()
         };
+        debug_assert_eq!(balance, geth_steps[1].stack.nth_last(0)?);
         state.account_read(
             &mut exec_step,
             address,
             AccountField::CodeHash,
             code_hash.to_word(),
-            code_hash.to_word(),
         );
         if exists {
-            state.account_read(
-                &mut exec_step,
-                address,
-                AccountField::Balance,
-                balance,
-                balance,
-            );
+            state.account_read(&mut exec_step, address, AccountField::Balance, balance);
         }
 
         // Write the BALANCE result to stack.
@@ -93,33 +88,46 @@ impl Opcode for Balance {
 
 #[cfg(test)]
 mod balance_tests {
-    use super::*;
-    use crate::circuit_input_builder::ExecState;
-    use crate::mock::BlockData;
-    use crate::operation::{AccountOp, CallContextOp, StackOp};
-    use eth_types::evm_types::{OpcodeId, StackAddress};
-    use eth_types::geth_types::GethData;
-    use eth_types::{address, bytecode, Bytecode, ToWord, Word, U256};
-    use keccak256::EMPTY_HASH_LE;
-    use mock::TestContext;
+    use crate::{
+        circuit_input_builder::ExecState,
+        mock::BlockData,
+        operation::{
+            AccountField, AccountOp, CallContextField, CallContextOp, StackOp,
+            TxAccessListAccountOp, RW,
+        },
+        state_db::CodeDB,
+    };
+    use eth_types::{
+        address, bytecode,
+        evm_types::{OpcodeId, StackAddress},
+        geth_types::GethData,
+        Bytecode, ToWord, Word, U256,
+    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
     use pretty_assertions::assert_eq;
 
     #[test]
     fn test_balance_of_non_existing_address() {
-        test_ok(false, false);
+        test_ok(false, false, None);
     }
 
     #[test]
     fn test_balance_of_cold_address() {
-        test_ok(true, false);
+        test_ok(true, false, None);
+        test_ok(true, false, Some(vec![1, 2, 3]))
     }
 
     #[test]
     fn test_balance_of_warm_address() {
-        test_ok(true, true);
+        test_ok(true, true, None);
+        test_ok(true, true, Some(vec![2, 3, 4]))
     }
 
-    fn test_ok(exists: bool, is_warm: bool) {
+    // account_code = None should be the same as exists = false, so we can remove
+    // it.
+    fn test_ok(exists: bool, is_warm: bool, account_code: Option<Vec<u8>>) {
         let address = address!("0xaabbccddee000000000000000000000000000000");
 
         // Pop balance first for warm account.
@@ -144,15 +152,19 @@ mod balance_tests {
         };
 
         // Get the execution steps from the external tracer.
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x0000000000000000000000000000000000000010"))
                     .balance(Word::from(1u64 << 20))
                     .code(code.clone());
                 if exists {
-                    accs[1].address(address).balance(balance);
+                    if let Some(code) = account_code.clone() {
+                        accs[1].address(address).balance(balance).code(code);
+                    } else {
+                        accs[1].address(address).balance(balance);
+                    }
                 } else {
                     accs[1]
                         .address(address!("0x0000000000000000000000000000000000000020"))
@@ -161,9 +173,13 @@ mod balance_tests {
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000cafe01"))
                     .balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -178,7 +194,7 @@ mod balance_tests {
         // Check if account address is in access list as a result of bus mapping.
         assert!(builder.sdb.add_account_to_access_list(address));
 
-        let tx_id = 1;
+        let tx_id = tx_idx!(1);
         let transaction = &builder.block.txs()[tx_id - 1];
         let call_id = transaction.calls()[0].call_id;
 
@@ -249,7 +265,13 @@ mod balance_tests {
             }
         );
 
-        let code_hash = Word::from_little_endian(&*EMPTY_HASH_LE);
+        let code_hash = if let Some(code) = account_code {
+            CodeDB::hash(&code).to_word()
+        } else if exists {
+            CodeDB::empty_code_hash().to_word()
+        } else {
+            U256::zero()
+        };
         let operation = &container.account[indices[5].as_usize()];
         assert_eq!(operation.rw(), RW::READ);
         assert_eq!(

@@ -9,9 +9,11 @@ use crate::{
 use bus_mapping::{circuit_input_builder::CircuitsParams, mock::BlockData};
 use eth_types::geth_types::GethData;
 
-use halo2_proofs::circuit::Value;
-use halo2_proofs::dev::{unwrap_value, MockProver};
-use halo2_proofs::halo2curves::bn256::Fr;
+use halo2_proofs::{
+    circuit::Value,
+    dev::{unwrap_value, MockProver},
+    halo2curves::bn256::Fr,
+};
 use mock::TestContext;
 
 #[cfg(test)]
@@ -184,6 +186,7 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
         } else {
             self.circuits_params.unwrap_or_default()
         };
+        log::debug!("params in CircuitTestBuilder: {:?}", params);
 
         let block: Block<Fr> = if self.block.is_some() {
             self.block.unwrap()

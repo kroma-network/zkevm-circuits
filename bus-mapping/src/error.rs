@@ -1,14 +1,13 @@
 //! Error module for the bus-mapping crate
 
-use core::fmt::{Display, Formatter, Result as FmtResult};
-use eth_types::{evm_types::OpcodeId, Address, GethExecStep, Word, H256};
-use ethers_providers::ProviderError;
-use std::error::Error as StdError;
-
 use crate::geth_errors::{
     GETH_ERR_GAS_UINT_OVERFLOW, GETH_ERR_OUT_OF_GAS, GETH_ERR_STACK_OVERFLOW,
     GETH_ERR_STACK_UNDERFLOW,
 };
+use core::fmt::{Display, Formatter, Result as FmtResult};
+use eth_types::{evm_types::OpcodeId, Address, GethExecStep, Word, H256};
+use ethers_providers::ProviderError;
+use std::error::Error as StdError;
 
 /// Error type for any BusMapping related failure.
 #[derive(Debug)]
@@ -56,7 +55,7 @@ impl From<ProviderError> for Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -73,8 +72,8 @@ pub enum OogError {
     /// Out of Gas for CREATE, RETURN, REVERT, which have dynamic memory
     /// expansion gas cost
     DynamicMemoryExpansion,
-    /// Out of Gas for CALLDATACOPY, CODECOPY, RETURNDATACOPY, which copy a
-    /// specified chunk of memory
+    /// Out of Gas for CALLDATACOPY, CODECOPY, EXTCODECOPY, RETURNDATACOPY,
+    /// which copy a specified chunk of memory
     MemoryCopy,
     /// Out of Gas for BALANCE, EXTCODESIZE, EXTCODEHASH, which possibly touch
     /// an extra account
@@ -88,8 +87,6 @@ pub enum OogError {
     Exp,
     /// Out of Gas for SHA3
     Sha3,
-    /// Out of Gas for EXTCODECOPY
-    ExtCodeCopy,
     /// Out of Gas for SLOAD and SSTORE
     SloadSstore,
     /// Out of Gas for CALL, CALLCODE, DELEGATECALL and STATICCALL
@@ -133,11 +130,18 @@ pub enum ExecError {
     MaxCodeSizeExceeded,
     /// For CALL, CALLCODE, DELEGATECALL, STATICCALL
     PrecompileFailed,
+    /// ..
+    GasUintOverflow,
+    /// ..
+    NonceUintOverflow,
 }
 
 // TODO: Move to impl block.
 pub(crate) fn get_step_reported_error(op: &OpcodeId, error: &str) -> ExecError {
-    if error == GETH_ERR_OUT_OF_GAS || error == GETH_ERR_GAS_UINT_OVERFLOW {
+    if error == GETH_ERR_GAS_UINT_OVERFLOW {
+        return ExecError::GasUintOverflow;
+    }
+    if error == GETH_ERR_OUT_OF_GAS {
         // NOTE: We report a GasUintOverflow error as an OutOfGas error
         let oog_err = match op {
             OpcodeId::MLOAD | OpcodeId::MSTORE | OpcodeId::MSTORE8 => {
@@ -146,9 +150,10 @@ pub(crate) fn get_step_reported_error(op: &OpcodeId, error: &str) -> ExecError {
             OpcodeId::CREATE | OpcodeId::RETURN | OpcodeId::REVERT => {
                 OogError::DynamicMemoryExpansion
             }
-            OpcodeId::CALLDATACOPY | OpcodeId::CODECOPY | OpcodeId::RETURNDATACOPY => {
-                OogError::MemoryCopy
-            }
+            OpcodeId::CALLDATACOPY
+            | OpcodeId::CODECOPY
+            | OpcodeId::EXTCODECOPY
+            | OpcodeId::RETURNDATACOPY => OogError::MemoryCopy,
             OpcodeId::BALANCE | OpcodeId::EXTCODESIZE | OpcodeId::EXTCODEHASH => {
                 OogError::AccountAccess
             }
@@ -157,7 +162,6 @@ pub(crate) fn get_step_reported_error(op: &OpcodeId, error: &str) -> ExecError {
             }
             OpcodeId::EXP => OogError::Exp,
             OpcodeId::SHA3 => OogError::Sha3,
-            OpcodeId::EXTCODECOPY => OogError::ExtCodeCopy,
             OpcodeId::CALL | OpcodeId::CALLCODE | OpcodeId::DELEGATECALL | OpcodeId::STATICCALL => {
                 OogError::Call
             }
@@ -172,6 +176,6 @@ pub(crate) fn get_step_reported_error(op: &OpcodeId, error: &str) -> ExecError {
     } else if error.starts_with(GETH_ERR_STACK_UNDERFLOW) {
         ExecError::StackUnderflow
     } else {
-        panic!("Unknown GethExecStep.error: {}", error);
+        panic!("Unknown GethExecStep.error: {error}");
     }
 }

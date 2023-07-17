@@ -1,20 +1,15 @@
 #![allow(dead_code, unused_imports)]
 
-use super::parse;
-use super::spec::{AccountMatch, Env, StateTest};
-use crate::abi;
-use crate::compiler::Compiler;
-use crate::utils::MainnetFork;
+use super::{
+    parse,
+    spec::{AccountMatch, Env, StateTest},
+};
+use crate::{abi, compiler::Compiler, utils::MainnetFork};
 use anyhow::{bail, Context, Result};
-use eth_types::evm_types::OpcodeId;
-use eth_types::{geth_types::Account, Address, Bytes, H256, U256};
-use ethers_core::k256::ecdsa::SigningKey;
-use ethers_core::utils::secret_key_to_address;
+use eth_types::{evm_types::OpcodeId, geth_types::Account, Address, Bytes, H256, U256, U64};
+use ethers_core::{k256::ecdsa::SigningKey, utils::secret_key_to_address};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::ops::RangeBounds;
-use std::str::FromStr;
+use std::{collections::HashMap, convert::TryInto, ops::RangeBounds, str::FromStr};
 use yaml_rust::Yaml;
 
 fn default_block_base_fee() -> String {
@@ -83,6 +78,7 @@ struct Transaction {
     secret_key: String,
     to: String,
     value: Vec<String>,
+    transaction_type: String,
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +121,7 @@ impl<'a> JsonStateTestBuilder<'a> {
             let from = secret_key_to_address(&SigningKey::from_bytes(&secret_key.to_vec())?);
             let nonce = parse::parse_u256(&test.transaction.nonce)?;
             let gas_price = parse::parse_u256(&test.transaction.gas_price)?;
+            let transaction_type = parse::parse_u64(&test.transaction.transaction_type)?;
 
             let data_s: Vec<_> = test
                 .transaction
@@ -177,10 +174,7 @@ impl<'a> JsonStateTestBuilder<'a> {
 
                             state_tests.push(StateTest {
                                 path: path.to_string(),
-                                id: format!(
-                                    "{}_d{}_g{}_v{}",
-                                    test_name, idx_data, idx_gas, idx_value
-                                ),
+                                id: format!("{test_name}_d{idx_data}_g{idx_gas}_v{idx_value}"),
                                 env: env.clone(),
                                 pre: pre.clone(),
                                 result: result.clone(),
@@ -191,6 +185,7 @@ impl<'a> JsonStateTestBuilder<'a> {
                                 gas_price,
                                 gas_limit: *gas_limit,
                                 value: *value,
+                                transaction_type: Some(U64::from(transaction_type)),
                                 data: data.0.clone(),
                                 exception: false,
                             });
@@ -232,7 +227,7 @@ impl<'a> JsonStateTestBuilder<'a> {
             let account = Account {
                 address,
                 balance: parse::parse_u256(&acc.balance)?,
-                nonce: parse::parse_u256(&acc.nonce)?,
+                nonce: parse::parse_u64(&acc.nonce)?.into(),
                 code: parse::parse_code(self.compiler, &acc.code)?,
                 storage,
             };
@@ -270,7 +265,7 @@ impl<'a> JsonStateTestBuilder<'a> {
                 nonce: acc
                     .nonce
                     .as_ref()
-                    .map(|v| parse::parse_u256(v))
+                    .map(|v| parse::parse_u64(v))
                     .transpose()?,
                 storage,
             };
@@ -310,7 +305,11 @@ impl<'a> JsonStateTestBuilder<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::Compiler;
+    use crate::statetest::{AccountMatch, Env, JsonStateTestBuilder, StateTest};
+    use anyhow::Result;
+    use eth_types::{geth_types::Account, Address, Bytes, H256, U256, U64};
+    use std::{collections::HashMap, str::FromStr};
 
     const JSON: &str = r#"
 {
@@ -355,6 +354,7 @@ mod test {
             }
         },
         "transaction" : {
+            "transactionType": "0",
             "data" : [
                 "0x6001",
                 "0x6002"
@@ -406,12 +406,13 @@ mod test {
             gas_price: U256::from(10u64),
             nonce: U256::from(0u64),
             value: U256::from(100000u64),
+            transaction_type: Some(U64::one()),
             data: Bytes::from(hex::decode("6001")?),
             pre: HashMap::from([(
                 acc095e,
                 Account {
                     address: acc095e,
-                    nonce: U256::from(0u64),
+                    nonce: U64::from(0u64),
                     balance: U256::from(1000000000000000000u64),
                     code: Bytes::from(hex::decode("600160010160005500")?),
                     storage: HashMap::new(),
@@ -421,7 +422,7 @@ mod test {
                 acc095e,
                 AccountMatch {
                     address: acc095e,
-                    nonce: Some(U256::from(1u64)),
+                    nonce: Some(1u64),
                     balance: None,
                     code: Some(Bytes::from(hex::decode("600160010160005500")?)),
                     storage: HashMap::from([(U256::zero(), U256::from(2u64))]),

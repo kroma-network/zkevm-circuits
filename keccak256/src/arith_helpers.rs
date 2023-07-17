@@ -204,7 +204,8 @@ pub fn f_from_radix_be<F: Field>(buf: &[u8], base: u8) -> F {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{B13, B9};
+    use crate::arith_helpers::convert_b13_lane_to_b9;
     use num_bigint::BigUint;
     #[test]
     fn test_convert_b13_lane_to_b9() {

@@ -5,13 +5,17 @@ mod tests {
     use ark_std::{end_timer, start_timer};
     use bus_mapping::evm::OpcodeId;
     use eth_types::Field;
-    use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof};
-    use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG, ParamsVerifierKZG};
-    use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
-    use halo2_proofs::poly::kzg::strategy::SingleStrategy;
     use halo2_proofs::{
         halo2curves::bn256::{Bn256, Fr, G1Affine},
-        poly::commitment::ParamsProver,
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
+        poly::{
+            commitment::ParamsProver,
+            kzg::{
+                commitment::{KZGCommitmentScheme, ParamsKZG, ParamsVerifierKZG},
+                multiopen::{ProverSHPLONK, VerifierSHPLONK},
+                strategy::SingleStrategy,
+            },
+        },
         transcript::{
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
@@ -19,9 +23,10 @@ mod tests {
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
     use std::env::var;
-    use zkevm_circuits::bytecode_circuit::bytecode_unroller::{unroll, UnrolledBytecode};
-
-    use zkevm_circuits::bytecode_circuit::circuit::BytecodeCircuit;
+    use zkevm_circuits::bytecode_circuit::{
+        bytecode_unroller::{unroll, UnrolledBytecode},
+        circuit::BytecodeCircuit,
+    };
 
     #[cfg_attr(not(feature = "benches"), ignore)]
     #[test]
@@ -34,7 +39,7 @@ mod tests {
             .parse()
             .expect("Cannot parse DEGREE env var as u32");
 
-        //Unique string used by bench results module for parsing the result
+        // Unique string used by bench results module for parsing the result
         const BENCHMARK_ID: &str = "Bytecode Circuit";
 
         // Contract code size exceeds 24576 bytes may not be deployable on Mainnet.

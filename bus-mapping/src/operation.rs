@@ -1,19 +1,15 @@
 //! Collection of structs and functions used to:
 //! - Define the internals of a [`MemoryOp`], [`StackOp`] and [`StorageOp`].
-//! - Define the actual operation types and a wrapper over them (the
-//!   [`Operation`] enum).
-//! - Define structures that interact with operations such as
-//!   [`OperationContainer`].
+//! - Define the actual operation types and a wrapper over them (the [`Operation`] enum).
+//! - Define structures that interact with operations such as [`OperationContainer`].
 pub(crate) mod container;
+
+use core::{cmp::Ordering, fmt, fmt::Debug};
+use eth_types::{Address, Word};
+use std::mem::swap;
 
 pub use container::OperationContainer;
 pub use eth_types::evm_types::{MemoryAddress, StackAddress};
-
-use core::cmp::Ordering;
-use core::fmt;
-use core::fmt::Debug;
-use eth_types::{Address, Word};
-use std::mem::swap;
 
 /// Marker that defines whether an Operation performs a `READ` or a `WRITE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -742,8 +738,8 @@ pub enum TxLogField {
     Topic,
     /// data of log entry
     Data,
-    /* TODO: Add `TopicLength` and `DataLength`, which will be used for the RLP encoding of the
-     * Tx Receipt */
+    // TODO: Add `TopicLength` and `DataLength`, which will be used for the RLP encoding of the
+    // Tx Receipt
 }
 
 /// Represents TxLog read/write operation.
@@ -1067,7 +1063,11 @@ impl<T: Op> Operation<T> {
 
 #[cfg(test)]
 mod operation_tests {
-    use super::*;
+    use crate::operation::{MemoryOp, Operation, RWCounter, StackOp, RW};
+    use eth_types::{
+        evm_types::{MemoryAddress, StackAddress},
+        Word,
+    };
 
     #[test]
     fn unchecked_op_transmutations_are_safe() {

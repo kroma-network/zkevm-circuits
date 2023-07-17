@@ -1,10 +1,12 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecState, ExecStep};
-use crate::circuit_input_builder::{CopyDataType, CopyEvent, NumberOrHash};
-use crate::operation::{CallContextField, TxLogField};
-use crate::Error;
-use eth_types::Word;
-use eth_types::{GethExecStep, ToWord};
+use crate::{
+    circuit_input_builder::{
+        CircuitInputStateRef, CopyDataType, CopyEvent, ExecState, ExecStep, NumberOrHash,
+    },
+    operation::{CallContextField, TxLogField},
+    Error,
+};
+use eth_types::{GethExecStep, ToWord, Word};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Log;
@@ -18,19 +20,23 @@ impl Opcode for Log {
         let mut exec_step = gen_log_step(state, geth_step)?;
         if state.call()?.is_persistent {
             let copy_event = gen_copy_event(state, geth_step, &mut exec_step)?;
-            state.push_copy(copy_event);
+            state.push_copy(&mut exec_step, copy_event);
             state.tx_ctx.log_id += 1;
         }
 
         // reconstruction
-        let offset = geth_step.stack.nth_last(0)?.as_usize();
-        let length = geth_step.stack.nth_last(1)?.as_usize();
+        let offset = geth_step.stack.nth_last(0)?;
+        let length = geth_step.stack.nth_last(1)?.as_u64();
 
         if length != 0 {
-            state
-                .call_ctx_mut()?
-                .memory
-                .extend_at_least(offset + length);
+            // Offset should be within range of Uint64 if length is non-zero.
+            let memory_length = offset
+                .as_u64()
+                .checked_add(length)
+                .and_then(|val| usize::try_from(val).ok())
+                .unwrap();
+
+            state.call_ctx_mut()?.memory.extend_at_least(memory_length);
         }
 
         Ok(vec![exec_step])
@@ -127,41 +133,6 @@ fn gen_log_step(
     Ok(exec_step)
 }
 
-fn gen_copy_steps(
-    state: &mut CircuitInputStateRef,
-    exec_step: &mut ExecStep,
-    src_addr: u64,
-    bytes_left: usize,
-) -> Result<Vec<(u8, bool)>, Error> {
-    // Get memory data
-    let mem = state
-        .call_ctx()?
-        .memory
-        .read_chunk(src_addr.into(), bytes_left.into());
-
-    let mut copy_steps = Vec::with_capacity(bytes_left);
-    for (idx, byte) in mem.iter().enumerate() {
-        let addr = src_addr + idx as u64;
-
-        // Read memory
-        state.memory_read(exec_step, (addr as usize).into(), *byte)?;
-
-        copy_steps.push((*byte, false));
-
-        // Write log
-        state.tx_log_write(
-            exec_step,
-            state.tx_ctx.id(),
-            state.tx_ctx.log_id + 1,
-            TxLogField::Data,
-            idx,
-            Word::from(*byte),
-        )?;
-    }
-
-    Ok(copy_steps)
-}
-
 fn gen_copy_event(
     state: &mut CircuitInputStateRef,
     geth_step: &GethExecStep,
@@ -170,12 +141,15 @@ fn gen_copy_event(
     let rw_counter_start = state.block_ctx.rwc;
 
     assert!(state.call()?.is_persistent, "Error: Call is not persistent");
-    let memory_start = geth_step.stack.nth_last(0)?.as_u64();
-    let msize = geth_step.stack.nth_last(1)?.as_usize();
 
-    let (src_addr, src_addr_end) = (memory_start, memory_start + msize as u64);
+    // Get low Uint64 for memory start as below reference. Memory size must be
+    // within range of Uint64, otherwise returns ErrGasUintOverflow.
+    // https://github.com/ethereum/go-ethereum/blob/b80f05bde2c4e93ae64bb3813b6d67266b5fc0e6/core/vm/instructions.go#L850
+    let memory_start = geth_step.stack.nth_last(0)?.low_u64();
+    let msize = geth_step.stack.nth_last(1)?.as_u64();
 
-    let steps = gen_copy_steps(state, exec_step, src_addr, msize)?;
+    let (src_addr, src_addr_end) = (memory_start, memory_start.checked_add(msize).unwrap());
+    let steps = state.gen_copy_steps_for_log(exec_step, src_addr, msize)?;
 
     Ok(CopyEvent {
         src_type: CopyDataType::Memory,
@@ -205,7 +179,13 @@ mod log_tests {
         Bytecode, ToWord, Word,
     };
 
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -274,7 +254,7 @@ mod log_tests {
         code_prepare.append(&code);
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code_prepare),
             tx_from_1_to_0,
@@ -288,16 +268,16 @@ mod log_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let is_persistent = builder.block.txs()[0].calls()[0].is_persistent;
-        let callee_address = builder.block.txs()[0].to;
+        let is_persistent = builder.block.txs()[tx_idx!(0)].calls()[0].is_persistent;
+        let callee_address = builder.block.txs()[tx_idx!(0)].to;
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(cur_op_code))
             .unwrap();
 
-        let expected_call_id = builder.block.txs()[0].calls()[step.call_index].call_id;
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
 
         assert_eq!(
             [0, 1]
@@ -306,11 +286,11 @@ mod log_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from((1022 - topic_count) as u32), Word::from(mstart))
+                    &StackOp::new(expected_call_id, StackAddress::from((1022 - topic_count) as u32), Word::from(mstart))
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from((1023 - topic_count) as u32), Word::from(msize))
+                    &StackOp::new(expected_call_id, StackAddress::from((1023 - topic_count) as u32), Word::from(msize))
                 )
             ]
         );
@@ -325,15 +305,15 @@ mod log_tests {
                 (
                     RW::READ,
                     &CallContextOp {
-                        call_id: 1,
+                        call_id: expected_call_id,
                         field: CallContextField::TxId,
-                        value: Word::from(1),
+                        value: Word::from(tx_idx!(1)),
                     },
                 ),
                 (
                     RW::READ,
                     &CallContextOp {
-                        call_id: 1,
+                        call_id: expected_call_id,
                         field: CallContextField::IsStatic,
                         value: Word::from(0),
                     },
@@ -341,7 +321,7 @@ mod log_tests {
                 (
                     RW::READ,
                     &CallContextOp {
-                        call_id: 1,
+                        call_id: expected_call_id,
                         field: CallContextField::CalleeAddress,
                         value: callee_address.to_word(),
                     },
@@ -349,7 +329,7 @@ mod log_tests {
                 (
                     RW::READ,
                     &CallContextOp {
-                        call_id: 1,
+                        call_id: expected_call_id,
                         field: CallContextField::IsPersistent,
                         value: Word::from(1),
                     },
@@ -366,7 +346,7 @@ mod log_tests {
                 [(
                     RW::WRITE,
                     &TxLogOp {
-                        tx_id: 1,
+                        tx_id: tx_idx!(1),
                         log_id: step.log_id + 1,
                         field: TxLogField::Address,
                         index: 0,
@@ -381,7 +361,7 @@ mod log_tests {
         for (idx, topic) in topics.iter().rev().enumerate() {
             log_topic_ops.push((
                 RW::WRITE,
-                TxLogOp::new(1, step.log_id + 1, TxLogField::Topic, idx, *topic),
+                TxLogOp::new(tx_idx!(1), step.log_id + 1, TxLogField::Topic, idx, *topic),
             ));
         }
         assert_eq!(
@@ -392,12 +372,20 @@ mod log_tests {
             { log_topic_ops },
         );
 
+        let memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == expected_call_id)
+            .unwrap();
+
         // memory reads.
         let mut log_data_ops = Vec::with_capacity(msize);
         assert_eq!(
             // skip first 32 writes of MSTORE ops
             (mstart + 64..(mstart + 64 + msize))
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             {
@@ -405,13 +393,17 @@ mod log_tests {
                 (mstart..msize).for_each(|idx| {
                     memory_ops.push((
                         RW::READ,
-                        MemoryOp::new(1, (mstart + idx).into(), memory_data[mstart + idx]),
+                        MemoryOp::new(
+                            expected_call_id,
+                            (mstart + idx).into(),
+                            memory_data[mstart + idx],
+                        ),
                     ));
                     // tx log addition
                     log_data_ops.push((
                         RW::WRITE,
                         TxLogOp::new(
-                            1,
+                            tx_idx!(1),
                             step.log_id + 1, // because it is in next CopyToLog step
                             TxLogField::Data,
                             idx - mstart,
@@ -442,7 +434,7 @@ mod log_tests {
         assert_eq!(copy_events[0].src_addr as usize, mstart);
         assert_eq!(copy_events[0].src_addr_end as usize, mstart + msize);
         assert_eq!(copy_events[0].dst_type, CopyDataType::TxLog);
-        assert_eq!(copy_events[0].dst_id, NumberOrHash::Number(1)); // tx_id
+        assert_eq!(copy_events[0].dst_id, NumberOrHash::Number(tx_idx!(1))); // tx_id
         assert_eq!(copy_events[0].dst_addr as usize, 0);
         assert_eq!(copy_events[0].log_id, Some(step.log_id as u64 + 1));
 

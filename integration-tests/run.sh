@@ -1,15 +1,16 @@
 #!/bin/sh
 set -e
 
+ARG_KROMA_PATH=
 ARG_DEFAULT_SUDO=
 ARG_DEFAULT_STEPS="setup gendata tests cleanup"
-ARG_DEFAULT_TESTS="rpc circuit_input_builder circuits:mock_prover"
+ARG_DEFAULT_TESTS="rpc circuit_input_builder circuits::mock_prover circuits::real_prover"
 
 usage() {
     cat >&2 << EOF
         Usage: $0 [OPTIONS]
         Options:
-          --sudo         Use sudo for docker-compoes commands.
+          --sudo         Use sudo for docker compose commands.
           --steps ARG    Space separated list of steps to do.
                          Default: "${ARG_DEFAULT_STEPS}".
           --tests ARG    Space separated list of tests to run.
@@ -19,14 +20,14 @@ usage() {
 EOF
 }
 
-ARG_SUDO="${ARG_DEFAULT_SUDO}"
 ARG_STEPS="${ARG_DEFAULT_STEPS}"
 ARG_TESTS="${ARG_DEFAULT_TESTS}"
 
 while [ "$1" != "" ]; do
     case "$1" in
-        --sudo )
-            ARG_SUDO=1
+        --kroma )
+            shift
+            ARG_KROMA_PATH="$1"
         ;;
         --steps )
             shift
@@ -74,18 +75,11 @@ for step in $ARG_STEPS; do
     esac
 done
 
-docker_compose_cmd() {
-    if [ -n "$ARG_SUDO" ]; then
-        sudo docker-compose $@
-    else
-        docker-compose $@
-    fi
-}
-
 if [ -n "$STEP_SETUP" ]; then
     echo "+ Setup..."
-    docker_compose_cmd down -v --remove-orphans
-    docker_compose_cmd up -d geth0
+    cd $ARG_KROMA_PATH
+    make devnet-up
+    cd -
 fi
 
 if [ -n "$STEP_GENDATA" ]; then
@@ -104,5 +98,7 @@ fi
 
 if [ -n "$STEP_CLEANUP" ]; then
     echo "+ Cleanup..."
-    docker_compose_cmd down -v --remove-orphans
+    cd $ARG_KROMA_PATH
+    make devnet-clean
+    cd -
 fi

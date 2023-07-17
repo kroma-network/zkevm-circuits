@@ -1,9 +1,11 @@
 use super::Opcode;
-use crate::circuit_input_builder::{
-    CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
+use crate::{
+    circuit_input_builder::{
+        CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
+    },
+    operation::{AccountField, CallContextField, TxAccessListAccountOp},
+    Error,
 };
-use crate::operation::{AccountField, CallContextField, TxAccessListAccountOp, RW};
-use crate::Error;
 use eth_types::{Bytecode, GethExecStep, ToAddress, ToWord, H256, U256};
 
 #[derive(Clone, Copy, Debug)]
@@ -18,13 +20,13 @@ impl Opcode for Extcodecopy {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
-        let exec_steps = vec![gen_extcodecopy_step(state, geth_step)?];
+        let mut exec_steps = vec![gen_extcodecopy_step(state, geth_step)?];
 
         // reconstruction
         let address = geth_steps[0].stack.nth_last(0)?.to_address();
-        let dest_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
-        let code_offset = geth_steps[0].stack.nth_last(2)?.as_u64();
-        let length = geth_steps[0].stack.nth_last(3)?.as_u64();
+        let dst_offset = geth_steps[0].stack.nth_last(1)?;
+        let code_offset = geth_step.stack.nth_last(2)?;
+        let length = geth_steps[0].stack.nth_last(3)?;
 
         let (_, account) = state.sdb.get_account(&address);
         let code_hash = account.code_hash;
@@ -33,10 +35,10 @@ impl Opcode for Extcodecopy {
         let call_ctx = state.call_ctx_mut()?;
         let memory = &mut call_ctx.memory;
 
-        memory.copy_from(dest_offset, &code, code_offset, length as usize);
+        memory.copy_from(dst_offset, code_offset, length, &code);
 
         let copy_event = gen_copy_event(state, geth_step)?;
-        state.push_copy(copy_event);
+        state.push_copy(&mut exec_steps[0], copy_event);
         Ok(exec_steps)
     }
 }
@@ -47,7 +49,7 @@ fn gen_extcodecopy_step(
 ) -> Result<ExecStep, Error> {
     let mut exec_step = state.new_step(geth_step)?;
 
-    let external_address_word = geth_step.stack.last()?;
+    let external_address_word = geth_step.stack.nth_last(0)?;
     let external_address = external_address_word.to_address();
     let dest_offset = geth_step.stack.nth_last(1)?;
     let offset = geth_step.stack.nth_last(2)?;
@@ -84,7 +86,6 @@ fn gen_extcodecopy_step(
     let is_warm = state.sdb.check_account_in_access_list(&external_address);
     state.push_op_reversible(
         &mut exec_step,
-        RW::WRITE,
         TxAccessListAccountOp {
             tx_id: state.tx_ctx.id(),
             address: external_address,
@@ -106,34 +107,8 @@ fn gen_extcodecopy_step(
         external_address,
         AccountField::CodeHash,
         code_hash.to_word(),
-        code_hash.to_word(),
     );
     Ok(exec_step)
-}
-
-fn gen_copy_steps(
-    state: &mut CircuitInputStateRef,
-    exec_step: &mut ExecStep,
-    src_addr: u64,
-    dst_addr: u64,
-    src_addr_end: u64,
-    bytes_left: u64,
-    code: &Bytecode,
-) -> Result<Vec<(u8, bool)>, Error> {
-    let mut copy_steps = Vec::with_capacity(bytes_left as usize);
-    for idx in 0..bytes_left {
-        let addr = src_addr + idx;
-        let step = if addr < src_addr_end {
-            let code = code.code.get(addr as usize).unwrap();
-            (code.value, code.is_code)
-        } else {
-            (0, false)
-        };
-        copy_steps.push(step);
-        state.memory_write(exec_step, (dst_addr + idx).into(), step.0)?;
-    }
-
-    Ok(copy_steps)
 }
 
 fn gen_copy_event(
@@ -141,9 +116,10 @@ fn gen_copy_event(
     geth_step: &GethExecStep,
 ) -> Result<CopyEvent, Error> {
     let rw_counter_start = state.block_ctx.rwc;
+
     let external_address = geth_step.stack.nth_last(0)?.to_address();
-    let memory_offset = geth_step.stack.nth_last(1)?.as_u64();
-    let data_offset = geth_step.stack.nth_last(2)?.as_u64();
+    let dst_offset = geth_step.stack.nth_last(1)?;
+    let code_offset = geth_step.stack.nth_last(2)?;
     let length = geth_step.stack.nth_last(3)?.as_u64();
 
     let account = state.sdb.get_account(&external_address).1;
@@ -154,28 +130,39 @@ fn gen_copy_event(
         H256::zero()
     };
 
-    let code: Bytecode = if exists {
+    let bytecode: Bytecode = if exists {
         state.code(code_hash)?.into()
     } else {
         Bytecode::default()
     };
-    let src_addr_end = code.code.len() as u64;
+    let code_size = bytecode.code.len() as u64;
+
+    // Get low Uint64 of offset.
+    let dst_addr = dst_offset.low_u64();
+    let src_addr_end = code_size;
+
+    // Reset offset to Uint64 maximum value if overflow, and set source start to the
+    // minimum value of offset and code size.
+    let src_addr = u64::try_from(code_offset)
+        .unwrap_or(u64::MAX)
+        .min(src_addr_end);
+
     let mut exec_step = state.new_step(geth_step)?;
-    let copy_steps = gen_copy_steps(
-        state,
+    let copy_steps = state.gen_copy_steps_for_bytecode(
         &mut exec_step,
-        data_offset,
-        memory_offset,
+        &bytecode,
+        src_addr,
+        dst_addr,
         src_addr_end,
         length,
-        &code,
     )?;
+
     Ok(CopyEvent {
-        src_addr: data_offset,
+        src_addr,
         src_addr_end,
         src_type: CopyDataType::Bytecode,
         src_id: NumberOrHash::Hash(code_hash),
-        dst_addr: memory_offset,
+        dst_addr,
         dst_type: CopyDataType::Memory,
         dst_id: NumberOrHash::Number(state.call()?.call_id),
         log_id: None,
@@ -193,15 +180,17 @@ mod extcodecopy_tests {
             AccountField, AccountOp, CallContextField, CallContextOp, MemoryOp, StackOp,
             TxAccessListAccountOp, RW,
         },
+        state_db::CodeDB,
     };
-    use eth_types::{address, bytecode, Bytecode, Bytes, ToWord, Word};
     use eth_types::{
+        address, bytecode,
         evm_types::{MemoryAddress, OpcodeId, StackAddress},
         geth_types::GethData,
-        H256, U256,
+        Bytecode, Bytes, ToWord, Word, U256,
     };
-    use ethers_core::utils::keccak256;
-    use mock::TestContext;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
 
     fn test_ok(
         code_ext: Bytes,
@@ -229,16 +218,18 @@ mod extcodecopy_tests {
         });
 
         let bytecode_ext = Bytecode::from(code_ext.to_vec());
+        // TODO: bytecode_ext = vec![] is being used to indicate an empty account.
+        // Should be an optional vec and we need to add tests for EOA vs. non-EOA.
         let code_hash = if code_ext.is_empty() {
             Default::default()
         } else {
-            keccak256(code_ext.clone())
+            CodeDB::hash(&code_ext)
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new(
+        let block: GethData = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x0000000000000000000000000000000000000010"))
                     .code(code.clone());
@@ -248,9 +239,13 @@ mod extcodecopy_tests {
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000cafe01"))
                     .balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
         )
@@ -264,7 +259,7 @@ mod extcodecopy_tests {
 
         assert!(builder.sdb.add_account_to_access_list(external_address));
 
-        let tx_id = 1;
+        let tx_id = tx_idx!(1);
         let transaction = &builder.block.txs()[tx_id - 1];
         let call_id = transaction.calls()[0].call_id;
 
@@ -400,8 +395,8 @@ mod extcodecopy_tests {
                 &AccountOp {
                     address: external_address,
                     field: AccountField::CodeHash,
-                    value: Word::from(code_hash),
-                    value_prev: Word::from(code_hash),
+                    value: code_hash.to_word(),
+                    value_prev: code_hash.to_word(),
                 }
             )
         );
@@ -413,10 +408,20 @@ mod extcodecopy_tests {
             .unwrap();
 
         let expected_call_id = transaction.calls()[step.call_index].call_id;
+        #[cfg(feature = "kroma")]
+        let system_deposit_memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == expected_call_id)
+            .unwrap();
+        #[cfg(not(feature = "kroma"))]
+        let system_deposit_memory_offset = 0;
 
         assert_eq!(
             (0..copy_size)
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[system_deposit_memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             (0..copy_size)
@@ -440,7 +445,7 @@ mod extcodecopy_tests {
         let copy_events = builder.block.copy_events.clone();
         assert_eq!(copy_events.len(), 1);
         assert_eq!(copy_events[0].bytes.len(), copy_size);
-        assert_eq!(copy_events[0].src_id, NumberOrHash::Hash(H256(code_hash)));
+        assert_eq!(copy_events[0].src_id, NumberOrHash::Hash(code_hash));
         assert_eq!(copy_events[0].src_addr as usize, data_offset);
         assert_eq!(copy_events[0].src_addr_end as usize, code_ext.len());
         assert_eq!(copy_events[0].src_type, CopyDataType::Bytecode);

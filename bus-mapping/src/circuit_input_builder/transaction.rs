@@ -1,18 +1,17 @@
 //! Transaction & TransactionContext utility module.
 
-use std::collections::BTreeMap;
-
-use eth_types::evm_types::Memory;
-use eth_types::Signature;
-use eth_types::{geth_types, Address, GethExecTrace, Word, H256};
-use ethers_core::utils::get_contract_address;
-
+use super::{call::ReversionGroup, Call, CallContext, CallKind, CodeSource, ExecStep};
 use crate::{
     state_db::{CodeDB, StateDB},
     Error,
 };
-
-use super::{call::ReversionGroup, Call, CallContext, CallKind, CodeSource, ExecStep};
+use eth_types::{
+    evm_types::Memory, geth_types, Address, GethExecTrace, Signature, Word, H256, U64,
+};
+use ethers_core::utils::get_contract_address;
+#[cfg(feature = "kroma")]
+use geth_types::DEPOSIT_TX_TYPE;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Default)]
 /// Context of a [`Transaction`] which can mutate in an [`ExecStep`].
@@ -183,6 +182,8 @@ impl TransactionContext {
 pub struct Transaction {
     /// ..
     pub block_num: u64,
+    /// Transaction Type
+    pub transaction_type: u64,
     /// Nonce
     pub nonce: u64,
     /// Hash
@@ -207,12 +208,25 @@ pub struct Transaction {
     pub(crate) calls: Vec<Call>,
     /// Execution steps
     steps: Vec<ExecStep>,
+
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
+    /// Mint
+    pub mint: Word,
+    /// Kroma non-deposit tx.
+    #[cfg(feature = "kroma")]
+    /// Rollup data gas cost
+    pub rollup_data_gas_cost: u64,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
     fn from(tx: &Transaction) -> geth_types::Transaction {
         geth_types::Transaction {
-            hash: tx.hash,
+            transaction_type: if tx.transaction_type == 0 {
+                None
+            } else {
+                Some(U64::from(tx.transaction_type))
+            },
             from: tx.from,
             to: Some(tx.to),
             nonce: Word::from(tx.nonce),
@@ -223,6 +237,11 @@ impl From<&Transaction> for geth_types::Transaction {
             v: tx.signature.v,
             r: tx.signature.r,
             s: tx.signature.s,
+            hash: tx.hash,
+            #[cfg(feature = "kroma")]
+            mint: tx.mint,
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: tx.rollup_data_gas_cost,
             ..Default::default()
         }
     }
@@ -232,6 +251,7 @@ impl Transaction {
     /// Create a dummy Transaction with zero values
     pub fn dummy() -> Self {
         Self {
+            transaction_type: 0,
             nonce: 0,
             gas: 0,
             gas_price: Word::zero(),
@@ -249,6 +269,10 @@ impl Transaction {
             steps: Vec::new(),
             block_num: Default::default(),
             hash: Default::default(),
+            #[cfg(feature = "kroma")]
+            mint: Word::zero(),
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: Default::default(),
         }
     }
 
@@ -308,9 +332,10 @@ impl Transaction {
             }
         };
 
+        let transaction_type = eth_tx.transaction_type.unwrap_or_default().as_u64();
         log::debug!(
             "eth_tx's type: {:?}, idx: {:?}, hash: {:?}, tx: {:?}",
-            eth_tx.transaction_type,
+            transaction_type,
             eth_tx.transaction_index,
             eth_tx.hash,
             {
@@ -320,6 +345,7 @@ impl Transaction {
             }
         );
         Ok(Self {
+            transaction_type,
             block_num: eth_tx.block_number.unwrap().as_u64(),
             hash: eth_tx.hash,
             nonce: eth_tx.nonce.as_u64(),
@@ -337,12 +363,28 @@ impl Transaction {
                 r: eth_tx.r,
                 s: eth_tx.s,
             },
+            #[cfg(feature = "kroma")]
+            mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: if transaction_type != DEPOSIT_TX_TYPE {
+                eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(eth_tx)
+            } else {
+                0
+            },
         })
     }
 
     /// Whether this [`Transaction`] is a create one
     pub fn is_create(&self) -> bool {
         self.calls[0].is_create()
+    }
+
+    /// Whether this [`Transaction`] is a Kroma deposit transaction.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kroma"))]
+        return false;
     }
 
     /// Return the list of execution steps of this transaction.
@@ -384,4 +426,17 @@ impl Transaction {
     pub fn is_steps_empty(&self) -> bool {
         self.steps.is_empty()
     }
+}
+
+/// L1 fee
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TxL1Fee {
+    /// L1 base fee
+    pub base_fee: Word,
+    /// L1 fee overhead
+    pub fee_overhead: Word,
+    /// L1 fee scalar
+    pub fee_scalar: Word,
+    /// Validator reward scalar
+    pub validator_reward_scalar: Word,
 }

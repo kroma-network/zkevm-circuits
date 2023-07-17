@@ -1,8 +1,7 @@
 use super::util::{CachedRegion, CellManager, CellType};
-use crate::evm_circuit::param::EXECUTION_STATE_HEIGHT_MAP;
 use crate::{
     evm_circuit::{
-        param::{MAX_STEP_HEIGHT, STEP_STATE_HEIGHT, STEP_WIDTH},
+        param::{EXECUTION_STATE_HEIGHT_MAP, MAX_STEP_HEIGHT, STEP_STATE_HEIGHT, STEP_WIDTH},
         util::Cell,
         witness::{Block, Call, ExecStep},
     },
@@ -15,7 +14,7 @@ use halo2_proofs::{
     circuit::Value,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression},
 };
-use std::iter;
+use std::{fmt::Display, iter};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -27,6 +26,14 @@ pub enum ExecutionState {
     EndTx,
     EndInnerBlock,
     EndBlock,
+    #[cfg(feature = "kroma")]
+    BeginDepositTx,
+    #[cfg(feature = "kroma")]
+    EndDepositTx,
+    #[cfg(feature = "kroma")]
+    FeeDistributionHook,
+    #[cfg(feature = "kroma")]
+    ProposerRewardHook,
     // Opcode successful cases
     STOP,
     ADD_SUB,     // ADD, SUB
@@ -91,9 +98,9 @@ pub enum ExecutionState {
     ErrorWriteProtection,
     ErrorDepth,
     ErrorInsufficientBalance,
+    ErrorNonceUintOverflow,
     ErrorContractAddressCollision,
     ErrorInvalidCreationCode,
-    ErrorMaxCodeSizeExceeded,
     ErrorInvalidJump,
     ErrorReturnDataOutOfBound,
     ErrorPrecompileFailed,
@@ -102,20 +109,27 @@ pub enum ExecutionState {
     ErrorOutOfGasDynamicMemoryExpansion,
     ErrorOutOfGasMemoryCopy,
     ErrorOutOfGasAccountAccess,
-    ErrorOutOfGasCodeStore,
+    // error for CodeStoreOOG and MaxCodeSizeExceeded
+    ErrorCodeStore,
     ErrorOutOfGasLOG,
     ErrorOutOfGasEXP,
     ErrorOutOfGasSHA3,
-    ErrorOutOfGasEXTCODECOPY,
     ErrorOutOfGasCall,
     ErrorOutOfGasSloadSstore,
     ErrorOutOfGasCREATE2,
     ErrorOutOfGasSELFDESTRUCT,
+    ErrorGasUintOverflow,
 }
 
 impl Default for ExecutionState {
     fn default() -> Self {
         Self::STOP
+    }
+}
+
+impl Display for ExecutionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
@@ -128,6 +142,17 @@ impl ExecutionState {
         Self::iter().count()
     }
 
+    pub(crate) fn ends_tx(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return matches!(self, Self::EndTx | Self::EndDepositTx);
+        #[cfg(not(feature = "kroma"))]
+        return matches!(self, Self::EndTx);
+    }
+
+    pub(crate) fn halts_in_success(&self) -> bool {
+        matches!(self, Self::STOP | Self::RETURN_REVERT | Self::SELFDESTRUCT)
+    }
+
     pub(crate) fn halts_in_exception(&self) -> bool {
         matches!(
             self,
@@ -138,19 +163,18 @@ impl ExecutionState {
                 | Self::ErrorInsufficientBalance
                 | Self::ErrorContractAddressCollision
                 | Self::ErrorInvalidCreationCode
-                | Self::ErrorMaxCodeSizeExceeded
                 | Self::ErrorInvalidJump
                 | Self::ErrorReturnDataOutOfBound
+                | Self::ErrorGasUintOverflow
                 | Self::ErrorOutOfGasConstant
                 | Self::ErrorOutOfGasStaticMemoryExpansion
                 | Self::ErrorOutOfGasDynamicMemoryExpansion
                 | Self::ErrorOutOfGasMemoryCopy
                 | Self::ErrorOutOfGasAccountAccess
-                | Self::ErrorOutOfGasCodeStore
+                | Self::ErrorCodeStore
                 | Self::ErrorOutOfGasLOG
                 | Self::ErrorOutOfGasEXP
                 | Self::ErrorOutOfGasSHA3
-                | Self::ErrorOutOfGasEXTCODECOPY
                 | Self::ErrorOutOfGasCall
                 | Self::ErrorOutOfGasSloadSstore
                 | Self::ErrorOutOfGasCREATE2
@@ -327,7 +351,7 @@ impl ExecutionState {
 
     pub fn get_step_height(&self) -> usize {
         self.get_step_height_option()
-            .unwrap_or_else(|| panic!("Execution state unknown: {:?}", self))
+            .unwrap_or_else(|| panic!("Execution state unknown: {self:?}"))
     }
 }
 
@@ -590,7 +614,7 @@ impl<F: FieldExt> Step<F> {
         self.state.program_counter.assign(
             region,
             offset,
-            Value::known(F::from(step.program_counter as u64)),
+            Value::known(F::from(step.program_counter)),
         )?;
         self.state.stack_pointer.assign(
             region,

@@ -1,20 +1,28 @@
-use crate::evm_circuit::execution::ExecutionGadget;
-use crate::evm_circuit::param::N_BYTES_GAS;
-use crate::evm_circuit::step::ExecutionState;
-use crate::evm_circuit::util::common_gadget::{
-    cal_sload_gas_cost_for_assignment, cal_sstore_gas_cost_for_assignment, CommonErrorGadget,
-    SloadGasGadget, SstoreGasGadget,
+use crate::{
+    evm_circuit::{
+        execution::ExecutionGadget,
+        param::N_BYTES_GAS,
+        step::ExecutionState,
+        util::{
+            and,
+            common_gadget::{
+                cal_sload_gas_cost_for_assignment, cal_sstore_gas_cost_for_assignment,
+                CommonErrorGadget, SloadGasGadget, SstoreGasGadget,
+            },
+            constraint_builder::ConstraintBuilder,
+            math_gadget::{LtGadget, PairSelectGadget},
+            or, select, CachedRegion, Cell,
+        },
+        witness::{Block, Call, ExecStep, Transaction},
+    },
+    table::CallContextFieldTag,
+    util::Expr,
 };
-use crate::evm_circuit::util::constraint_builder::ConstraintBuilder;
-use crate::evm_circuit::util::math_gadget::{LtGadget, PairSelectGadget};
-use crate::evm_circuit::util::{and, or, select, CachedRegion, Cell};
-use crate::evm_circuit::witness::{Block, Call, ExecStep, Transaction};
-use crate::table::CallContextFieldTag;
-use crate::util::Expr;
-use eth_types::evm_types::{GasCost, OpcodeId};
-use eth_types::{Field, ToScalar, U256};
-use halo2_proofs::circuit::Value;
-use halo2_proofs::plonk::Error;
+use eth_types::{
+    evm_types::{GasCost, OpcodeId},
+    Field, ToScalar, U256,
+};
+use halo2_proofs::{circuit::Value, plonk::Error};
 
 /// Gadget to implement the corresponding out of gas errors for
 /// [`OpcodeId::SLOAD`] and [`OpcodeId::SSTORE`].
@@ -57,7 +65,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGSloadSstoreGadget<F> {
         let callee_address = cb.call_context(None, CallContextFieldTag::CalleeAddress);
 
         // Constrain `is_static` must be false for SSTORE.
-        //cb.require_zero("is_static == false", is_static.expr() * is_sstore.expr().0);
+        // cb.require_zero("is_static == false", is_static.expr() * is_sstore.expr().0);
 
         let phase2_key = cb.query_cell_phase2();
         let phase2_value = cb.query_cell_phase2();
@@ -240,13 +248,23 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGSloadSstoreGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::evm_circuit::test::rand_bytes;
-    use crate::evm_circuit::util::common_gadget::cal_sstore_gas_cost_for_assignment;
-    use crate::test_util::CircuitTestBuilder;
-    use eth_types::evm_types::{GasCost, OpcodeId};
-    use eth_types::{bytecode, Bytecode, ToWord, U256};
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    use super::cal_sload_gas_cost_for_assignment;
+    use crate::{
+        evm_circuit::{test::rand_bytes, util::common_gadget::cal_sstore_gas_cost_for_assignment},
+        test_util::CircuitTestBuilder,
+    };
+    use eth_types::{
+        bytecode,
+        evm_types::{GasCost, OpcodeId},
+        Bytecode, ToWord, U256,
+    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{SimpleTestContext, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
+    };
     use std::cmp::max;
 
     const TESTING_STORAGE_KEY: U256 = U256([0, 0, 0, 0x030201]);
@@ -448,19 +466,23 @@ mod test {
     }
 
     fn test_root(testing_data: &TestingData) {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(MOCK_ACCOUNTS[0])
                     .balance(eth(10))
                     .code(testing_data.bytecode.clone())
                     .storage([(testing_data.key, testing_data.original_value)].into_iter());
                 accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
                 // Decrease expected gas cost (by 1) to trigger out of gas error.
-                txs[0]
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());
@@ -498,18 +520,22 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(addr_b)
                     .code(code_b)
                     .storage([(testing_data.key, testing_data.original_value)].into_iter());
                 accs[1].address(addr_a).code(code_a);
                 accs[2].address(mock::MOCK_ACCOUNTS[2]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].from(accs[2].address).to(accs[1].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
         )

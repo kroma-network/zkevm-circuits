@@ -1,3 +1,4 @@
+use super::{rlc, CachedRegion, CellType, StoredExpression};
 use crate::{
     evm_circuit::{
         param::STACK_CAPACITY,
@@ -11,6 +12,7 @@ use crate::{
     },
     util::{build_tx_log_expression, Challenges, Expr},
 };
+use bus_mapping::state_db::EMPTY_CODE_HASH_LE;
 use eth_types::Field;
 use gadgets::util::{and, not};
 use halo2_proofs::{
@@ -20,9 +22,6 @@ use halo2_proofs::{
         Expression::{self, Constant},
     },
 };
-use keccak256::EMPTY_HASH_LE;
-
-use super::{rlc, CachedRegion, CellType, StoredExpression};
 
 // Max degree allowed in all expressions passing through the ConstraintBuilder.
 // It aims to cap `extended_k` to 2, which allows constraint degree to 2^2+1,
@@ -121,7 +120,7 @@ impl<F: Field> ReversionInfo<F> {
             cb.require_equal(
                 "callee_rw_counter_end_of_reversion == rw_counter_end_of_reversion - (reversible_write_counter + 1)",
                 callee.rw_counter_end_of_reversion(),
-                caller.rw_counter_of_reversion(),
+                caller.rw_counter_of_reversion(1.expr()),
             );
         });
         callee
@@ -136,11 +135,13 @@ impl<F: Field> ReversionInfo<F> {
     }
 
     /// Returns `rw_counter_end_of_reversion - reversible_write_counter` and
-    /// increases `reversible_write_counter` by `1`.
-    pub(crate) fn rw_counter_of_reversion(&mut self) -> Expression<F> {
+    /// increases `reversible_write_counter` by `1` when `inc_selector` is
+    /// enabled.
+    pub(crate) fn rw_counter_of_reversion(&mut self, inc_selector: Expression<F>) -> Expression<F> {
         let rw_counter_of_reversion =
-            self.rw_counter_end_of_reversion.expr() - self.reversible_write_counter.expr();
-        self.reversible_write_counter = self.reversible_write_counter.clone() + 1.expr();
+            self.rw_counter_end_of_reversion.expr() - self.reversible_write_counter.clone();
+        self.reversible_write_counter =
+            self.reversible_write_counter.clone() + inc_selector * 1.expr();
         rw_counter_of_reversion
     }
 
@@ -296,7 +297,7 @@ pub(crate) struct ConstraintBuilder<'a, F> {
     stack_pointer_offset: Expression<F>,
     log_id_offset: usize,
     in_next_step: bool,
-    condition: Option<Expression<F>>,
+    conditions: Vec<Expression<F>>,
     constraints_location: ConstraintLocation,
     stored_expressions: Vec<StoredExpression<F>>,
     pub(crate) max_inner_degree: (&'static str, usize),
@@ -326,7 +327,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
             stack_pointer_offset: 0.expr(),
             log_id_offset: 0,
             in_next_step: false,
-            condition: None,
+            conditions: Vec::new(),
             constraints_location: ConstraintLocation::Step,
             stored_expressions: Vec::new(),
             max_inner_degree: ("", 0),
@@ -353,6 +354,15 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
             self.stored_expressions,
             self.curr.cell_manager.get_height(),
         )
+    }
+
+    fn condition_expr_opt(&self) -> Option<Expression<F>> {
+        let mut iter = self.conditions.iter();
+        let first = match iter.next() {
+            Some(e) => e,
+            None => return None,
+        };
+        Some(iter.fold(first.clone(), |acc, e| acc * e.clone()))
     }
 
     pub(crate) fn challenges(&self) -> &Challenges<Expression<F>> {
@@ -453,14 +463,18 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         rlc::expr(&bytes, self.challenges.keccak_input())
     }
 
-    pub(crate) fn empty_hash_rlc(&self) -> Expression<F> {
-        self.word_rlc((*EMPTY_HASH_LE).map(|byte| byte.expr()))
+    pub(crate) fn empty_code_hash_rlc(&self) -> Expression<F> {
+        self.word_rlc((*EMPTY_CODE_HASH_LE).map(|byte| byte.expr()))
     }
 
     // Common
 
     pub(crate) fn require_zero(&mut self, name: &'static str, constraint: Expression<F>) {
         self.add_constraint(name, constraint);
+    }
+
+    pub(crate) fn require_true(&mut self, name: &'static str, constraint: Expression<F>) {
+        self.require_equal(name, constraint, 1.expr());
     }
 
     pub(crate) fn require_equal(
@@ -491,6 +505,19 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
 
     pub(crate) fn require_next_state(&mut self, execution_state: ExecutionState) {
         let next_state = self.next.execution_state_selector([execution_state]);
+        self.add_constraint(
+            "Constrain next execution state",
+            1.expr() - next_state.expr(),
+        );
+    }
+
+    #[cfg(feature = "kroma")]
+    pub(crate) fn end_deposit_tx_or_fee_distribution_hook(&mut self) {
+        let next_state = self.next.execution_state_selector([
+            ExecutionState::EndDepositTx,
+            ExecutionState::FeeDistributionHook,
+        ]);
+
         self.add_constraint(
             "Constrain next execution state",
             1.expr() - next_state.expr(),
@@ -628,9 +655,9 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         )
     }
 
-    pub(crate) fn bytecode_length(&mut self, code_hash: Expression<F>, value: Expression<F>) {
+    pub(crate) fn bytecode_header(&mut self, code_hash: Expression<F>, value: Expression<F>) {
         self.add_lookup(
-            "Bytecode (length)",
+            "Bytecode (header)",
             Lookup::Bytecode {
                 hash: code_hash,
                 tag: BytecodeFieldTag::Header.expr(),
@@ -712,7 +739,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         tag: RwTableTag,
         values: RwValues<F>,
     ) {
-        let name = format!("rw lookup {}", name);
+        let name = format!("rw lookup {name}");
         self.add_lookup(
             &name,
             Lookup::Rw {
@@ -743,7 +770,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         // Manually constant folding is used here, since halo2 cannot do this
         // automatically. Better error message will be printed during circuit
         // debugging.
-        self.rw_counter_offset = match &self.condition {
+        self.rw_counter_offset = match self.condition_expr_opt() {
             None => {
                 if let Constant(v) = self.rw_counter_offset {
                     Constant(v + F::from(1u64))
@@ -751,7 +778,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                     self.rw_counter_offset.clone() + 1i32.expr()
                 }
             }
-            Some(c) => self.rw_counter_offset.clone() + c.clone(),
+            Some(c) => self.rw_counter_offset.clone() + c,
         };
     }
 
@@ -771,31 +798,21 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
 
         // Revert if is_persistent is 0
         if let Some(reversion_info) = reversion_info {
-            // To allow conditional reversible writes, we extract the pre-existing condition
-            // here if it exists, and then reset it afterwards.
-            let condition = self.condition.clone();
-            self.condition = None;
-            self.condition(
-                and::expr(&[
-                    condition.clone().unwrap_or_else(|| 1.expr()),
-                    not::expr(reversion_info.is_persistent()),
-                ]),
-                |cb| {
-                    let name = format!("{} with reversion", name);
-                    cb.rw_lookup_with_counter(
-                        &name,
-                        reversion_info.rw_counter_of_reversion(),
-                        true.expr(),
-                        tag,
-                        RwValues {
-                            value_prev: values.value,
-                            value: values.value_prev,
-                            ..values
-                        },
-                    )
-                },
-            );
-            self.condition = condition;
+            let reversible_write_counter_inc_selector = self.condition_expr();
+            self.condition(not::expr(reversion_info.is_persistent()), |cb| {
+                let name = format!("{name} with reversion");
+                cb.rw_lookup_with_counter(
+                    &name,
+                    reversion_info.rw_counter_of_reversion(reversible_write_counter_inc_selector),
+                    true.expr(),
+                    tag,
+                    RwValues {
+                        value_prev: values.value,
+                        value: values.value_prev,
+                        ..values
+                    },
+                )
+            });
         }
     }
 
@@ -1370,13 +1387,9 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
         condition: Expression<F>,
         constraint: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        debug_assert!(
-            self.condition.is_none(),
-            "Nested condition is not supported"
-        );
-        self.condition = Some(condition);
+        self.conditions.push(condition);
         let ret = constraint(self);
-        self.condition = None;
+        self.conditions.pop();
         ret
     }
 
@@ -1465,8 +1478,8 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
     }
 
     pub(crate) fn add_lookup(&mut self, name: &str, lookup: Lookup<F>) {
-        let lookup = match &self.condition {
-            Some(condition) => lookup.conditional(condition.clone()),
+        let lookup = match self.condition_expr_opt() {
+            Some(condition) => lookup.conditional(condition),
             None => lookup,
         };
         let compressed_expr = self.split_expression(
@@ -1503,7 +1516,7 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
                 self.in_next_step = in_next_step;
 
                 // Require the stored value to equal the value of the expression
-                let name = format!("{} (stored expression)", name);
+                let name = format!("{name} (stored expression)");
                 self.push_constraint(
                     Box::leak(name.clone().into_boxed_str()),
                     cell.expr() - expr.clone(),
@@ -1581,8 +1594,8 @@ impl<'a, F: Field> ConstraintBuilder<'a, F> {
     }
 
     fn condition_expr(&self) -> Expression<F> {
-        match &self.condition {
-            Some(condition) => condition.clone(),
+        match self.condition_expr_opt() {
+            Some(condition) => condition,
             None => 1.expr(),
         }
     }

@@ -1,15 +1,13 @@
 //! Mock Transaction definition and builder related methods.
 
 use super::{MOCK_ACCOUNTS, MOCK_CHAIN_ID, MOCK_GASPRICE};
-use eth_types::word;
 use eth_types::{
-    geth_types::Transaction as GethTransaction, AccessList, Address, Bytes, Hash, Transaction,
-    Word, U64,
+    geth_types::Transaction as GethTransaction, word, AccessList, Address, Bytes, Hash,
+    Transaction, Word, U64,
 };
-use ethers_core::types::OtherFields;
 use ethers_core::{
     rand::{CryptoRng, RngCore},
-    types::TransactionRequest,
+    types::{OtherFields, TransactionRequest},
 };
 use ethers_signers::{LocalWallet, Signer};
 use lazy_static::lazy_static;
@@ -27,7 +25,7 @@ lazy_static! {
                 .transaction_idx(1u64)
                 .from(AddrOrWallet::random(&mut rng))
                 .to(MOCK_ACCOUNTS[0])
-                .nonce(word!("0x103"))
+                .nonce(0x103u64)
                 .value(word!("0x3e8"))
                 .gas_price(word!("0x4d2"))
                 .input(vec![1, 2, 3, 4, 5, 0, 6, 7, 8, 9].into()) // call data gas cost of 0 is 4
@@ -36,7 +34,7 @@ lazy_static! {
                 .transaction_idx(2u64)
                 .from(AddrOrWallet::random(&mut rng))
                 .to(MOCK_ACCOUNTS[1])
-                .nonce(word!("0x104"))
+                .nonce(0x104u64)
                 .value(word!("0x3e8"))
                 .gas_price(word!("0x4d2"))
                 .input(Bytes::from(b"hello"))
@@ -45,7 +43,7 @@ lazy_static! {
                 .transaction_idx(3u64)
                 .from(AddrOrWallet::random(&mut rng))
                 .to(MOCK_ACCOUNTS[2])
-                .nonce(word!("0x105"))
+                .nonce(0x105u64)
                 .value(word!("0x3e8"))
                 .gas_price(word!("0x4d2"))
                 .input(Bytes::from(b"hello"))
@@ -54,7 +52,7 @@ lazy_static! {
                 .transaction_idx(4u64)
                 .from(AddrOrWallet::random(&mut rng))
                 .to(MOCK_ACCOUNTS[3])
-                .nonce(word!("0x106"))
+                .nonce(0x106u64)
                 .value(word!("0x3e8"))
                 .gas_price(word!("0x4d2"))
                 .input(Bytes::from(b""))
@@ -63,7 +61,7 @@ lazy_static! {
                 .transaction_idx(5u64)
                 .from(AddrOrWallet::random(&mut rng))
                 .to(MOCK_ACCOUNTS[4])
-                .nonce(word!("0x0"))
+                .nonce(0x0u64)
                 .value(word!("0x0"))
                 .gas_price(word!("0x4d2"))
                 .input(Bytes::from(b"hello"))
@@ -72,7 +70,7 @@ lazy_static! {
                 .transaction_idx(6u64)
                 .from(AddrOrWallet::random(&mut rng))
                 .to(AddrOrWallet::Addr(Address::zero()))
-                .nonce(word!("0x0"))
+                .nonce(0x0u64)
                 .value(word!("0x0"))
                 .gas_price(word!("0x4d2"))
                 .input(Bytes::from(b"hello"))
@@ -145,7 +143,7 @@ impl AddrOrWallet {
 /// any of it's details.
 pub struct MockTransaction {
     pub hash: Option<Hash>,
-    pub nonce: Word,
+    pub nonce: u64,
     pub block_hash: Hash,
     pub block_number: U64,
     pub transaction_index: U64,
@@ -163,13 +161,17 @@ pub struct MockTransaction {
     pub max_priority_fee_per_gas: Word,
     pub max_fee_per_gas: Word,
     pub chain_id: Word,
+
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
+    pub mint: Word,
 }
 
 impl Default for MockTransaction {
     fn default() -> Self {
         MockTransaction {
             hash: None,
-            nonce: Word::zero(),
+            nonce: 0,
             block_hash: Hash::zero(),
             block_number: U64::zero(),
             transaction_index: U64::zero(),
@@ -187,6 +189,8 @@ impl Default for MockTransaction {
             max_priority_fee_per_gas: Word::zero(),
             max_fee_per_gas: Word::zero(),
             chain_id: *MOCK_CHAIN_ID,
+            #[cfg(feature = "kroma")]
+            mint: Word::zero(),
         }
     }
 }
@@ -195,7 +199,7 @@ impl From<MockTransaction> for Transaction {
     fn from(mock: MockTransaction) -> Self {
         Transaction {
             hash: mock.hash.unwrap_or_default(),
-            nonce: mock.nonce,
+            nonce: mock.nonce.into(),
             block_hash: Some(mock.block_hash),
             block_number: Some(mock.block_number),
             transaction_index: Some(mock.transaction_index),
@@ -233,7 +237,7 @@ impl MockTransaction {
     }
 
     /// Set nonce field for the MockTransaction.
-    pub fn nonce(&mut self, nonce: Word) -> &mut Self {
+    pub fn nonce(&mut self, nonce: u64) -> &mut Self {
         self.nonce = nonce;
         self
     }
@@ -327,6 +331,13 @@ impl MockTransaction {
     /// Set chain_id field for the MockTransaction.
     pub fn chain_id(&mut self, chain_id: Word) -> &mut Self {
         self.chain_id = chain_id;
+        self
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Set mint field for the MockTransaction.
+    pub fn mint(&mut self, mint: Word) -> &mut Self {
+        self.mint = mint;
         self
     }
 

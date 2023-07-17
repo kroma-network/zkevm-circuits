@@ -1,46 +1,41 @@
 //! Implementation of an in-memory key-value database to represent the
 //! Ethereum State Trie.
 
+#[cfg(feature = "kroma")]
+use crate::circuit_input_builder::TxL1Fee;
 use crate::precompile::is_precompiled;
-use eth_types::{Address, Hash, Word, H256, U256};
+#[cfg(feature = "kroma")]
+use crate::Error;
+#[cfg(feature = "kroma")]
+use eth_types::kroma_params::{
+    BASE_FEE_KEY, L1_BLOCK, L1_COST_DENOMINATOR, L1_FEE_OVERHEAD_KEY, L1_FEE_SCALAR_KEY,
+    VALIDATOR_REWARD_SCALAR_KEY,
+};
+use eth_types::{geth_types, Address, Hash, Word, H256, U256};
 use ethers_core::utils::keccak256;
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 
 lazy_static! {
     static ref ACCOUNT_ZERO: Account = Account::zero();
-    static ref VALUE_ZERO: Word = Word::zero();
-    static ref CODE_HASH_ZERO: Hash = H256(keccak256([]));
+    static ref EMPTY_CODE_HASH: Hash = CodeDB::hash(&[]);
+    /// bytes of empty code hash, in little endian order.
+    pub static ref EMPTY_CODE_HASH_LE: [u8; 32] = {
+        let mut bytes = EMPTY_CODE_HASH.to_fixed_bytes();
+        bytes.reverse();
+        bytes
+    };
 }
 
-/// Define any object can encode the code to a 32 bytes hash
-pub trait CodeHash: std::fmt::Debug {
-    /// encode code
-    fn hash_code(&self, code: &[u8]) -> Hash;
-}
-
-/// Helper trait for clone object in a object-safe way
-pub trait CodeHashCopy: CodeHash {
-    /// clone to a boxed object
-    fn clone_box(&self) -> Box<dyn CodeHashCopy>;
-}
-
-impl<T> CodeHashCopy for T
-where
-    T: 'static + CodeHash + Clone,
-{
-    fn clone_box(&self) -> Box<dyn CodeHashCopy> {
-        Box::new(self.clone())
-    }
-}
+const VALUE_ZERO: Word = Word::zero();
 
 /// Memory storage for contract code by code hash.
 #[derive(Debug)]
-pub struct CodeDB(pub HashMap<Hash, Vec<u8>>, Box<dyn CodeHashCopy>);
+pub struct CodeDB(pub HashMap<Hash, Vec<u8>>);
 
 impl Clone for CodeDB {
     fn clone(&self) -> Self {
-        CodeDB(self.0.clone(), self.1.clone_box())
+        CodeDB(self.0.clone())
     }
 }
 
@@ -50,40 +45,26 @@ impl Default for CodeDB {
     }
 }
 
-#[derive(Debug, Clone)]
-struct EthCodeHash;
-
-impl CodeHash for EthCodeHash {
-    fn hash_code(&self, code: &[u8]) -> Hash {
-        H256(keccak256(code))
-    }
-}
-
 impl CodeDB {
-    /// Create a new empty Self with specified code hash method
-    pub fn new_with_code_hasher(hasher: Box<dyn CodeHashCopy>) -> Self {
-        Self(HashMap::new(), hasher)
-    }
     /// Create a new empty Self.
     pub fn new() -> Self {
-        Self::new_with_code_hasher(Box::new(EthCodeHash))
+        Self(HashMap::new())
     }
-    /// Insert code indexed by code hash, and return the code hash. Notice we
-    /// always return Self::empty_code_hash() for empty code
+    /// Insert code indexed by code hash, and return the code hash.
     pub fn insert(&mut self, code: Vec<u8>) -> Hash {
-        let hash = if code.is_empty() {
-            Self::empty_code_hash()
-        } else {
-            self.1.hash_code(&code)
-        };
+        let hash = Self::hash(&code);
+
         self.0.insert(hash, code);
         hash
     }
-    /// Specify code hash for empty code (nil), it should be kept consistent
-    /// between different methods because many contract use this magic hash
-    /// for distinguishing accounts without contracts
+    /// Specify code hash for empty code (nil)
     pub fn empty_code_hash() -> Hash {
-        *CODE_HASH_ZERO
+        *EMPTY_CODE_HASH
+    }
+
+    /// Compute hash of given code.
+    pub fn hash(code: &[u8]) -> Hash {
+        H256(keccak256(code))
     }
 }
 
@@ -92,7 +73,7 @@ impl CodeDB {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Account {
     /// Nonce
-    pub nonce: Word,
+    pub nonce: u64,
     /// Balance
     pub balance: Word,
     /// Storage key-value map
@@ -101,20 +82,31 @@ pub struct Account {
     pub code_hash: Hash,
 }
 
+impl From<geth_types::Account> for Account {
+    fn from(account: geth_types::Account) -> Self {
+        Self {
+            nonce: account.nonce.as_u64(),
+            balance: account.balance,
+            storage: account.storage.clone(),
+            code_hash: CodeDB::hash(&account.code.to_vec()),
+        }
+    }
+}
+
 impl Account {
     /// Return an empty account, with all values set at zero.
     pub fn zero() -> Self {
         Self {
-            nonce: Word::zero(),
+            nonce: 0,
             balance: Word::zero(),
             storage: HashMap::new(),
-            code_hash: *CODE_HASH_ZERO,
+            code_hash: *EMPTY_CODE_HASH,
         }
     }
 
     /// Return if account is empty or not.
     pub fn is_empty(&self) -> bool {
-        self.nonce.is_zero() && self.balance.is_zero() && self.code_hash.eq(&CODE_HASH_ZERO)
+        self.nonce == 0 && self.balance.is_zero() && self.code_hash.eq(&EMPTY_CODE_HASH)
     }
 }
 
@@ -141,14 +133,7 @@ pub struct StateDB {
 impl StateDB {
     /// Create an empty Self
     pub fn new() -> Self {
-        Self {
-            state: HashMap::new(),
-            access_list_account: HashSet::new(),
-            access_list_account_storage: HashSet::new(),
-            dirty_storage: HashMap::new(),
-            destructed_account: HashSet::new(),
-            refund: 0,
-        }
+        Self::default()
     }
 
     /// Set an [`Account`] at `addr` in the StateDB.
@@ -197,7 +182,7 @@ impl StateDB {
         let (_, acc) = self.get_account(addr);
         match acc.storage.get(key) {
             Some(value) => (true, value),
-            None => (false, &(*VALUE_ZERO)),
+            None => (false, &VALUE_ZERO),
         }
     }
 
@@ -229,14 +214,14 @@ impl StateDB {
     /// Get nonce of account with `addr`.
     pub fn get_nonce(&self, addr: &Address) -> u64 {
         let (_, account) = self.get_account(addr);
-        account.nonce.as_u64()
+        account.nonce
     }
 
     /// Increase nonce of account with `addr` and return the previous value.
     pub fn increase_nonce(&mut self, addr: &Address) -> u64 {
         let (_, account) = self.get_account_mut(addr);
-        let nonce = account.nonce.as_u64();
-        account.nonce = account.nonce + 1;
+        let nonce = account.nonce;
+        account.nonce += 1;
         nonce
     }
 
@@ -279,6 +264,7 @@ impl StateDB {
 
     /// Set account as self destructed.
     pub fn destruct_account(&mut self, addr: Address) {
+        self.state.insert(addr, Account::zero());
         self.destructed_account.insert(addr);
     }
 
@@ -290,6 +276,72 @@ impl StateDB {
     /// Set refund
     pub fn set_refund(&mut self, value: u64) {
         self.refund = value;
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Get data from L1_BLOCK which are required to compute rewards.
+    pub fn get_l1_block(&self) -> Result<(TxL1Fee, TxL1Fee), Error> {
+        let (found, l1_base_fee) = self.get_storage(&L1_BLOCK, &BASE_FEE_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(*L1_BLOCK, *BASE_FEE_KEY));
+        }
+        let (found, l1_fee_overhead) = self.get_storage(&L1_BLOCK, &L1_FEE_OVERHEAD_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_OVERHEAD_KEY));
+        }
+        let (found, l1_fee_scalar) = self.get_storage(&L1_BLOCK, &L1_FEE_SCALAR_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(*L1_BLOCK, *L1_FEE_SCALAR_KEY));
+        }
+        let (found, validator_reward_scalar) =
+            self.get_storage(&L1_BLOCK, &VALIDATOR_REWARD_SCALAR_KEY);
+        if !found {
+            return Err(Error::StorageKeyNotFound(
+                *L1_BLOCK,
+                *VALIDATOR_REWARD_SCALAR_KEY,
+            ));
+        }
+
+        let (_, l1_base_fee_committed) = self.get_committed_storage(&L1_BLOCK, &BASE_FEE_KEY);
+        let (_, l1_fee_overhead_committed) =
+            self.get_committed_storage(&L1_BLOCK, &L1_FEE_OVERHEAD_KEY);
+        let (_, l1_fee_scalar_committed) =
+            self.get_committed_storage(&L1_BLOCK, &L1_FEE_SCALAR_KEY);
+        let (_, validator_reward_scalar_committed) =
+            self.get_committed_storage(&L1_BLOCK, &VALIDATOR_REWARD_SCALAR_KEY);
+
+        let values = TxL1Fee {
+            base_fee: *l1_base_fee,
+            fee_overhead: *l1_fee_overhead,
+            fee_scalar: *l1_fee_scalar,
+            validator_reward_scalar: *validator_reward_scalar,
+        };
+        let committed_values = TxL1Fee {
+            base_fee: *l1_base_fee_committed,
+            fee_overhead: *l1_fee_overhead_committed,
+            fee_scalar: *l1_fee_scalar_committed,
+            validator_reward_scalar: *validator_reward_scalar_committed,
+        };
+        Ok((values, committed_values))
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Compute rollup l1 fee. See core/types/rollup_l1_cost.go in kroma-geth
+    /// for details.
+    pub fn compute_l1_fee(
+        &self,
+        l1_base_fee: Word,
+        l1_fee_overhead: Word,
+        l1_fee_scalar: Word,
+        rollup_data_gas_cost: u64,
+    ) -> Result<Word, Error> {
+        debug_assert!(!l1_base_fee.is_zero());
+        debug_assert!(!l1_fee_overhead.is_zero());
+        debug_assert!(!l1_fee_scalar.is_zero());
+        Ok(
+            (Word::from(rollup_data_gas_cost) + l1_fee_overhead) * l1_base_fee * l1_fee_scalar
+                / *L1_COST_DENOMINATOR,
+        )
     }
 
     /// Clear access list and refund, and commit dirty storage.
@@ -313,8 +365,8 @@ impl StateDB {
 
 #[cfg(test)]
 mod statedb_tests {
-    use super::*;
-    use eth_types::address;
+    use crate::state_db::{Account, StateDB};
+    use eth_types::{address, Word};
 
     #[test]
     fn statedb() {
@@ -336,12 +388,12 @@ mod statedb_tests {
         let (found, acc) = statedb.get_account_mut(&addr_a);
         assert!(!found);
         assert_eq!(acc, &Account::zero());
-        acc.nonce = Word::from(100);
+        acc.nonce = 100;
 
         // Get existing account and check nonce
         let (found, acc) = statedb.get_account(&addr_a);
         assert!(found);
-        assert_eq!(acc.nonce, Word::from(100));
+        assert_eq!(acc.nonce, 100);
 
         // Get non-existing storage key for existing account and set value
         let (found, value) = statedb.get_storage_mut(&addr_a, &Word::from(2));
@@ -363,7 +415,7 @@ mod statedb_tests {
         // Get existing account and check nonce
         let (found, acc) = statedb.get_account(&addr_b);
         assert!(found);
-        assert_eq!(acc.nonce, Word::zero());
+        assert_eq!(acc.nonce, 0);
 
         // Get existing storage key and check value
         let (found, value) = statedb.get_storage(&addr_b, &Word::from(3));

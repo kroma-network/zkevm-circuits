@@ -147,11 +147,17 @@ impl<F: Field, const N_ADDENDS: usize, const CHECK_OVERFLOW: bool>
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_util::*;
-    use super::*;
-    use eth_types::{Word, U256};
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::Error;
+    use super::{util, AddWordsGadget};
+    use crate::evm_circuit::util::{
+        constraint_builder::ConstraintBuilder,
+        math_gadget::test_util::{
+            test_math_gadget_container, try_test, MathGadgetContainer, WORD_HIGH_MAX, WORD_LOW_MAX,
+        },
+        CachedRegion,
+    };
+    use eth_types::{Field, ToLittleEndian, Word, U256};
+    use gadgets::util::Expr;
+    use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]
     /// AddWordsTestContainer: require(sum = sum(addends))

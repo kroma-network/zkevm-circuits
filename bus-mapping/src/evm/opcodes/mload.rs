@@ -1,8 +1,9 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
-use eth_types::evm_types::MemoryAddress;
-use eth_types::{GethExecStep, ToBigEndian};
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    Error,
+};
+use eth_types::{evm_types::MemoryAddress, GethExecStep, ToBigEndian};
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
 /// corresponding to the [`OpcodeId::MLOAD`](crate::evm::OpcodeId::MLOAD)
@@ -19,7 +20,6 @@ impl Opcode for Mload {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-        //
         // First stack read
         //
         let stack_value_read = geth_step.stack.last()?;
@@ -34,12 +34,10 @@ impl Opcode for Mload {
         // 0.
         let mem_read_value = geth_steps[1].stack.last()?;
 
-        //
         // First stack write
         //
         state.stack_write(&mut exec_step, stack_position, mem_read_value)?;
 
-        //
         // First mem read -> 32 MemoryOp generated.
         //
         for byte in mem_read_value.to_be_bytes() {
@@ -62,7 +60,6 @@ impl Opcode for Mload {
 
 #[cfg(test)]
 mod mload_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
@@ -70,12 +67,18 @@ mod mload_tests {
     };
     use eth_types::{
         bytecode,
-        evm_types::{OpcodeId, StackAddress},
+        evm_types::{MemoryAddress, OpcodeId, StackAddress},
         geth_types::GethData,
-        Word,
+        ToBigEndian, Word,
     };
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -89,7 +92,7 @@ mod mload_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -103,11 +106,12 @@ mod mload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::MLOAD))
             .unwrap();
+        let call_id = builder.block.txs()[tx_idx!(0)].calls[0].call_id;
 
         assert_eq!(
             [0, 1]
@@ -116,11 +120,11 @@ mod mload_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(0x40))
+                    &StackOp::new(call_id, StackAddress::from(1023), Word::from(0x40))
                 ),
                 (
                     RW::WRITE,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(0x80))
+                    &StackOp::new(call_id, StackAddress::from(1023), Word::from(0x80))
                 )
             ]
         );
@@ -135,7 +139,10 @@ mod mload_tests {
                 .to_be_bytes()
                 .into_iter()
                 .enumerate()
-                .map(|(idx, byte)| (RW::READ, MemoryOp::new(1, MemoryAddress(idx + 0x40), byte)))
+                .map(|(idx, byte)| (
+                    RW::READ,
+                    MemoryOp::new(call_id, MemoryAddress(idx + 0x40), byte)
+                ))
                 .collect_vec()
         )
     }

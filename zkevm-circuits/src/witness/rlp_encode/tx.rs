@@ -1,16 +1,16 @@
-use ethers_core::utils::rlp;
-use halo2_proofs::circuit::Value;
-use halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
-use strum_macros::EnumIter;
-
-use crate::util::Challenges;
-use crate::witness::rlp_encode::common::handle_u8;
-use crate::{evm_circuit::witness::Transaction, impl_expr, witness::tx::SignedTransaction};
-
 use super::{
     common::{handle_address, handle_bytes, handle_prefix, handle_u256, handle_u64},
     witness_gen::{RlpDataType, RlpWitnessGen, RlpWitnessRow},
 };
+use crate::{
+    evm_circuit::witness::Transaction,
+    impl_expr,
+    util::Challenges,
+    witness::{rlp_encode::common::handle_u8, tx::SignedTransaction},
+};
+use ethers_core::utils::rlp;
+use halo2_proofs::{arithmetic::FieldExt, circuit::Value, plonk::Expression};
+use strum_macros::EnumIter;
 
 /// Tags used to tag rows in the RLP circuit for a transaction.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, EnumIter)]
@@ -52,6 +52,15 @@ pub enum RlpTxTag {
     /// combination in its accumulator value. Its used to support a lookup
     /// for rlc(rlp(tx)).
     Rlp,
+    /// Denotes the byte(s) for the tx’s type.
+    TransactionType,
+
+    #[cfg(feature = "kroma")]
+    /// Denotes the amount to mint for deposit tx.
+    Mint,
+    #[cfg(feature = "kroma")]
+    /// Denotes the gas cost to roll up a tx.
+    RollupDataGasCost,
 }
 
 impl_expr!(RlpTxTag);
@@ -360,15 +369,16 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
 #[cfg(test)]
 mod tests {
     use ethers_core::utils::rlp;
-    use halo2_proofs::circuit::Value;
-    use halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr};
+    use halo2_proofs::{arithmetic::Field, circuit::Value, halo2curves::bn256::Fr};
     use num::Zero;
 
-    use crate::evm_circuit::{
-        test::rand_bytes,
-        witness::{RlpTxTag, RlpWitnessGen, Transaction},
+    use crate::{
+        evm_circuit::{
+            test::rand_bytes,
+            witness::{RlpTxTag, RlpWitnessGen, Transaction},
+        },
+        util::Challenges,
     };
-    use crate::util::Challenges;
 
     #[test]
     fn tx_rlp_witgen_a() {

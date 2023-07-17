@@ -12,9 +12,7 @@ use crate::{
     },
     util::Expr,
 };
-use eth_types::evm_types::OpcodeId;
-use eth_types::Field;
-use eth_types::ToLittleEndian;
+use eth_types::{evm_types::OpcodeId, Field, ToLittleEndian};
 use halo2_proofs::plonk::Error;
 
 #[derive(Clone, Debug)]
@@ -103,7 +101,7 @@ impl<F: Field> ExecutionGadget<F> for BitwiseGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_ok(a: Word, b: Word) {
         let bytecode = bytecode! {
@@ -122,7 +120,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

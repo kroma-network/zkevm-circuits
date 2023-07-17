@@ -1,14 +1,18 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CallKind, CircuitInputStateRef, CodeSource, ExecStep};
-use crate::operation::MemoryOp;
-use crate::operation::{AccountField, CallContextField, TxAccessListAccountOp, RW};
-use crate::precompile::{execute_precompiled, is_precompiled};
-use crate::Error;
-use eth_types::evm_types::gas_utils::{eip150_gas, memory_expansion_gas_cost};
-use eth_types::evm_types::GasCost;
-use eth_types::evm_types::OpcodeId;
-use eth_types::{GethExecStep, ToWord, Word};
-use keccak256::EMPTY_HASH;
+use crate::{
+    circuit_input_builder::{CallKind, CircuitInputStateRef, CodeSource, ExecStep},
+    operation::{AccountField, CallContextField, MemoryOp, TxAccessListAccountOp, RW},
+    precompile::{execute_precompiled, is_precompiled},
+    state_db::CodeDB,
+    Error,
+};
+use eth_types::{
+    evm_types::{
+        gas_utils::{eip150_gas, memory_expansion_gas_cost},
+        GasCost, OpcodeId,
+    },
+    GethExecStep, ToWord, Word,
+};
 use std::cmp::min;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
@@ -27,9 +31,9 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
 
-        let args_offset = geth_step.stack.nth_last(N_ARGS - 4)?.as_usize();
+        let args_offset = geth_step.stack.nth_last(N_ARGS - 4)?.low_u64() as usize;
         let args_length = geth_step.stack.nth_last(N_ARGS - 3)?.as_usize();
-        let ret_offset = geth_step.stack.nth_last(N_ARGS - 2)?.as_usize();
+        let ret_offset = geth_step.stack.nth_last(N_ARGS - 2)?.low_u64() as usize;
         let ret_length = geth_step.stack.nth_last(N_ARGS - 1)?.as_usize();
 
         // we need to keep the memory until parse_call complete
@@ -99,7 +103,7 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
         let (callee_code_hash_word, is_empty_code_hash) = if callee_exists {
             (
                 callee_code_hash.to_word(),
-                callee_code_hash.to_fixed_bytes() == *EMPTY_HASH,
+                callee_code_hash == CodeDB::empty_code_hash(),
             )
         } else {
             (Word::zero(), true)
@@ -109,13 +113,11 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             callee_address,
             AccountField::CodeHash,
             callee_code_hash_word,
-            callee_code_hash_word,
         );
 
         let is_warm = state.sdb.check_account_in_access_list(&callee_address);
         state.push_op_reversible(
             &mut exec_step,
-            RW::WRITE,
             TxAccessListAccountOp {
                 tx_id,
                 address: callee_address,
@@ -143,13 +145,7 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
         let caller_balance = sender_account.balance;
         let is_call_or_callcode = call.kind == CallKind::Call || call.kind == CallKind::CallCode;
         let insufficient_balance = call.value > caller_balance && is_call_or_callcode;
-
-        //log::debug!(
-        //    "insufficient_balance: {}, call type: {:?}, sender_account: {:?} ",
-        //    insufficient_balance,
-        //    call.kind,
-        //    call.caller_address
-        //);
+        let is_depth_ok = geth_step.depth < 1025;
 
         // read balance of caller to compare to value for insufficient_balance checking
         // in circuit, also use for callcode successful case check balance is
@@ -160,16 +156,21 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             call.caller_address,
             AccountField::Balance,
             caller_balance,
-            caller_balance,
         );
 
-        // Transfer value only for CALL opcode, insufficient_balance = false
-        // and value > 0.
-        if call.kind == CallKind::Call && !insufficient_balance && !call.value.is_zero() {
+        let code_address = call.code_address();
+        let is_precompile = code_address
+            .map(|ref addr| is_precompiled(addr))
+            .unwrap_or(false);
+        // TODO: What about transfer for CALLCODE?
+        // Transfer value only for CALL opcode, insufficient_balance = false.
+        if call.kind == CallKind::Call && !insufficient_balance && is_depth_ok {
             state.transfer(
                 &mut exec_step,
                 call.caller_address,
                 call.address,
+                callee_exists || is_precompile,
+                false,
                 call.value,
             )?;
         }
@@ -221,8 +222,7 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             && geth_steps[1].gas.0 != callee_gas_left + if has_value { 2300 } else { 0 }
         {
             // panic with full info
-            let info1 = format!("callee_gas_left {} gas_specified {} gas_cost {} is_warm {} has_value {} current_memory_word_size {} next_memory_word_size {}, memory_expansion_gas_cost {}",
-                    callee_gas_left, gas_specified, gas_cost, is_warm, has_value, curr_memory_word_size, next_memory_word_size, memory_expansion_gas_cost);
+            let info1 = format!("callee_gas_left {callee_gas_left} gas_specified {gas_specified} gas_cost {gas_cost} is_warm {is_warm} has_value {has_value} current_memory_word_size {curr_memory_word_size} next_memory_word_size {next_memory_word_size}, memory_expansion_gas_cost {memory_expansion_gas_cost}");
             let info2 = format!("args gas:{:?} addr:{:?} value:{:?} cd_pos:{:?} cd_len:{:?} rd_pos:{:?} rd_len:{:?}",
                         geth_step.stack.nth_last(0),
                         geth_step.stack.nth_last(1),
@@ -239,17 +239,13 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             debug_assert_eq!(
                 geth_steps[1].gas.0,
                 callee_gas_left + if has_value { 2300 } else { 0 },
-                "{}",
-                full_ctx
+                "{full_ctx}"
             );
         }
 
-        let code_address = call.code_address();
         match (
-            insufficient_balance,
-            code_address
-                .map(|ref addr| is_precompiled(addr))
-                .unwrap_or(false),
+            insufficient_balance || !is_depth_ok,
+            is_precompile,
             is_empty_code_hash,
         ) {
             // 1. Call to precompiled.
@@ -259,7 +255,11 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
                 let code_address = code_address.unwrap();
                 let (result, contract_gas_cost) = execute_precompiled(
                     &code_address,
-                    &caller_ctx.memory.0[args_offset..args_offset + args_length],
+                    if args_length != 0 {
+                        &caller_ctx.memory.0[args_offset..args_offset + args_length]
+                    } else {
+                        &[]
+                    },
                     callee_gas_left,
                 );
                 log::trace!(
@@ -302,7 +302,7 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
                 state.handle_return(geth_step)?;
 
                 let real_cost = geth_steps[0].gas.0 - geth_steps[1].gas.0;
-                //debug_assert_eq!(real_cost, gas_cost + contract_gas_cost);
+                // debug_assert_eq!(real_cost, gas_cost + contract_gas_cost);
                 if real_cost != exec_step.gas_cost.0 {
                     log::warn!(
                         "precompile gas fixed from {} to {}, step {:?}",
@@ -316,7 +316,6 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
             }
             // 2. Call to account with empty code.
             (false, _, true) => {
-                log::warn!("Call to account with empty code is not supported yet.");
                 for (field, value) in [
                     (CallContextField::LastCalleeId, 0.into()),
                     (CallContextField::LastCalleeReturnDataOffset, 0.into()),
@@ -432,11 +431,11 @@ impl<const N_ARGS: usize> Opcode for CallOpcode<N_ARGS> {
 #[cfg(test)]
 mod call_tests {
     use crate::mock::BlockData;
-    use eth_types::geth_types::GethData;
-    use eth_types::{bytecode, word};
-    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
-    use mock::test_ctx::LoggerConfig;
-    use mock::TestContext;
+    use eth_types::{bytecode, geth_types::GethData, word};
+    use mock::test_ctx::{
+        helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+        LoggerConfig, SimpleTestContext,
+    };
 
     #[test]
     fn test_precompiled_call_callcode() {
@@ -478,7 +477,7 @@ mod call_tests {
                 code.append(instruction);
 
                 // Get the execution steps from the external tracer
-                let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+                let block: GethData = SimpleTestContext::new_with_logger_config(
                     None,
                     account_0_code_account_1_no_code(code),
                     tx_from_1_to_0,
@@ -776,7 +775,7 @@ mod call_tests {
 
         for code in codes.into_iter() {
             // Get the execution steps from the external tracer
-            let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+            let block: GethData = SimpleTestContext::new_with_logger_config(
                 None,
                 account_0_code_account_1_no_code(code),
                 tx_from_1_to_0,

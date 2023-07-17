@@ -45,13 +45,13 @@ impl<F: Field, const N_BYTES: usize> RangeCheckGadget<F, N_BYTES> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_util::*;
-    use super::*;
-    use eth_types::*;
+    use super::{
+        super::test_util::{test_math_gadget_container, try_test, MathGadgetContainer},
+        CachedRegion, Cell, ConstraintBuilder, Field, RangeCheckGadget,
+    };
+    use eth_types::{ToScalar, Word};
     use gadgets::util::Expr;
-    use halo2_proofs::circuit::Value;
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::Error;
+    use halo2_proofs::{circuit::Value, halo2curves::bn256::Fr, plonk::Error};
 
     #[derive(Clone)]
     /// RangeCheckTestContainer: require(a in [0..1<<(8*N_BYTES)])

@@ -1,6 +1,8 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    Error,
+};
 use eth_types::GethExecStep;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
@@ -10,9 +12,15 @@ use eth_types::GethExecStep;
 /// - N = 2: BinaryOpcode
 /// - N = 3: TernaryOpcode
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct StackOnlyOpcode<const N_POP: usize, const N_PUSH: usize>;
+pub(crate) struct StackOnlyOpcode<
+    const N_POP: usize,
+    const N_PUSH: usize,
+    const IS_ERR: bool = { false },
+>;
 
-impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, N_PUSH> {
+impl<const N_POP: usize, const N_PUSH: usize, const IS_ERR: bool> Opcode
+    for StackOnlyOpcode<N_POP, N_PUSH, IS_ERR>
+{
     fn gen_associated_ops(
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
@@ -37,14 +45,25 @@ impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, 
             )?;
         }
 
+        if IS_ERR {
+            let next_step = geth_steps.get(1);
+            exec_step.error = state.get_step_err(geth_step, next_step).unwrap();
+
+            state.gen_restore_context_ops(&mut exec_step, geth_steps)?;
+            state.handle_return(geth_step)?;
+        }
+
         Ok(vec![exec_step])
     }
 }
 
 #[cfg(test)]
 mod stackonlyop_tests {
-    use crate::operation::RW;
-    use crate::{circuit_input_builder::ExecState, mock::BlockData, operation::StackOp};
+    use crate::{
+        circuit_input_builder::ExecState,
+        mock::BlockData,
+        operation::{StackOp, RW},
+    };
     use eth_types::{
         bytecode,
         evm_types::{OpcodeId, StackAddress},
@@ -52,10 +71,24 @@ mod stackonlyop_tests {
         word, Bytecode, Word,
     };
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
-    use mock::{MOCK_BASEFEE, MOCK_DIFFICULTY, MOCK_GASLIMIT};
+    #[cfg(feature = "kroma")]
+    use mock::KROMA_MOCK_GASLIMIT;
+    #[cfg(not(feature = "kroma"))]
+    use mock::MOCK_GASLIMIT;
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx, MOCK_BASEFEE, MOCK_DIFFICULTY,
+    };
     use pretty_assertions::assert_eq;
     use std::ops::{BitOr, BitXor};
+
+    #[cfg(feature = "kroma")]
+    const CALL_ID: usize = 739;
+    #[cfg(not(feature = "kroma"))]
+    const CALL_ID: usize = 1;
 
     fn stack_only_opcode_impl<const N_POP: usize, const N_PUSH: usize>(
         opcode: OpcodeId,
@@ -64,7 +97,7 @@ mod stackonlyop_tests {
         pushes: Vec<StackOp>,
     ) {
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -78,7 +111,7 @@ mod stackonlyop_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(opcode))
@@ -119,11 +152,11 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(0x60)),
-                StackOp::new(1, StackAddress(1023), Word::from(0x80)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(0x60)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(0x80)),
             ],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 Word::from(0x60) / Word::from(0x80),
             )],
@@ -141,11 +174,11 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(0x60)),
-                StackOp::new(1, StackAddress(1023), Word::from(0x80)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(0x60)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(0x80)),
             ],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 Word::from(0x60) % Word::from(0x80),
             )],
@@ -163,11 +196,11 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(0x60)),
-                StackOp::new(1, StackAddress(1023), Word::from(0x80)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(0x60)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(0x80)),
             ],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 Word::from(0x60) % Word::from(0x80),
             )],
@@ -184,10 +217,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
 
@@ -208,10 +245,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
     #[test]
@@ -231,10 +272,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
 
@@ -255,10 +300,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
     #[test]
@@ -278,10 +327,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
     #[test]
@@ -301,10 +354,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
     #[test]
@@ -324,10 +381,14 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![
-                StackOp::new(1, StackAddress(1022), Word::from(a)),
-                StackOp::new(1, StackAddress(1023), Word::from(b)),
+                StackOp::new(CALL_ID, StackAddress(1022), Word::from(a)),
+                StackOp::new(CALL_ID, StackAddress(1023), Word::from(b)),
             ],
-            vec![StackOp::new(1, StackAddress(1023), Word::from(result))],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                Word::from(result),
+            )],
         );
     }
     #[test]
@@ -347,12 +408,12 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 word!("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
             )],
             vec![StackOp::new(
-                1,
+                CALL_ID,
                 StackAddress(1023),
                 word!("0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e0"),
             )],
@@ -368,12 +429,16 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![],
-            vec![StackOp::new(1, StackAddress(1023), *MOCK_DIFFICULTY)],
+            vec![StackOp::new(CALL_ID, StackAddress(1023), *MOCK_DIFFICULTY)],
         );
     }
 
     #[test]
     fn gas_limit_opcode_impl() {
+        #[cfg(feature = "kroma")]
+        let checking_gas_limit = *KROMA_MOCK_GASLIMIT;
+        #[cfg(not(feature = "kroma"))]
+        let checking_gas_limit = *MOCK_GASLIMIT;
         stack_only_opcode_impl::<0, 1>(
             OpcodeId::GASLIMIT,
             bytecode! {
@@ -381,7 +446,11 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![],
-            vec![StackOp::new(1, StackAddress(1023), *MOCK_GASLIMIT)],
+            vec![StackOp::new(
+                CALL_ID,
+                StackAddress(1023),
+                checking_gas_limit,
+            )],
         );
     }
 
@@ -394,7 +463,7 @@ mod stackonlyop_tests {
                 STOP
             },
             vec![],
-            vec![StackOp::new(1, StackAddress(1023), *MOCK_BASEFEE)],
+            vec![StackOp::new(CALL_ID, StackAddress(1023), *MOCK_BASEFEE)],
         );
     }
 }

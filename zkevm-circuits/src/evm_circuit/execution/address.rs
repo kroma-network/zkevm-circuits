@@ -91,7 +91,12 @@ impl<F: Field> ExecutionGadget<F> for AddressGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, ToWord, Word};
-    use mock::test_ctx::TestContext;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        test_ctx::{SimpleTestContext, TestContext3_1},
+        tx_idx,
+    };
 
     fn test_root_ok() {
         let bytecode = bytecode! {
@@ -100,7 +105,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -133,17 +138,22 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            #[allow(unused_mut)]
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )

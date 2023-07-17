@@ -1,9 +1,11 @@
-use crate::circuit_input_builder::{
-    CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
+use crate::{
+    circuit_input_builder::{
+        CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
+    },
+    evm::Opcode,
+    operation::{CallContextField, MemoryOp, RW},
+    Error,
 };
-use crate::evm::Opcode;
-use crate::operation::{CallContextField, MemoryOp, RW};
-use crate::Error;
 use eth_types::GethExecStep;
 
 #[derive(Clone, Copy, Debug)]
@@ -15,24 +17,23 @@ impl Opcode for Returndatacopy {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
-        let exec_steps = vec![gen_returndatacopy_step(state, geth_step)?];
+        let mut exec_steps = vec![gen_returndatacopy_step(state, geth_step)?];
 
         // reconstruction
         let geth_step = &geth_steps[0];
-        let dest_offset = geth_step.stack.nth_last(0)?;
-        let offset = geth_step.stack.nth_last(1)?;
-        let size = geth_step.stack.nth_last(2)?;
+        let dst_offset = geth_step.stack.nth_last(0)?;
+        let src_offset = geth_step.stack.nth_last(1)?;
+        let length = geth_step.stack.nth_last(2)?;
 
         // can we reduce this clone?
         let return_data = state.call_ctx()?.return_data.clone();
 
         let call_ctx = state.call_ctx_mut()?;
         let memory = &mut call_ctx.memory;
-        let length = size.as_usize();
-        memory.copy_from(dest_offset.as_u64(), &return_data, offset.as_u64(), length);
+        memory.copy_from(dst_offset, src_offset, length, &return_data);
 
         let copy_event = gen_copy_event(state, geth_step)?;
-        state.push_copy(copy_event);
+        state.push_copy(&mut exec_steps[0], copy_event);
         Ok(exec_steps)
     }
 }
@@ -122,7 +123,8 @@ fn gen_copy_event(
     state: &mut CircuitInputStateRef,
     geth_step: &GethExecStep,
 ) -> Result<CopyEvent, Error> {
-    let dst_addr = geth_step.stack.nth_last(0)?.as_u64();
+    // Get low Uint64 of offset.
+    let dst_addr = geth_step.stack.nth_last(0)?.low_u64();
     let data_offset = geth_step.stack.nth_last(1)?.as_u64();
     let length = geth_step.stack.nth_last(2)?.as_u64();
 
@@ -168,10 +170,11 @@ fn gen_copy_event(
 #[cfg(test)]
 mod return_tests {
     use crate::mock::BlockData;
-    use eth_types::geth_types::GethData;
-    use eth_types::{bytecode, word};
-    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
-    use mock::TestContext;
+    use eth_types::{bytecode, geth_types::GethData, word};
+    use mock::test_ctx::{
+        helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+        SimpleTestContext,
+    };
 
     #[test]
     fn test_ok() {
@@ -222,7 +225,7 @@ mod return_tests {
             STOP
         };
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,

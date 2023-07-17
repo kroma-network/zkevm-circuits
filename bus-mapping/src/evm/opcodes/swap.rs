@@ -1,6 +1,8 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    Error,
+};
 use eth_types::GethExecStep;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
@@ -35,11 +37,19 @@ impl<const N: usize> Opcode for Swap<N> {
 
 #[cfg(test)]
 mod swap_tests {
-    use crate::mock::BlockData;
-    use crate::operation::{StackOp, RW};
+    use crate::{
+        mock::BlockData,
+        operation::{StackOp, RW},
+    };
     use eth_types::{bytecode, evm_types::StackAddress, geth_types::GethData, Word};
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -58,7 +68,7 @@ mod swap_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -74,11 +84,12 @@ mod swap_tests {
 
         // Generate steps corresponding to DUP1, DUP3, DUP5
         for (i, (a, b)) in [(6, 5), (5, 3), (3, 1)].iter().enumerate() {
-            let step = builder.block.txs()[0]
+            let step = builder.block.txs()[tx_idx!(0)]
                 .steps()
                 .iter()
                 .filter(|step| step.exec_state.is_swap())
                 .collect_vec()[i];
+            let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
             let a_pos = StackAddress(1024 - 6);
             let b_pos = StackAddress(1024 - 5 + i * 2);
@@ -91,10 +102,10 @@ mod swap_tests {
                         [step.bus_mapping_instance[idx].as_usize()])
                     .map(|operation| (operation.rw(), operation.op())),
                 [
-                    (RW::READ, &StackOp::new(1, b_pos, b_val)),
-                    (RW::READ, &StackOp::new(1, a_pos, a_val)),
-                    (RW::WRITE, &StackOp::new(1, b_pos, a_val)),
-                    (RW::WRITE, &StackOp::new(1, a_pos, b_val)),
+                    (RW::READ, &StackOp::new(call_id, b_pos, b_val)),
+                    (RW::READ, &StackOp::new(call_id, a_pos, a_val)),
+                    (RW::WRITE, &StackOp::new(call_id, b_pos, a_val)),
+                    (RW::WRITE, &StackOp::new(call_id, a_pos, b_val)),
                 ]
             );
         }

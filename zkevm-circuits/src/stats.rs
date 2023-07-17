@@ -111,8 +111,8 @@ pub(crate) fn bytecode_prefix_op_big_rws(opcode: OpcodeId) -> Bytecode {
 /// - height/gas: ratio between circuit cost and gas cost
 ///
 /// The TestContext is as follows:
-/// - `MOCK_ACCOUNTS[0]` calls `MOCK_ACCOUNTS[1]` which has a proxy code that
-///   calls `MOCK_ACCOUNT[2]` which has the main code
+/// - `MOCK_ACCOUNTS[0]` calls `MOCK_ACCOUNTS[1]` which has a proxy code that calls
+///   `MOCK_ACCOUNT[2]` which has the main code
 /// - `0x0` account has a copy of the main code
 /// - `MOCK_ACCOUNTS[3]` has a small code that returns a 0-memory chunk
 pub(crate) fn print_circuit_stats_by_states(
@@ -236,10 +236,10 @@ pub(crate) fn print_circuit_stats_by_states(
             assert_eq!(opcode, geth_step.op);
             let gas_cost = geth_step.gas_cost.0;
             table.push_row([
-                format!("{:?}", state),
-                format!("{:?}", opcode),
-                format!("{}", h),
-                format!("{}", gas_cost),
+                format!("{state:?}"),
+                format!("{opcode:?}"),
+                format!("{h}"),
+                format!("{gas_cost}"),
                 format!("{:1.3}", h as f64 / gas_cost as f64),
             ]);
         }

@@ -30,10 +30,10 @@
 //! ## Bus Mapping
 //! The goal of this crate is to serve as:
 //! - A parsing lib for EVM execution traces.
-//! - A way to infer some witness data that can only be constructed once we've
-//!   analyzed the full exec trace.
-//! - An easy interface to collect all of the data to witness into the circuits
-//!   and witness it with few function calls.
+//! - A way to infer some witness data that can only be constructed once we've analyzed the full
+//!   exec trace.
+//! - An easy interface to collect all of the data to witness into the circuits and witness it with
+//!   few function calls.
 //!
 //! ## Parsing
 //! Provided a JSON file or a JSON as a stream of bytes, which contains an
@@ -53,7 +53,7 @@
 //! use eth_types::{
 //!     self, address, Address, Word, Hash, U64, GethExecTrace, GethExecStep, geth_types::GethData, bytecode
 //! };
-//! use mock::test_ctx::{TestContext, helpers::*};
+//! use mock::test_ctx::{SimpleTestContext, helpers::*};
 //! use eth_types::evm_types::Gas;
 //! use bus_mapping::circuit_input_builder::{Block, CircuitInputBuilder};
 //!
@@ -121,7 +121,7 @@
 //! };
 //!
 //! // Get the execution steps from the external tracer
-//! let block: GethData = TestContext::<2, 1>::new(
+//! let block: GethData = SimpleTestContext::new(
 //!     None,
 //!     account_0_code_account_1_no_code(code),
 //!     tx_from_1_to_0,
@@ -179,8 +179,8 @@
 //!
 //! Once you have the trace built (following the code found above) you can
 //! basically:
-//! - Get an iterator/vector over the `Stack`, `Memory` or `Storage` operations
-//!   ordered on the way the State Proof needs.
+//! - Get an iterator/vector over the `Stack`, `Memory` or `Storage` operations ordered on the way
+//!   the State Proof needs.
 //!
 //! On that way, we would get something like this for the Memory ops:
 //! ```text,ignore

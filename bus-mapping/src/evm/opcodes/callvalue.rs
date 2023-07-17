@@ -1,7 +1,9 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::operation::CallContextField;
-use crate::Error;
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    operation::CallContextField,
+    Error,
+};
 use eth_types::GethExecStep;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
@@ -49,7 +51,13 @@ mod callvalue_tests {
         evm_types::{OpcodeId, StackAddress},
         geth_types::GethData,
     };
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -60,7 +68,7 @@ mod callvalue_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -74,14 +82,14 @@ mod callvalue_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLVALUE))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
-        let call_value = block.eth_block.transactions[0].value;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
+        let call_value = block.eth_block.transactions[tx_idx!(0)].value;
         assert_eq!(
             {
                 let operation =
@@ -105,7 +113,7 @@ mod callvalue_tests {
             },
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress::from(1023), call_value)
+                &StackOp::new(call_id, StackAddress::from(1023), call_value)
             )
         );
     }

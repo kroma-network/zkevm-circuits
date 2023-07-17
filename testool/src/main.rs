@@ -5,8 +5,7 @@ mod config;
 mod statetest;
 mod utils;
 
-use crate::config::TestSuite;
-use crate::statetest::ResultLevel;
+use crate::{config::TestSuite, statetest::ResultLevel};
 use anyhow::{bail, Result};
 use clap::Parser;
 use compiler::Compiler;
@@ -16,8 +15,7 @@ use statetest::{
     geth_trace, load_statetests_suite, run_statetests_suite, run_test, CircuitsConfig, Results,
     StateTest,
 };
-use std::path::PathBuf;
-use std::time::SystemTime;
+use std::{path::PathBuf, time::SystemTime};
 use strum::EnumString;
 
 const REPORT_FOLDER: &str = "report";
@@ -152,28 +150,15 @@ fn go() -> Result<()> {
             REPORT_FOLDER, args.suite, timestamp, git_hash
         );
 
-        // when running a report, the tests result of the containing cache file
-        // are used, but removing all Ignored tests
-        let mut results = if let Some(cache_filename) = args.cache {
-            let mut results = Results::from_file(PathBuf::from(cache_filename))?;
-            results
-                .tests
-                .retain(|_, test| test.level != ResultLevel::Ignored);
-            results
-        } else {
-            Results::default()
-        };
-        results.set_cache(PathBuf::from(csv_filename));
-        run_statetests_suite(state_tests, &circuits_config, &suite, &mut results)?;
-
         // filter non-csv files and files from the same commit
         let mut files: Vec<_> = std::fs::read_dir(REPORT_FOLDER)
             .unwrap()
             .filter_map(|f| {
                 let filename = f.unwrap().file_name().to_str().unwrap().to_string();
-                (filename.starts_with(&format!("{}.", args.suite))
-                    && filename.ends_with(".csv")
-                    && !filename.contains(&format!(".{}.", git_hash)))
+                (
+                    filename.starts_with(&format!("{}.", args.suite)) && filename.ends_with(".csv")
+                    //    && !filename.contains(&format!(".{}.", git_hash))
+                )
                 .then_some(filename)
             })
             .collect();
@@ -181,12 +166,35 @@ fn go() -> Result<()> {
         files.sort_by(|f, s| s.cmp(f));
         let previous = if !files.is_empty() {
             let file = files.remove(0);
-            let path = format!("{}/{}", REPORT_FOLDER, file);
+            let path = format!("{REPORT_FOLDER}/{file}");
             info!("Comparing with previous results in {}", path);
             Some((file, Results::from_file(PathBuf::from(path))?))
         } else {
             None
         };
+
+        // when running a report, the tests result of the containing cache file
+        // are used, but removing all Ignored tests
+        let mut results = if let Some(cache_filename) = args.cache {
+            let cache_filename = if cache_filename == *"auto" {
+                let file = previous.clone().unwrap().0;
+                format!("{REPORT_FOLDER}/{file}")
+            } else {
+                cache_filename
+            };
+            let mut results = Results::from_file(PathBuf::from(cache_filename))?;
+            results.tests.retain(|_, test| {
+                test.level == ResultLevel::Success || test.level == ResultLevel::Ignored
+            });
+            results
+        } else {
+            Results::default()
+        };
+        results.set_cache(PathBuf::from(csv_filename));
+
+        run_statetests_suite(state_tests, &circuits_config, &suite, &mut results)?;
+
+        results.write_cache()?;
         let report = results.report(previous);
         std::fs::write(&html_filename, report.gen_html()?)?;
 
@@ -216,6 +224,6 @@ fn go() -> Result<()> {
 
 fn main() {
     if let Err(err) = go() {
-        eprintln!("Error found {}", err);
+        eprintln!("Error found {err}");
     }
 }

@@ -267,18 +267,19 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm_circuit::test::rand_bytes;
-    use crate::test_util::CircuitTestBuilder;
+    use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{bytecode, ToWord, Word};
-    use mock::test_ctx::TestContext;
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{test_ctx::TestContext3_1, tx_idx};
 
     fn test_ok_internal(
         return_data_offset: usize,
         return_data_size: usize,
-        dest_offset: usize,
-        offset: usize,
         size: usize,
+        offset: usize,
+        dest_offset: Word,
     ) {
         let (addr_a, addr_b) = (mock::MOCK_ACCOUNTS[0], mock::MOCK_ACCOUNTS[1]);
 
@@ -314,17 +315,21 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_a).code(code_a);
                 accs[1].address(addr_b).code(code_b);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -332,7 +337,7 @@ mod test {
 
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
-                max_rws: 2048,
+                max_rws: 3100,
                 ..Default::default()
             })
             .run();
@@ -340,51 +345,45 @@ mod test {
 
     #[test]
     fn returndatacopy_gadget_do_nothing() {
-        test_ok_internal(0x00, 0x02, 0x10, 0x00, 0x00);
+        test_ok_internal(0, 2, 0, 0, 0x10.into());
     }
 
     #[test]
     fn returndatacopy_gadget_simple() {
-        test_ok_internal(0x00, 0x02, 0x10, 0x00, 0x02);
+        test_ok_internal(0, 2, 2, 0, 0x10.into());
     }
 
     #[test]
     fn returndatacopy_gadget_large() {
-        test_ok_internal(0x00, 0x20, 0x20, 0x00, 0x20);
+        test_ok_internal(0, 0x20, 0x20, 0, 0x20.into());
     }
 
     #[test]
     fn returndatacopy_gadget_large_partial() {
-        test_ok_internal(0x00, 0x20, 0x20, 0x10, 0x10);
+        test_ok_internal(0, 0x20, 0x10, 0x10, 0x20.into());
     }
 
     #[test]
     fn returndatacopy_gadget_zero_length() {
-        test_ok_internal(0x00, 0x00, 0x20, 0x00, 0x00);
+        test_ok_internal(0, 0, 0, 0, 0x20.into());
     }
 
     #[test]
     fn returndatacopy_gadget_long_length() {
         // rlc value matters only if length > 255, i.e., size.cells.len() > 1
-        test_ok_internal(0x00, 0x200, 0x20, 0x00, 0x150);
+        test_ok_internal(0, 0x200, 0x150, 0, 0x20.into());
     }
 
     #[test]
     fn returndatacopy_gadget_big_offset() {
         // rlc value matters only if length > 255, i.e., size.cells.len() > 1
-        test_ok_internal(0x200, 0x200, 0x200, 0x00, 0x150);
+        test_ok_internal(0x200, 0x200, 0x150, 0, 0x200.into());
     }
 
-    // TODO: Add negative cases for out-of-bound and out-of-gas
-    // #[test]
-    // #[should_panic]
-    // fn returndatacopy_gadget_out_of_bound() {
-    //     test_ok_internal(0x00, 0x10, 0x20, 0x10, 0x10);
-    // }
-
-    // #[test]
-    // #[should_panic]
-    // fn returndatacopy_gadget_out_of_gas() {
-    //     test_ok_internal(0x00, 0x10, 0x2000000, 0x00, 0x10);
-    // }
+    #[test]
+    fn returndatacopy_gadget_overflow_offset_and_zero_length() {
+        test_ok_internal(0, 0x20, 0, 0x20, Word::MAX);
+    }
+    //     test_ok_internal(0, 0x10, 0x10, 0x10, 0x20.into());
+    //     test_ok_internal(0, 0x10, 0x10, 0, 0x2000000.into());
 }

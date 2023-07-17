@@ -101,11 +101,13 @@ impl<F: Field, const N_BYTES: usize> LtGadget<F, N_BYTES> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_util::*;
-    use super::*;
-    use eth_types::*;
-    use halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_proofs::plonk::Error;
+    use super::{
+        super::test_util::{test_math_gadget_container, try_test, MathGadgetContainer, Value},
+        CachedRegion, Cell, ConstraintBuilder, Field, LtGadget,
+    };
+    use eth_types::{ToLittleEndian, Word};
+    use gadgets::util::Expr;
+    use halo2_proofs::{halo2curves::bn256::Fr, plonk::Error};
 
     const N: usize = 3;
     #[derive(Clone)]

@@ -8,22 +8,23 @@ use env_logger::Env;
 use eth_types::Address;
 use ethers::{
     abi,
-    core::k256::ecdsa::SigningKey,
-    core::types::Bytes,
+    core::{k256::ecdsa::SigningKey, types::Bytes},
     providers::{Http, Provider},
     signers::{coins_bip39::English, MnemonicBuilder, Signer, Wallet},
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::env::{self, VarError};
-use std::fs::File;
-use std::sync::Once;
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    env::{self, VarError},
+    fs::File,
+    sync::Once,
+    time::Duration,
+};
 use url::Url;
 
 /// Geth dev chain ID
-pub const CHAIN_ID: u64 = 1337;
+pub const CHAIN_ID: u64 = 901;
 /// Path to the test contracts
 pub const CONTRACTS_PATH: &str = "contracts";
 /// List of contracts as (ContractName, ContractSolidityFile)
@@ -37,39 +38,39 @@ pub const CONTRACTS: &[(&str, &str)] = &[
 /// Path to gen_blockchain_data output file
 pub const GENDATA_OUTPUT_PATH: &str = "gendata_output.json";
 
-const GETH0_URL_DEFAULT: &str = "http://52.37.45.56:30303";
+const L2_RPC_DEFAULT: &str = "http://localhost:9545";
 
 lazy_static! {
-    /// URL of the integration test geth0 instance, which contains blocks for which proofs will be
+    /// URL of the integration test l2 geth instance, which contains blocks for which proofs will be
     /// generated.
-    pub static ref GETH0_URL: String = match env::var("GETH0_URL") {
+    pub static ref L2_GETH_URL: String = match env::var("L2_GETH_URL") {
         Ok(val) => val,
-        Err(VarError::NotPresent) => GETH0_URL_DEFAULT.to_string(),
-        Err(e) => panic!("Error in GETH0_URL env var: {:?}", e),
+        Err(VarError::NotPresent) => L2_RPC_DEFAULT.to_string(),
+        Err(e) => panic!("Error in L2_GETH_URL env var: {e:?}"),
     };
     /// ..
     pub static ref START_BLOCK: usize =  match env::var("START_BLOCK") {
         Ok(val) => str::parse::<usize>(&val).unwrap(),
         Err(VarError::NotPresent) => 16140010,
-        Err(e) => panic!("Error in START_BLOCK env var: {:?}", e),
+        Err(e) => panic!("Error in START_BLOCK env var: {e:?}"),
     };
     /// ..
     pub static ref END_BLOCK: usize =  match env::var("END_BLOCK") {
         Ok(val) => str::parse::<usize>(&val).unwrap(),
         Err(VarError::NotPresent) => 16140010,
-        Err(e) => panic!("Error in END_BLOCK env var: {:?}", e),
+        Err(e) => panic!("Error in END_BLOCK env var: {e:?}"),
     };
     /// ..
     pub static ref TX_ID: String =  match env::var("TX_ID") {
         Ok(val) => val,
         Err(VarError::NotPresent) => "".to_string(),
-        Err(e) => panic!("Error in TX_ID env var: {:?}", e),
+        Err(e) => panic!("Error in TX_ID env var: {e:?}"),
     };
     /// ..
     pub static ref CIRCUIT: String =  match env::var("CIRCUIT") {
         Ok(val) => val,
         Err(VarError::NotPresent) => "super".to_string(),
-        Err(e) => panic!("Error in CIRCUIT env var: {:?}", e),
+        Err(e) => panic!("Error in CIRCUIT env var: {e:?}"),
     };
 
 }
@@ -85,13 +86,13 @@ pub fn log_init() {
 
 /// Get the integration test [`GethClient`]
 pub fn get_client() -> GethClient<Http> {
-    let transport = Http::new(Url::parse(&GETH0_URL).expect("invalid url"));
+    let transport = Http::new(Url::parse(&L2_GETH_URL).expect("invalid url"));
     GethClient::new(transport)
 }
 
 /// Get the integration test [`Provider`]
 pub fn get_provider() -> Provider<Http> {
-    let transport = Http::new(Url::parse(&GETH0_URL).expect("invalid url"));
+    let transport = Http::new(Url::parse(&L2_GETH_URL).expect("invalid url"));
     Provider::new(transport).interval(Duration::from_millis(100))
 }
 
@@ -101,8 +102,7 @@ pub async fn get_chain_id() -> u64 {
     client.get_chain_id().await.unwrap()
 }
 
-const PHRASE: &str =
-    "work man father plunge mystery proud hollow address reunion sauce theory bonus";
+const PHRASE: &str = "test test test test test test test test test test test junk";
 
 /// Get a wallet by index
 pub fn get_wallet(index: u32) -> Wallet<SigningKey> {

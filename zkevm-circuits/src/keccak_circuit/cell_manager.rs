@@ -1,11 +1,10 @@
+use super::keccak_packed_multi::KeccakRegion;
 use crate::keccak_circuit::util::extract_field;
-use crate::keccak_circuit::KeccakRegion;
 use gadgets::util::Expr;
-use halo2_proofs::arithmetic::FieldExt;
-use halo2_proofs::plonk::VirtualCells;
 use halo2_proofs::{
+    arithmetic::FieldExt,
     circuit::Value,
-    plonk::{Advice, Column, ConstraintSystem, Expression},
+    plonk::{Advice, Column, ConstraintSystem, Expression, VirtualCells},
     poly::Rotation,
 };
 
@@ -61,11 +60,7 @@ impl<F: FieldExt> Cell<F> {
     }
 
     pub(crate) fn assign(&self, region: &mut KeccakRegion<F>, offset: i32, value: F) {
-        region.assign(
-            self.column_idx,
-            ((offset as i32) + self.rotation) as usize,
-            value,
-        );
+        region.assign(self.column_idx, (offset + self.rotation) as usize, value);
     }
 
     pub(crate) fn assign_value(&self, region: &mut KeccakRegion<F>, offset: i32, value: Value<F>) {
@@ -75,11 +70,7 @@ impl<F: FieldExt> Cell<F> {
         // this shouldn't be needed.
         let value_f = extract_field(value);
 
-        region.assign(
-            self.column_idx,
-            ((offset as i32) + self.rotation) as usize,
-            value_f,
-        );
+        region.assign(self.column_idx, (offset + self.rotation) as usize, value_f);
     }
 }
 
@@ -136,7 +127,40 @@ impl<F: FieldExt> CellManager<F> {
         self.query_cell_at_pos(meta, row_idx, column_idx)
     }
 
-    pub(crate) fn query_cell_at_pos(
+    pub(crate) fn query_cell_value(&mut self) -> Cell<F> {
+        let (row_idx, column_idx) = self.get_position();
+        self.query_cell_value_at_pos(row_idx as i32, column_idx)
+    }
+
+    pub(crate) fn query_cell_value_at_row(&mut self, row_idx: i32) -> Cell<F> {
+        let column_idx = self.rows[row_idx as usize];
+        self.rows[row_idx as usize] += 1;
+        self.query_cell_value_at_pos(row_idx, column_idx)
+    }
+
+    pub(crate) fn start_region(&mut self) -> usize {
+        // Make sure all rows start at the same column
+        let width = self.get_width();
+        for row in self.rows.iter_mut() {
+            self.num_unused_cells += width - *row;
+            *row = width;
+        }
+        width
+    }
+
+    pub(crate) fn get_width(&self) -> usize {
+        self.rows.iter().cloned().max().unwrap()
+    }
+
+    pub(crate) fn columns(&self) -> &[CellColumn<F>] {
+        &self.columns
+    }
+
+    pub(crate) fn get_num_unused_cells(&self) -> usize {
+        self.num_unused_cells
+    }
+
+    fn query_cell_at_pos(
         &mut self,
         meta: &mut ConstraintSystem<F>,
         row_idx: i32,
@@ -163,18 +187,7 @@ impl<F: FieldExt> CellManager<F> {
         cells[0].clone()
     }
 
-    pub(crate) fn query_cell_value(&mut self) -> Cell<F> {
-        let (row_idx, column_idx) = self.get_position();
-        self.query_cell_value_at_pos(row_idx as i32, column_idx)
-    }
-
-    pub(crate) fn query_cell_value_at_row(&mut self, row_idx: i32) -> Cell<F> {
-        let column_idx = self.rows[row_idx as usize];
-        self.rows[row_idx as usize] += 1;
-        self.query_cell_value_at_pos(row_idx, column_idx)
-    }
-
-    pub(crate) fn query_cell_value_at_pos(&mut self, row_idx: i32, column_idx: usize) -> Cell<F> {
+    fn query_cell_value_at_pos(&mut self, row_idx: i32, column_idx: usize) -> Cell<F> {
         Cell::new_value(column_idx, row_idx)
     }
 
@@ -189,27 +202,5 @@ impl<F: FieldExt> CellManager<F> {
         }
         self.rows[best_row_idx] += 1;
         (best_row_idx, best_row_pos)
-    }
-
-    pub(crate) fn get_width(&self) -> usize {
-        self.rows.iter().cloned().max().unwrap()
-    }
-
-    pub(crate) fn start_region(&mut self) -> usize {
-        // Make sure all rows start at the same column
-        let width = self.get_width();
-        for row in self.rows.iter_mut() {
-            self.num_unused_cells += width - *row;
-            *row = width;
-        }
-        width
-    }
-
-    pub(crate) fn columns(&self) -> &[CellColumn<F>] {
-        &self.columns
-    }
-
-    pub(crate) fn get_num_unused_cells(&self) -> usize {
-        self.num_unused_cells
     }
 }

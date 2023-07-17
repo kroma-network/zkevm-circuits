@@ -1,5 +1,10 @@
-use crate::arith_helpers::*;
-use crate::common::*;
+use crate::{
+    arith_helpers::{
+        convert_b13_lane_to_b9, convert_b2_to_b13, convert_b2_to_b9, convert_b9_lane_to_b13,
+        convert_b9_lane_to_b2, Lane13, StateBigInt, A1, A2, A3, A4, B13,
+    },
+    common::{State, PERMUTATION, ROTATION_CONSTANTS, ROUND_CONSTANTS},
+};
 use itertools::Itertools;
 
 #[derive(Default)]
@@ -231,9 +236,14 @@ impl Sponge {
 }
 #[cfg(test)]
 mod tests {
-    use crate::arith_helpers::*;
-    use crate::keccak_arith::{Keccak, KeccakFArith, State};
-    use crate::plain::KeccakF;
+    use crate::{
+        arith_helpers::{
+            convert_b13_lane_to_b9, convert_b2_to_b13, convert_b2_to_b9, convert_b9_lane_to_b13,
+            convert_b9_lane_to_b2, convert_b9_lane_to_b2_normal, StateBigInt,
+        },
+        keccak_arith::{Keccak, KeccakFArith, State},
+        plain::KeccakF,
+    };
     use itertools::Itertools;
     use num_bigint::BigUint;
     use num_traits::Zero;

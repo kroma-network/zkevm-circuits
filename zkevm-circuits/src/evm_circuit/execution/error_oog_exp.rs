@@ -1,30 +1,34 @@
-use crate::evm_circuit::execution::ExecutionGadget;
-use crate::evm_circuit::param::N_BYTES_GAS;
-use crate::evm_circuit::step::ExecutionState;
-use crate::evm_circuit::util::common_gadget::RestoreContextGadget;
-use crate::evm_circuit::util::constraint_builder::Transition::{Delta, Same};
-use crate::evm_circuit::util::constraint_builder::{ConstraintBuilder, StepStateTransition};
-use crate::evm_circuit::util::math_gadget::{ByteSizeGadget, LtGadget};
-use crate::evm_circuit::util::{CachedRegion, Cell, Word};
-use crate::evm_circuit::witness::{Block, Call, ExecStep, Transaction};
-use crate::table::CallContextFieldTag;
-use crate::util::Expr;
-use eth_types::evm_types::{GasCost, OpcodeId};
-use eth_types::{Field, ToLittleEndian};
-use halo2_proofs::circuit::Value;
-use halo2_proofs::plonk::Error;
+use crate::{
+    evm_circuit::{
+        execution::ExecutionGadget,
+        param::N_BYTES_GAS,
+        step::ExecutionState,
+        util::{
+            common_gadget::CommonErrorGadget,
+            constraint_builder::ConstraintBuilder,
+            math_gadget::{ByteSizeGadget, LtGadget},
+            CachedRegion, Cell, Word,
+        },
+        witness::{Block, Call, ExecStep, Transaction},
+    },
+    util::Expr,
+};
+use eth_types::{
+    evm_types::{GasCost, OpcodeId},
+    Field, ToLittleEndian,
+};
+use halo2_proofs::{circuit::Value, plonk::Error};
 
 /// Gadget to implement the corresponding out of gas errors for
 /// [`OpcodeId::EXP`].
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorOOGExpGadget<F> {
     opcode: Cell<F>,
-    rw_counter_end_of_reversion: Cell<F>,
     base: Word<F>,
     exponent: Word<F>,
     exponent_byte_size: ByteSizeGadget<F>,
     insufficient_gas_cost: LtGadget<F, N_BYTES_GAS>,
-    restore_context: RestoreContextGadget<F>,
+    common_error_gadget: CommonErrorGadget<F>,
 }
 
 impl<F: Field> ExecutionGadget<F> for ErrorOOGExpGadget<F> {
@@ -34,7 +38,6 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGExpGadget<F> {
 
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let opcode = cb.query_cell();
-        cb.opcode_lookup(opcode.expr(), 1.expr());
 
         cb.require_equal(
             "ErrorOutOfGasEXP opcode must be EXP",
@@ -74,67 +77,14 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGExpGadget<F> {
             1.expr(),
         );
 
-        // Current call must fail.
-        cb.call_context_lookup(false.expr(), None, CallContextFieldTag::IsSuccess, 0.expr());
-
-        let rw_counter_end_of_reversion = cb.query_cell();
-        cb.call_context_lookup(
-            false.expr(),
-            None,
-            CallContextFieldTag::RwCounterEndOfReversion,
-            rw_counter_end_of_reversion.expr(),
-        );
-
-        // Go to EndTx only when is_root.
-        let is_to_end_tx = cb.next.execution_state_selector([ExecutionState::EndTx]);
-        cb.require_equal(
-            "Go to EndTx only when is_root",
-            cb.curr.state.is_root.expr(),
-            is_to_end_tx,
-        );
-
-        // When it's a root call.
-        cb.condition(cb.curr.state.is_root.expr(), |cb| {
-            // Do step state transition.
-            cb.require_step_state_transition(StepStateTransition {
-                call_id: Same,
-                rw_counter: Delta(4.expr() + cb.curr.state.reversible_write_counter.expr()),
-                ..StepStateTransition::any()
-            });
-        });
-
-        // When it's an internal call, need to restore caller's state as finishing this
-        // call. Restore caller state to next StepState.
-        let restore_context = cb.condition(1.expr() - cb.curr.state.is_root.expr(), |cb| {
-            RestoreContextGadget::construct(
-                cb,
-                0.expr(),
-                0.expr(),
-                0.expr(),
-                0.expr(),
-                0.expr(),
-                0.expr(),
-                0.expr(),
-            )
-        });
-
-        // Constrain RwCounterEndOfReversion.
-        let rw_counter_end_of_step =
-            cb.curr.state.rw_counter.expr() + cb.rw_counter_offset() - 1.expr();
-        cb.require_equal(
-            "rw_counter_end_of_reversion = rw_counter_end_of_step + reversible_counter",
-            rw_counter_end_of_reversion.expr(),
-            rw_counter_end_of_step + cb.curr.state.reversible_write_counter.expr(),
-        );
-
+        let common_error_gadget = CommonErrorGadget::construct(cb, opcode.expr(), 4.expr());
         Self {
             opcode,
-            rw_counter_end_of_reversion,
             base,
             exponent,
             exponent_byte_size,
             insufficient_gas_cost,
-            restore_context,
+            common_error_gadget,
         }
     }
 
@@ -158,11 +108,6 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGExpGadget<F> {
 
         self.opcode
             .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
-        self.rw_counter_end_of_reversion.assign(
-            region,
-            offset,
-            Value::known(F::from(call.rw_counter_end_of_reversion as u64)),
-        )?;
         self.base.assign(region, offset, Some(base.to_le_bytes()))?;
         self.exponent
             .assign(region, offset, Some(exponent.to_le_bytes()))?;
@@ -173,19 +118,31 @@ impl<F: Field> ExecutionGadget<F> for ErrorOOGExpGadget<F> {
             Value::known(F::from(step.gas_left)),
             Value::known(F::from(step.gas_cost)),
         )?;
-        self.restore_context
-            .assign(region, offset, block, call, step, 4)
+        self.common_error_gadget
+            .assign(region, offset, block, call, step, 4)?;
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::evm_circuit::test::{rand_bytes, rand_word};
-    use crate::test_util::CircuitTestBuilder;
-    use eth_types::evm_types::{GasCost, OpcodeId};
-    use eth_types::{bytecode, Bytecode, ToWord, U256};
-    use mock::test_ctx::helpers::account_0_code_account_1_no_code;
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    use crate::{
+        evm_circuit::test::{rand_bytes, rand_word},
+        test_util::CircuitTestBuilder,
+    };
+    use eth_types::{
+        bytecode,
+        evm_types::{GasCost, OpcodeId},
+        Bytecode, ToWord, U256,
+    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{
+        eth,
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
+    };
 
     #[test]
     fn test_oog_exp() {
@@ -227,12 +184,14 @@ mod tests {
     }
 
     fn test_root(testing_data: &TestingData) {
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(testing_data.bytecode.clone()),
             |mut txs, accs| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
                 // Decrease expected gas cost (by 1) to trigger out of gas error.
-                txs[0]
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());
@@ -270,15 +229,19 @@ mod tests {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].from(accs[2].address).to(accs[1].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
         )

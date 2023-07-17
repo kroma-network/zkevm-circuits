@@ -22,8 +22,8 @@ use crate::{
     table::{AccountFieldTag, CallContextFieldTag},
     util::Expr,
 };
-use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
-use eth_types::{evm_types::GasCost, Field, ToBigEndian, ToLittleEndian, ToScalar, U256};
+use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId, state_db::CodeDB};
+use eth_types::{evm_types::GasCost, Field, ToBigEndian, ToLittleEndian, ToScalar, ToWord, U256};
 use ethers_core::utils::{keccak256, rlp};
 use halo2_proofs::{
     circuit::Value,
@@ -61,6 +61,7 @@ pub(crate) struct CreateGadget<F> {
     gas_left: ConstantDivisionGadget<F, N_BYTES_GAS>,
 
     code_hash: Cell<F>,
+    keccak_code_hash: Cell<F>,
 
     keccak_input: Cell<F>,
     keccak_input_length: Cell<F>,
@@ -115,7 +116,9 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
         cb.stack_push(callee_is_success.expr() * new_address_rlc);
 
         let code_hash = cb.query_cell_phase2();
+        let keccak_code_hash = cb.query_cell_phase2();
         cb.condition(initialization_code.has_length(), |cb| {
+            // TODO(rohit): lookup to keccak table to verify keccak code hash?
             cb.copy_table_lookup(
                 cb.curr.state.call_id.expr(),
                 CopyDataType::Memory.expr(),
@@ -130,7 +133,11 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             );
         });
         cb.condition(not::expr(initialization_code.has_length()), |cb| {
-            cb.require_equal("", code_hash.expr(), cb.empty_hash_rlc());
+            cb.require_equal(
+                "code hash of empty bytes",
+                code_hash.expr(),
+                cb.empty_code_hash_rlc(),
+            );
         });
 
         let tx_id = cb.call_context(None, CallContextFieldTag::TxId);
@@ -173,9 +180,19 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             cb.require_equal(
                 "callee_rw_counter_end_of_reversion == rw_counter_end_of_reversion - (reversible_write_counter + 1)",
                 callee_reversion_info.rw_counter_end_of_reversion(),
-                reversion_info.rw_counter_of_reversion(),
+                reversion_info.rw_counter_of_reversion(1.expr()),
             );
         });
+
+        let transfer = TransferGadget::construct(
+            cb,
+            from_bytes::expr(&caller_address.cells),
+            new_address.clone(),
+            0.expr(),
+            1.expr(),
+            value.clone(),
+            &mut callee_reversion_info,
+        );
 
         cb.account_write(
             new_address.clone(),
@@ -183,14 +200,6 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             1.expr(),
             0.expr(),
             Some(&mut callee_reversion_info),
-        );
-
-        let transfer = TransferGadget::construct(
-            cb,
-            from_bytes::expr(&caller_address.cells),
-            new_address.clone(),
-            value.clone(),
-            &mut callee_reversion_info,
         );
 
         let memory_expansion =
@@ -252,6 +261,7 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             (CallContextFieldTag::IsStatic, false.expr()),
             (CallContextFieldTag::IsCreate, true.expr()),
             (CallContextFieldTag::CodeHash, code_hash.expr()),
+            (CallContextFieldTag::Value, value.expr()),
         ] {
             cb.call_context_lookup(true.expr(), Some(callee_call_id.expr()), field_tag, value);
         }
@@ -264,78 +274,83 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
                 is_create: To(true.expr()),
                 code_hash: To(code_hash.expr()),
                 gas_left: To(callee_gas_left),
-                reversible_write_counter: To(3.expr()),
+                reversible_write_counter: To(1.expr() + transfer.reversible_w_delta()),
                 ..StepStateTransition::new_context()
             })
         });
 
         cb.condition(not::expr(initialization_code.has_length()), |cb| {
+            for field_tag in [
+                CallContextFieldTag::LastCalleeId,
+                CallContextFieldTag::LastCalleeReturnDataOffset,
+                CallContextFieldTag::LastCalleeReturnDataLength,
+            ] {
+                cb.call_context_lookup(true.expr(), None, field_tag, 0.expr());
+            }
             cb.require_step_state_transition(StepStateTransition {
                 rw_counter: Delta(cb.rw_counter_offset()),
                 program_counter: Delta(1.expr()),
                 stack_pointer: Delta(2.expr() + is_create2.expr()),
                 gas_left: Delta(-gas_cost),
-                reversible_write_counter: Delta(5.expr()),
+                reversible_write_counter: Delta(3.expr() + transfer.reversible_w_delta()),
                 ..Default::default()
             })
         });
 
         let keccak_input = cb.query_cell_phase2();
         let keccak_input_length = cb.query_cell();
-        /*
-        cb.condition(is_create2.expr(), |cb| {
-            // For CREATE2, the keccak input is the concatenation of 0xff, address, salt,
-            // and code_hash. Each sequence of bytes occurs in a fixed position, so to
-            // compute the RLC of the input, we only need to compute some fixed powers of
-            // the randomness.
-            let randomness_raised_to_16 = cb.power_of_randomness()[15].clone();
-            let randomness_raised_to_32 = randomness_raised_to_16.square();
-            let randomness_raised_to_64 = randomness_raised_to_32.clone().square();
-            let randomness_raised_to_84 =
-                randomness_raised_to_64.clone() * cb.power_of_randomness()[19].clone();
-            cb.require_equal(
-                "for CREATE2, keccak input is 0xff ++ address ++ salt ++ code_hash",
-                keccak_input.expr(),
-                0xff.expr() * randomness_raised_to_84
-                    + caller_address.expr() * randomness_raised_to_64
-                    + salt.expr() * randomness_raised_to_32
-                    + code_hash.expr(),
-            );
-            cb.require_equal(
-                "for CREATE2, keccak input length is 85",
-                keccak_input_length.expr(),
-                (1 + 20 + 32 + 32).expr(),
-            );
-        });
 
+        // cb.condition(is_create2.expr(), |cb| {
+        // For CREATE2, the keccak input is the concatenation of 0xff, address, salt,
+        // and code_hash. Each sequence of bytes occurs in a fixed position, so to
+        // compute the RLC of the input, we only need to compute some fixed powers of
+        // the randomness.
+        // let randomness_raised_to_16 = cb.power_of_randomness()[15].clone();
+        // let randomness_raised_to_32 = randomness_raised_to_16.square();
+        // let randomness_raised_to_64 = randomness_raised_to_32.clone().square();
+        // let randomness_raised_to_84 =
+        // randomness_raised_to_64.clone() * cb.power_of_randomness()[19].clone();
+        // cb.require_equal(
+        // "for CREATE2, keccak input is 0xff ++ address ++ salt ++ code_hash",
+        // keccak_input.expr(),
+        // 0xff.expr() * randomness_raised_to_84
+        // + caller_address.expr() * randomness_raised_to_64
+        // + salt.expr() * randomness_raised_to_32
+        // + code_hash.expr(),
+        // );
+        // cb.require_equal(
+        // "for CREATE2, keccak input length is 85",
+        // keccak_input_length.expr(),
+        // (1 + 20 + 32 + 32).expr(),
+        // );
+        // });
 
-        cb.condition(not::expr(is_create2.expr()), |cb| {
-            let randomness_raised_to_20 = cb.power_of_randomness()[19].clone();
-            let randomness_raised_to_21 = cb.power_of_randomness()[20].clone();
-            cb.require_equal(
-                "for CREATE, keccak input is rlp([address, nonce])",
-                keccak_input.expr(),
-                nonce.rlp_rlc(cb)
-                    + nonce.randomness_raised_to_rlp_length(cb)
-                        * (((0xc0.expr() + 21.expr() + nonce.rlp_length())
-                            * randomness_raised_to_21)
-                            + (0x80 + 20).expr() * randomness_raised_to_20
-                            + caller_address.expr()),
-            );
-            cb.require_equal(
-                "for CREATE, keccak input length is rlp([address, nonce]).len()",
-                keccak_input_length.expr(),
-                (1 + 1 + 20).expr() + nonce.rlp_length(),
-            );
-        });
-
-
-        cb.keccak_table_lookup(
-            keccak_input.expr(),
-            keccak_input_length.expr(),
-            keccak_output.expr(),
-        );
-        */
+        // cb.condition(not::expr(is_create2.expr()), |cb| {
+        // let randomness_raised_to_20 = cb.power_of_randomness()[19].clone();
+        // let randomness_raised_to_21 = cb.power_of_randomness()[20].clone();
+        // cb.require_equal(
+        // "for CREATE, keccak input is rlp([address, nonce])",
+        // keccak_input.expr(),
+        // nonce.rlp_rlc(cb)
+        // + nonce.randomness_raised_to_rlp_length(cb)
+        // * (((0xc0.expr() + 21.expr() + nonce.rlp_length())
+        // * randomness_raised_to_21)
+        // + (0x80 + 20).expr() * randomness_raised_to_20
+        // + caller_address.expr()),
+        // );
+        // cb.require_equal(
+        // "for CREATE, keccak input length is rlp([address, nonce]).len()",
+        // keccak_input_length.expr(),
+        // (1 + 1 + 20).expr() + nonce.rlp_length(),
+        // );
+        // });
+        //
+        //
+        // cb.keccak_table_lookup(
+        // keccak_input.expr(),
+        // keccak_input_length.expr(),
+        // keccak_output.expr(),
+        // );
 
         Self {
             opcode,
@@ -355,6 +370,7 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             gas_left,
             callee_is_success,
             code_hash,
+            keccak_code_hash,
             keccak_output,
             keccak_input,
             keccak_input_length,
@@ -394,10 +410,15 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             ..4 + usize::from(is_create2) + initialization_code_length.as_usize())
             .map(|i| block.rws[step.rw_indices[i]].memory_value())
             .collect();
-        let mut code_hash = keccak256(&values);
-        code_hash.reverse();
-        let code_hash_rlc = region.word_rlc(U256::from_little_endian(&code_hash));
-        self.code_hash.assign(region, offset, code_hash_rlc)?;
+        let keccak_code_hash = keccak256(&values);
+        self.keccak_code_hash.assign(
+            region,
+            offset,
+            region.word_rlc(U256::from_big_endian(&keccak_code_hash)),
+        )?;
+        let code_hash = CodeDB::hash(&values);
+        self.code_hash
+            .assign(region, offset, region.word_rlc(code_hash.to_word()))?;
 
         for (word, assignment) in [(&self.value, value), (&self.salt, salt)] {
             word.assign(region, offset, Some(assignment.to_le_bytes()))?;
@@ -452,8 +473,8 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
         self.nonce.assign(region, offset, caller_nonce)?;
 
         let [callee_rw_counter_end_of_reversion, callee_is_persistent] = [10, 11].map(|i| {
-            block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]]
-                .call_context_value()
+            let rw = block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]];
+            rw.call_context_value()
         });
 
         self.callee_reversion_info.assign(
@@ -466,10 +487,22 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
             callee_is_persistent.low_u64() != 0,
         )?;
 
-        let [caller_balance_pair, callee_balance_pair] = [13, 14].map(|i| {
-            block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]]
-                .account_value_pair()
-        });
+        let mut rw_offset = 0;
+
+        let [caller_balance_pair, callee_balance_pair] = if !value.is_zero() {
+            rw_offset += 2;
+            [13, 14].map(|i| {
+                let rw = block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]];
+                debug_assert_eq!(
+                    rw.field_tag(),
+                    Some(AccountFieldTag::Balance as u64),
+                    "invalid rw {rw:?}"
+                );
+                rw.account_value_pair()
+            })
+        } else {
+            [(0.into(), 0.into()), (0.into(), 0.into())]
+        };
         self.transfer.assign(
             region,
             offset,
@@ -492,26 +525,22 @@ impl<F: Field> ExecutionGadget<F> for CreateGadget<F> {
                 (31u64 + initialization_code_length.as_u64()).into(),
             )?;
 
-        self.gas_left.assign(
-            region,
-            offset,
-            (step.gas_left
-                - GasCost::CREATE.as_u64()
-                - memory_expansion_gas_cost
-                - if is_create2 {
-                    u64::try_from(initialization_code_word_size).unwrap()
-                        * GasCost::COPY_SHA3.as_u64()
-                } else {
-                    0
-                })
-            .into(),
-        )?;
+        let gas_left = step.gas_left
+            - GasCost::CREATE.as_u64()
+            - memory_expansion_gas_cost
+            - if is_create2 {
+                u64::try_from(initialization_code_word_size).unwrap() * GasCost::COPY_SHA3.as_u64()
+            } else {
+                0
+            };
+        self.gas_left.assign(region, offset, gas_left.into())?;
 
         self.callee_is_success.assign(
             region,
             offset,
             Value::known(
-                block.rws[step.rw_indices[22 + usize::from(is_create2) + copy_rw_increase]]
+                block.rws
+                    [step.rw_indices[21 + rw_offset + usize::from(is_create2) + copy_rw_increase]]
                     .call_context_value()
                     .to_scalar()
                     .unwrap(),
@@ -664,55 +693,55 @@ impl<F: Field> RlpU64Gadget<F> {
     fn rlp_length(&self) -> Expression<F> {
         1.expr() + not::expr(self.is_less_than_128.expr()) * self.n_bytes_nonce()
     }
-    /*
-    fn rlp_rlc(&self, cb: &ConstraintBuilder<F>) -> Expression<F> {
-        select::expr(
-            and::expr(&[
-                self.is_less_than_128.expr(),
-                not::expr(self.most_significant_byte_is_zero.expr()),
-            ]),
-            self.value(),
-            (0x80.expr() + self.n_bytes_nonce()) * self.randomness_raised_n_bytes_nonce(cb)
-                + self.bytes.expr(),
-        )
-    }
-
-    fn randomness_raised_to_rlp_length(&self, cb: &ConstraintBuilder<F>) -> Expression<F> {
-        let powers_of_randomness = cb.power_of_randomness();
-        powers_of_randomness[0].clone()
-            * select::expr(
-                self.is_less_than_128.expr(),
-                1.expr(),
-                self.randomness_raised_n_bytes_nonce(cb),
-            )
-    }
-
-    fn randomness_raised_n_bytes_nonce(&self, cb: &ConstraintBuilder<F>) -> Expression<F> {
-        let powers_of_randomness = cb.power_of_randomness();
-        select::expr(
-            self.most_significant_byte_is_zero.expr(),
-            1.expr(),
-            sum::expr(
-                self.is_most_significant_byte
-                    .iter()
-                    .zip(powers_of_randomness)
-                    .map(|(indicator, power)| indicator.expr() * power.clone()),
-            ),
-        )
-    }
-    */
+    // fn rlp_rlc(&self, cb: &ConstraintBuilder<F>) -> Expression<F> {
+    // select::expr(
+    // and::expr(&[
+    // self.is_less_than_128.expr(),
+    // not::expr(self.most_significant_byte_is_zero.expr()),
+    // ]),
+    // self.value(),
+    // (0x80.expr() + self.n_bytes_nonce()) * self.randomness_raised_n_bytes_nonce(cb)
+    // + self.bytes.expr(),
+    // )
+    // }
+    //
+    // fn randomness_raised_to_rlp_length(&self, cb: &ConstraintBuilder<F>) -> Expression<F> {
+    // let powers_of_randomness = cb.power_of_randomness();
+    // powers_of_randomness[0].clone()
+    // select::expr(
+    // self.is_less_than_128.expr(),
+    // 1.expr(),
+    // self.randomness_raised_n_bytes_nonce(cb),
+    // )
+    // }
+    //
+    // fn randomness_raised_n_bytes_nonce(&self, cb: &ConstraintBuilder<F>) -> Expression<F> {
+    // let powers_of_randomness = cb.power_of_randomness();
+    // select::expr(
+    // self.most_significant_byte_is_zero.expr(),
+    // 1.expr(),
+    // sum::expr(
+    // self.is_most_significant_byte
+    // .iter()
+    // .zip(powers_of_randomness)
+    // .map(|(indicator, power)| indicator.expr() * power.clone()),
+    // ),
+    // )
+    // }
 }
 
 #[cfg(test)]
 mod test {
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{
-        address, bytecode, evm_types::OpcodeId, geth_types::Account, Address, Bytecode, Word,
+        address, bytecode, evm_types::OpcodeId, geth_types::Account, Address, Bytecode, Word, U64,
     };
 
     use itertools::Itertools;
     use lazy_static::lazy_static;
-    use mock::{eth, TestContext};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
+    use mock::{eth, test_ctx::SimpleTestContext, tx_idx};
 
     use crate::test_util::CircuitTestBuilder;
 
@@ -721,7 +750,7 @@ mod test {
         static ref CALLER_ADDRESS: Address = address!("0x00bbccddee000000000000000000000000002400");
     }
 
-    fn run_test_circuits(ctx: TestContext<2, 1>) {
+    fn run_test_circuits(ctx: SimpleTestContext) {
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
                 max_rws: 4500,
@@ -784,17 +813,21 @@ mod test {
         code
     }
 
-    fn test_context(caller: Account) -> TestContext<2, 1> {
-        TestContext::new(
+    fn test_context(caller: Account) -> SimpleTestContext {
+        SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(eth(10));
                 accs[1].account(&caller);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000u64.into());
@@ -816,7 +849,7 @@ mod test {
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: root_code.into(),
-                nonce: Word::one(),
+                nonce: U64::one(),
                 balance: eth(10),
                 ..Default::default()
             };
@@ -844,6 +877,30 @@ mod test {
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: creater_bytecode(vec![].into(), is_create2, true).into(),
+                nonce: 10.into(),
+                balance: eth(10),
+                ..Default::default()
+            };
+            run_test_circuits(test_context(caller));
+        }
+    }
+
+    #[test]
+    fn test_create_overflow_offset_and_zero_size() {
+        for is_create2 in [true, false] {
+            let mut bytecode = bytecode! {
+                PUSH1(0) // size
+                PUSH32(Word::MAX) // offset
+                PUSH2(23414) // value
+            };
+            bytecode.write_op(if is_create2 {
+                OpcodeId::CREATE2
+            } else {
+                OpcodeId::CREATE
+            });
+            let caller = Account {
+                address: *CALLER_ADDRESS,
+                code: bytecode.into(),
                 nonce: 10.into(),
                 balance: eth(10),
                 ..Default::default()

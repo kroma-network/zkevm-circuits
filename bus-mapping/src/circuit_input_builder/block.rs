@@ -1,13 +1,15 @@
 //! Block-related utility module
 
 use super::{
-    execution::ExecState, transaction::Transaction, CircuitsParams, CopyEvent, ExecStep, ExpEvent,
+    execution::ExecState,
+    transaction::{Transaction, TxL1Fee},
+    CircuitsParams, CopyEvent, ExecStep, ExpEvent,
 };
 use crate::{
     operation::{OperationContainer, RWCounter},
     Error,
 };
-use eth_types::{evm_unimplemented, Address, Hash, ToWord, Word, U256};
+use eth_types::{Address, Hash, ToWord, Word, U256};
 use std::collections::{BTreeMap, HashMap};
 
 /// Context of a [`Block`] which can mutate in a [`Transaction`].
@@ -98,7 +100,7 @@ impl BlockHead {
     ) -> Result<Self, Error> {
         if eth_block.base_fee_per_gas.is_none() {
             // FIXME: resolve this once we have proper EIP-1559 support
-            evm_unimplemented!(
+            log::debug!(
                 "This does not look like a EIP-1559 block - base_fee_per_gas defaults to zero"
             );
         }
@@ -157,6 +159,13 @@ pub struct Block {
     pub circuits_params: CircuitsParams,
     /// chain id
     pub chain_id: Word,
+
+    #[cfg(feature = "kroma")]
+    /// L1 fee
+    pub l1_fee: TxL1Fee,
+    #[cfg(feature = "kroma")]
+    /// L1 fee committed
+    pub l1_fee_committed: TxL1Fee,
 }
 
 impl Block {

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       enabled:
-        default: ${{ github.repository == 'scroll-tech/zkevm-circuits' }}
+        default: ${{ github.repository == 'kroma-network/zkevm-circuits' }}
         required: false
         type: boolean
 

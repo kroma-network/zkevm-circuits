@@ -1,7 +1,9 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::operation::{AccountField, CallContextField};
-use crate::Error;
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    operation::{AccountField, CallContextField},
+    Error,
+};
 use eth_types::{GethExecStep, ToWord};
 
 #[derive(Debug, Copy, Clone)]
@@ -31,7 +33,6 @@ impl Opcode for Selfbalance {
             callee_address,
             AccountField::Balance,
             self_balance,
-            self_balance,
         );
 
         // Stack write of self_balance
@@ -47,18 +48,24 @@ impl Opcode for Selfbalance {
 
 #[cfg(test)]
 mod selfbalance_tests {
-    use super::*;
     use crate::{
         circuit_input_builder::ExecState,
         mock::BlockData,
-        operation::{AccountOp, CallContextField, CallContextOp, StackOp, RW},
+        operation::{AccountField, AccountOp, CallContextField, CallContextOp, StackOp, RW},
     };
     use eth_types::{
         bytecode,
         evm_types::{OpcodeId, StackAddress},
         geth_types::GethData,
+        ToWord,
     };
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -69,7 +76,7 @@ mod selfbalance_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -83,14 +90,14 @@ mod selfbalance_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::SELFBALANCE))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
-        let callee_address = builder.block.txs()[0].to;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
+        let callee_address = builder.block.txs()[tx_idx!(0)].to;
         let self_balance = builder.sdb.get_account(&callee_address).1.balance;
 
         assert_eq!(
@@ -132,7 +139,7 @@ mod selfbalance_tests {
             },
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress::from(1023), self_balance)
+                &StackOp::new(call_id, StackAddress::from(1023), self_balance)
             )
         );
     }

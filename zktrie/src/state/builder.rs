@@ -1,17 +1,17 @@
 //! utils for build state trie
 
+use bus_mapping::state_db::CodeDB;
 use eth_types::{Address, Bytes, Word, H256, U256, U64};
+use halo2_proofs::{
+    arithmetic::FieldExt,
+    halo2curves::{bn256::Fr, group::ff::PrimeField},
+};
+use lazy_static::lazy_static;
+use mpt_circuits::hash::Hashable;
 use std::{
     convert::TryFrom,
     io::{Error, ErrorKind, Read},
 };
-
-use halo2_proofs::arithmetic::FieldExt;
-use halo2_proofs::halo2curves::bn256::Fr;
-use halo2_proofs::halo2curves::group::ff::PrimeField;
-use mpt_circuits::hash::Hashable;
-
-use lazy_static::lazy_static;
 
 lazy_static! {
     pub(crate) static ref HASH_SCHEME_DONE: bool = {
@@ -58,7 +58,7 @@ const NODE_TYPE_MIDDLE: u8 = 0;
 const NODE_TYPE_LEAF: u8 = 1;
 const NODE_TYPE_EMPTY: u8 = 2;
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub(crate) struct AccountData {
     pub nonce: u64,
     pub balance: U256,
@@ -80,6 +80,17 @@ pub(crate) trait CanRead: Sized {
     }
 }
 
+impl Default for AccountData {
+    fn default() -> Self {
+        Self {
+            nonce: 0,
+            balance: Default::default(),
+            storage_root: Default::default(),
+            code_hash: CodeDB::empty_code_hash(),
+        }
+    }
+}
+
 impl CanRead for AccountData {
     fn try_parse(mut rd: impl Read) -> Result<Self, Error> {
         let mut uint_buf = [0; 4];
@@ -89,14 +100,19 @@ impl CanRead for AccountData {
             return Err(Error::new(ErrorKind::Other, "unexpected flags"));
         }
 
+        let mut byte8_buf = [0u8; 8];
+        let mut byte16_buf = [0u8; 16];
         let mut byte32_buf = [0; 32];
-        rd.read_exact(&mut byte32_buf)?; //nonce
-        let nonce = U64::from_big_endian(&byte32_buf[24..]);
-        rd.read_exact(&mut byte32_buf)?; //balance
+        rd.read_exact(&mut byte16_buf)?;
+        rd.read_exact(&mut byte8_buf)?;
+        rd.read_exact(&mut byte8_buf)?;
+        let nonce = U64::from_big_endian(&byte8_buf);
+
+        rd.read_exact(&mut byte32_buf)?; // balance
         let balance = U256::from_big_endian(&byte32_buf);
-        rd.read_exact(&mut byte32_buf)?; //codehash
+        rd.read_exact(&mut byte32_buf)?; // code hash
         let code_hash = H256::from(&byte32_buf);
-        rd.read_exact(&mut byte32_buf)?; //storage root, not need yet
+        rd.read_exact(&mut byte32_buf)?; // storage root
         let storage_root = H256::from(&byte32_buf);
 
         Ok(AccountData {

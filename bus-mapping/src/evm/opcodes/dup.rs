@@ -1,6 +1,8 @@
 use super::Opcode;
-use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::Error;
+use crate::{
+    circuit_input_builder::{CircuitInputStateRef, ExecStep},
+    Error,
+};
 use eth_types::GethExecStep;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
@@ -31,10 +33,19 @@ impl<const N: usize> Opcode for Dup<N> {
 
 #[cfg(test)]
 mod dup_tests {
-    use crate::{mock::BlockData, operation::StackOp, operation::RW};
+    use crate::{
+        mock::BlockData,
+        operation::{StackOp, RW},
+    };
     use eth_types::{bytecode, evm_types::StackAddress, geth_types::GethData, word};
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -50,7 +61,7 @@ mod dup_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -69,11 +80,12 @@ mod dup_tests {
             .iter()
             .enumerate()
         {
-            let step = builder.block.txs()[0]
+            let step = builder.block.txs()[tx_idx!(0)]
                 .steps()
                 .iter()
                 .filter(|step| step.exec_state.is_dup())
                 .collect_vec()[i];
+            let call_id = builder.block.txs()[tx_idx!(0)].calls[0].call_id;
             assert_eq!(
                 [0, 1]
                     .map(|idx| &builder.block.container.stack
@@ -82,11 +94,11 @@ mod dup_tests {
                 [
                     (
                         RW::READ,
-                        &StackOp::new(1, StackAddress(1024 - 3 + i), *word)
+                        &StackOp::new(call_id, StackAddress(1024 - 3 + i), *word)
                     ),
                     (
                         RW::WRITE,
-                        &StackOp::new(1, StackAddress(1024 - 4 - i), *word)
+                        &StackOp::new(call_id, StackAddress(1024 - 4 - i), *word)
                     )
                 ]
             )

@@ -9,8 +9,7 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error, Expression},
 };
-use mpt_zktrie::hash::Hashable;
-use mpt_zktrie::{operation::AccountOp, EthTrie, EthTrieCircuit, EthTrieConfig};
+use mpt_zktrie::{hash::Hashable, operation::AccountOp, EthTrie, EthTrieCircuit, EthTrieConfig};
 
 /// re-wrapping for mpt circuit
 #[derive(Default, Clone, Debug)]
@@ -153,7 +152,7 @@ impl<F: Field + Hashable> Circuit<F> for MptCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let challenges = challenges.values(&layouter);
-        config.0.dev_load_hash_table(
+        config.0.load_hash_table(
             &mut layouter,
             self.0.ops.iter().flat_map(|op| op.hash_traces()),
             self.0.calcs,

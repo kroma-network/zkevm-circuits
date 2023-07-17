@@ -1,6 +1,5 @@
 use bus_mapping::evm::OpcodeId;
-use eth_types::evm_types::GasCost;
-use eth_types::{Field, ToLittleEndian, ToScalar, U256};
+use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar, U256};
 use gadgets::util::{and, not, split_u256, sum, Expr};
 use halo2_proofs::{circuit::Value, plonk::Error};
 
@@ -268,7 +267,7 @@ impl<F: Field> ExecutionGadget<F> for ExponentiationGadget<F> {
 mod tests {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::test_ctx::SimpleTestContext;
 
     fn test_ok(base: Word, exponent: Word) {
         let code = bytecode! {
@@ -278,7 +277,7 @@ mod tests {
             STOP
         };
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
         )
         .run();
     }

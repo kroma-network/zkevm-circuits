@@ -13,7 +13,7 @@ use crate::{
                 AddWordsGadget, ConstantDivisionGadget, IsEqualGadget, MinMaxGadget,
                 MulWordByU64Gadget,
             },
-            CachedRegion, Cell,
+            CachedRegion, Cell, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
@@ -22,7 +22,7 @@ use crate::{
     },
     util::Expr,
 };
-use eth_types::{evm_types::MAX_REFUND_QUOTIENT_OF_GAS_USED, Field, ToScalar};
+use eth_types::{evm_types::MAX_REFUND_QUOTIENT_OF_GAS_USED, Field, ToLittleEndian, ToScalar};
 use halo2_proofs::{circuit::Value, plonk::Error};
 use strum::EnumCount;
 
@@ -33,6 +33,7 @@ pub(crate) struct EndTxGadget<F> {
     max_refund: ConstantDivisionGadget<F, N_BYTES_GAS>,
     refund: Cell<F>,
     effective_refund: MinMaxGadget<F, N_BYTES_GAS>,
+    effective_fee: Word<F>,
     mul_gas_price_by_refund: MulWordByU64Gadget<F>,
     tx_caller_address: Cell<F>,
     gas_fee_refund: UpdateBalanceGadget<F, 2, true>,
@@ -81,6 +82,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             tx_caller_address.expr(),
             vec![mul_gas_price_by_refund.product().clone()],
             None,
+            None,
         );
 
         // Add gas_used * effective_tip to coinbase's balance
@@ -100,10 +102,14 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             effective_tip,
             gas_used.clone() - effective_refund.min(),
         );
+
+        let effective_fee = cb.query_word_rlc();
+
         let coinbase_reward = UpdateBalanceGadget::construct(
             cb,
             coinbase.expr(),
-            vec![mul_effective_tip_by_gas_used.product().clone()],
+            vec![effective_fee.clone()],
+            None,
             None,
         );
 
@@ -183,6 +189,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
             max_refund,
             refund,
             effective_refund,
+            effective_fee,
             mul_gas_price_by_refund,
             tx_caller_address,
             gas_fee_refund,
@@ -274,11 +281,14 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
                     .expect("unexpected Address -> Scalar conversion failure"),
             ),
         )?;
+        let effective_fee = coinbase_balance - coinbase_balance_prev;
+        self.effective_fee
+            .assign(region, offset, Some(effective_fee.to_le_bytes()))?;
         self.coinbase_reward.assign(
             region,
             offset,
             coinbase_balance_prev,
-            vec![coinbase_reward],
+            vec![effective_fee],
             coinbase_balance,
         )?;
 
@@ -317,7 +327,13 @@ mod test {
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{self, bytecode};
 
-    use mock::{eth, test_ctx::helpers::account_0_code_account_1_no_code, TestContext};
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{
+        eth,
+        test_ctx::{helpers::account_0_code_account_1_no_code, TestContext2_3},
+        tx_idx, TestContext,
+    };
 
     fn test_ok<const NACC: usize, const NTX: usize>(ctx: TestContext<NACC, NTX>) {
         CircuitTestBuilder::new_from_test_ctx(ctx)
@@ -347,19 +363,21 @@ mod test {
         // Multiple txs
         test_ok(
             // Get the execution steps from the external tracer
-            TestContext::<2, 3>::new(
+            TestContext2_3::new(
                 None,
                 account_0_code_account_1_no_code(bytecode! { STOP }),
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .to(accs[0].address)
                         .from(accs[1].address)
                         .value(eth(1));
-                    txs[1]
+                    txs[tx_idx!(1)]
                         .to(accs[0].address)
                         .from(accs[1].address)
                         .value(eth(1));
-                    txs[2]
+                    txs[tx_idx!(2)]
                         .to(accs[0].address)
                         .from(accs[1].address)
                         .value(eth(1));

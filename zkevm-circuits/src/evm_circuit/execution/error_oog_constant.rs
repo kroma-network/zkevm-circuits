@@ -1,14 +1,16 @@
-use crate::evm_circuit::{
-    execution::ExecutionGadget,
-    param::N_BYTES_GAS,
-    step::ExecutionState,
-    util::{
-        common_gadget::CommonErrorGadget, constraint_builder::ConstraintBuilder,
-        math_gadget::LtGadget, CachedRegion, Cell,
+use crate::{
+    evm_circuit::{
+        execution::ExecutionGadget,
+        param::N_BYTES_GAS,
+        step::ExecutionState,
+        util::{
+            common_gadget::CommonErrorGadget, constraint_builder::ConstraintBuilder,
+            math_gadget::LtGadget, CachedRegion, Cell,
+        },
+        witness::{Block, Call, ExecStep, Transaction},
     },
-    witness::{Block, Call, ExecStep, Transaction},
+    util::Expr,
 };
-use crate::util::Expr;
 use eth_types::Field;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
@@ -93,8 +95,12 @@ mod test {
         Address, ToWord, Word,
     };
 
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx};
     use mock::{
-        eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS,
+        eth, gwei,
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1},
+        tx_idx, MOCK_ACCOUNTS,
     };
 
     fn gas(call_data: &[u8]) -> Word {
@@ -123,11 +129,13 @@ mod test {
         };
 
         // Get the execution steps from the external tracer
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(tx.to.unwrap())
                     .from(tx.from)
                     .gas_price(tx.gas_price.unwrap())
@@ -215,25 +223,29 @@ mod test {
     }
 
     fn oog_constant_internal_call(caller: Account, callee: Account) {
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
                 accs[1]
                     .address(caller.address)
                     .code(caller.code)
-                    .nonce(caller.nonce)
+                    .nonce(caller.nonce.as_u64())
                     .balance(caller.balance);
                 accs[2]
                     .address(callee.address)
                     .code(callee.code)
-                    .nonce(callee.nonce)
+                    .nonce(callee.nonce.as_u64())
                     .balance(callee.balance);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(23800.into());

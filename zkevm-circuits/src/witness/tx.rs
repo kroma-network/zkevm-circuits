@@ -1,28 +1,34 @@
-use crate::evm_circuit::step::ExecutionState;
-use crate::evm_circuit::util::rlc;
-use crate::table::TxContextFieldTag;
-use crate::util::{rlc_be_bytes, Challenges};
-use bus_mapping::circuit_input_builder;
-use bus_mapping::circuit_input_builder::{get_dummy_tx, get_dummy_tx_hash};
-use eth_types::sign_types::{
-    biguint_to_32bytes_le, ct_option_ok_or, recover_pk, SignData, SECP256K1_Q,
+use super::{step::step_convert, Call, ExecStep};
+use crate::{
+    evm_circuit::{step::ExecutionState, util::rlc},
+    table::TxContextFieldTag,
+    util::{rlc_be_bytes, Challenges},
 };
+use bus_mapping::{
+    circuit_input_builder,
+    circuit_input_builder::{get_dummy_tx, get_dummy_tx_hash},
+};
+#[cfg(feature = "kroma")]
+use eth_types::geth_types::DEPOSIT_TX_TYPE;
 use eth_types::{
+    evm_types::rwc_util::end_tx_rwc,
+    sign_types::{biguint_to_32bytes_le, ct_option_ok_or, recover_pk, SignData, SECP256K1_Q},
     Address, Error, Field, Signature, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H256,
 };
-use ethers_core::types::TransactionRequest;
-use ethers_core::utils::{
-    keccak256,
-    rlp::{Encodable, RlpStream},
+use ethers_core::{
+    types::TransactionRequest,
+    utils::{
+        keccak256,
+        rlp::{Encodable, RlpStream},
+    },
 };
-use halo2_proofs::circuit::Value;
-use halo2_proofs::halo2curves::group::ff::PrimeField;
-use halo2_proofs::halo2curves::secp256k1;
+use halo2_proofs::{
+    circuit::Value,
+    halo2curves::{group::ff::PrimeField, secp256k1},
+};
 use mock::MockTransaction;
 use num::Integer;
 use num_bigint::BigUint;
-
-use super::{step::step_convert, Call, ExecStep};
 
 /// Transaction in a witness block
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -33,6 +39,8 @@ pub struct Transaction {
     pub id: usize,
     /// The hash of the transaction
     pub hash: H256,
+    /// The type of the transaction
+    pub transaction_type: u64,
     /// The sender account nonce of the transaction
     pub nonce: u64,
     /// The gas limit of the transaction
@@ -69,9 +77,32 @@ pub struct Transaction {
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
     pub steps: Vec<ExecStep>,
+
+    /// Kroma deposit tx
+    #[cfg(feature = "kroma")]
+    /// The mint
+    pub mint: Word,
+
+    /// Kroma non-deposit tx
+    #[cfg(feature = "kroma")]
+    /// The gas cost that needs to be rolled up to L1.
+    pub rollup_data_gas_cost: u64,
 }
 
 impl Transaction {
+    /// Whether tx is a system deposit tx.
+    pub fn is_system_deposit(&self) -> bool {
+        self.is_deposit() && self.id == 1
+    }
+
+    /// Whether tx is a deposit tx.
+    pub fn is_deposit(&self) -> bool {
+        #[cfg(feature = "kroma")]
+        return self.transaction_type == DEPOSIT_TX_TYPE;
+        #[cfg(not(feature = "kroma"))]
+        return false;
+    }
+
     /// Assignments for tx table, split into tx_data (all fields except
     /// calldata) and tx_calldata
     /// Return a fixed dummy tx for chain_id
@@ -102,18 +133,34 @@ impl Transaction {
     pub fn sign_data(&self) -> Result<SignData, Error> {
         let sig_r_le = self.r.to_le_bytes();
         let sig_s_le = self.s.to_le_bytes();
-        let sig_r = ct_option_ok_or(
-            secp256k1::Fq::from_repr(sig_r_le),
-            Error::Signature(libsecp256k1::Error::InvalidSignature),
-        )?;
-        let sig_s = ct_option_ok_or(
-            secp256k1::Fq::from_repr(sig_s_le),
-            Error::Signature(libsecp256k1::Error::InvalidSignature),
-        )?;
+        #[cfg(not(feature = "kroma"))]
+        let zero_signature = false;
+        #[cfg(feature = "kroma")]
+        let zero_signature = self.is_deposit();
+        let sig_r = if zero_signature {
+            secp256k1::Fq::zero()
+        } else {
+            ct_option_ok_or(
+                secp256k1::Fq::from_repr(sig_r_le),
+                Error::Signature(libsecp256k1::Error::InvalidSignature),
+            )?
+        };
+        let sig_s = if zero_signature {
+            secp256k1::Fq::zero()
+        } else {
+            ct_option_ok_or(
+                secp256k1::Fq::from_repr(sig_s_le),
+                Error::Signature(libsecp256k1::Error::InvalidSignature),
+            )?
+        };
         let msg = self.rlp_unsigned.clone().into();
         let msg_hash = keccak256(&self.rlp_unsigned);
         let v = ((self.v + 1) % 2) as u8;
-        let pk = recover_pk(v, &self.r, &self.s, &msg_hash)?;
+        let pk = if zero_signature {
+            halo2_proofs::halo2curves::secp256k1::Secp256k1Affine::generator()
+        } else {
+            recover_pk(v, &self.r, &self.s, &msg_hash)?
+        };
         // msg_hash = msg_hash % q
         let msg_hash = BigUint::from_bytes_be(msg_hash.as_slice());
         let msg_hash = msg_hash.mod_floor(&*SECP256K1_Q);
@@ -147,6 +194,13 @@ impl Transaction {
         let tx_sign_hash_be_bytes = keccak256(&self.rlp_unsigned);
 
         let ret = vec![
+            #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Type as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.transaction_type)),
+            ],
             [
                 Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::Nonce as u64)),
@@ -155,17 +209,17 @@ impl Transaction {
             ],
             [
                 Value::known(F::from(self.id as u64)),
-                Value::known(F::from(TxContextFieldTag::Gas as u64)),
-                Value::known(F::zero()),
-                Value::known(F::from(self.gas)),
-            ],
-            [
-                Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::GasPrice as u64)),
                 Value::known(F::zero()),
                 challenges
                     .evm_word()
                     .map(|challenge| rlc::value(&self.gas_price.to_le_bytes(), challenge)),
+            ],
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Gas as u64)),
+                Value::known(F::zero()),
+                Value::known(F::from(self.gas)),
             ],
             [
                 Value::known(F::from(self.id as u64)),
@@ -270,6 +324,26 @@ impl Transaction {
                 Value::known(F::zero()),
                 Value::known(F::from(self.block_number)),
             ],
+            #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Mint as u64)),
+                Value::known(F::zero()),
+                challenges
+                    .evm_word()
+                    .map(|challenge| rlc::value(&self.mint.to_le_bytes(), challenge)),
+            ],
+            #[cfg(feature = "kroma")]
+            // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+            // because it is used to add with another rlc value in RollupFeeHook gadget.
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::RollupDataGasCost as u64)),
+                Value::known(F::zero()),
+                challenges.evm_word().map(|challenge| {
+                    rlc::value(&self.rollup_data_gas_cost.to_le_bytes(), challenge)
+                }),
+            ],
         ];
 
         ret
@@ -373,7 +447,7 @@ impl From<MockTransaction> for Transaction {
             block_number: 1,
             id: mock_tx.transaction_index.as_usize(),
             hash: mock_tx.hash.unwrap_or_default(),
-            nonce: mock_tx.nonce.as_u64(),
+            nonce: mock_tx.nonce,
             gas: mock_tx.gas.as_u64(),
             gas_price: mock_tx.gas_price,
             caller_address: mock_tx.from.address(),
@@ -394,6 +468,11 @@ impl From<MockTransaction> for Transaction {
             s: sig.s,
             calls: vec![],
             steps: vec![],
+            transaction_type: mock_tx.transaction_type.as_u64(),
+            #[cfg(feature = "kroma")]
+            mint: mock_tx.mint,
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: 1000,
         }
     }
 }
@@ -409,11 +488,13 @@ pub(super) fn tx_convert(
     chain_id: u64,
     next_block_num: u64,
 ) -> Transaction {
-    debug_assert_eq!(
-        chain_id, tx.chain_id,
-        "block.chain_id = {}, tx.chain_id = {}",
-        chain_id, tx.chain_id
-    );
+    // NOTE(chokobole): tx.chain_id is 0 when retrieving transactions from getBlockByNumber()
+    // during integration test.
+    // debug_assert_eq!(
+    //     chain_id, tx.chain_id,
+    //     "block.chain_id = {}, tx.chain_id = {}",
+    //     chain_id, tx.chain_id
+    // );
     let (rlp_unsigned, rlp_signed) = {
         let mut legacy_tx = TransactionRequest::new()
             .from(tx.from)
@@ -440,6 +521,7 @@ pub(super) fn tx_convert(
         id,
         hash: tx.hash, // NOTE that if tx is not of legacy type, then tx.hash does not equal to
         // keccak(rlp_signed)
+        transaction_type: tx.transaction_type,
         nonce: tx.nonce,
         gas: tx.gas,
         gas_price: tx.gas_price,
@@ -449,6 +531,10 @@ pub(super) fn tx_convert(
         value: tx.value,
         call_data: tx.input.clone(),
         call_data_length: tx.input.len(),
+        #[cfg(feature = "kroma")]
+        mint: tx.mint,
+        #[cfg(feature = "kroma")]
+        rollup_data_gas_cost: tx.rollup_data_gas_cost,
         call_data_gas_cost: tx
             .input
             .iter()
@@ -487,11 +573,12 @@ pub(super) fn tx_convert(
             .iter()
             .map(|step| step_convert(step, tx.block_num))
             .chain({
-                let rw_counter = tx.steps().last().unwrap().rwc.0 + 9 - (id == 1) as usize;
+                let rwc =
+                    tx.steps().last().unwrap().rwc.0 + end_tx_rwc(tx.transaction_type, id == 1);
                 debug_assert!(next_block_num >= tx.block_num);
                 let end_inner_block_steps = (tx.block_num..next_block_num)
                     .map(|block_num| ExecStep {
-                        rw_counter,
+                        rw_counter: rwc,
                         execution_state: ExecutionState::EndInnerBlock,
                         block_num,
                         ..Default::default()

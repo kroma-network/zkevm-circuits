@@ -1,9 +1,8 @@
 //! Mock types and functions to generate mock data useful for tests
 
 use crate::{
-    circuit_input_builder::BlockHead,
     circuit_input_builder::{
-        get_state_accesses, AccessSet, Block, CircuitInputBuilder, CircuitsParams,
+        get_state_accesses, AccessSet, Block, BlockHead, CircuitInputBuilder, CircuitsParams,
     },
     state_db::{self, CodeDB, StateDB},
 };
@@ -22,7 +21,7 @@ pub struct BlockData {
     /// chain id
     pub chain_id: Word,
     /// history hashes contains most recent 256 block hashes in history, where
-    /// the lastest one is at history_hashes[history_hashes.len() - 1].
+    /// the latest one is at history_hashes[history_hashes.len() - 1].
     pub history_hashes: Vec<Word>,
     /// Block from geth
     pub eth_block: eth_types::Block<eth_types::Transaction>,
@@ -66,21 +65,8 @@ impl BlockData {
         }
 
         for account in geth_data.accounts {
-            let code_hash = code_db.insert(account.code.to_vec());
-            log::trace!(
-                "trace code {:?} {:?}",
-                code_hash,
-                hex::encode(account.code.to_vec())
-            );
-            sdb.set_account(
-                &account.address,
-                state_db::Account {
-                    nonce: account.nonce,
-                    balance: account.balance,
-                    storage: account.storage,
-                    code_hash,
-                },
-            );
+            code_db.insert(account.code.to_vec());
+            sdb.set_account(&account.address, state_db::Account::from(account.clone()));
         }
 
         Self {

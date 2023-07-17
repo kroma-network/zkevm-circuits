@@ -59,7 +59,7 @@ impl<F: Field> ExecutionGadget<F> for MemoryGadget<F> {
             [from_bytes::expr(&address.cells) + 1.expr() + (is_not_mstore8.clone() * 31.expr())],
         );
 
-        /* Stack operations */
+        // Stack operations
         // Pop the address from the stack
         cb.stack_pop(address.expr());
         // For MLOAD push the value to the stack
@@ -91,11 +91,10 @@ impl<F: Field> ExecutionGadget<F> for MemoryGadget<F> {
         });
 
         // State transition
-        // - `rw_counter` needs to be increased by 34 when is_not_mstore8, otherwise to
-        //   be increased by 31
+        // - `rw_counter` needs to be increased by 34 when is_not_mstore8, otherwise to be increased
+        //   by 31
         // - `program_counter` needs to be increased by 1
-        // - `stack_pointer` needs to be increased by 2 when is_store, otherwise to be
-        //   same
+        // - `stack_pointer` needs to be increased by 2 when is_store, otherwise to be same
         // - `memory_size` needs to be set to `next_memory_size`
         let gas_cost = OpcodeId::MLOAD.constant_gas_cost().expr() + memory_expansion.gas_cost();
         let step_state_transition = StepStateTransition {
@@ -175,12 +174,18 @@ impl<F: Field> ExecutionGadget<F> for MemoryGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::evm_circuit::test::rand_word;
-    use crate::test_util::CircuitTestBuilder;
-    use eth_types::bytecode;
-    use eth_types::evm_types::{GasCost, OpcodeId};
-    use eth_types::Word;
-    use mock::test_ctx::{helpers::*, TestContext};
+    use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
+    use eth_types::{
+        bytecode,
+        evm_types::{GasCost, OpcodeId},
+        Word,
+    };
+    #[cfg(feature = "kroma")]
+    use mock::test_ctx::helpers::system_deposit_tx;
+    use mock::{
+        test_ctx::{helpers::account_0_code_account_1_no_code, SimpleTestContext},
+        tx_idx,
+    };
     use std::iter;
 
     fn test_ok(opcode: OpcodeId, address: Word, value: Word, gas_cost: u64) {
@@ -194,11 +199,13 @@ mod test {
         let gas_limit =
             GasCost::TX.as_u64() + OpcodeId::PUSH32.as_u64() + OpcodeId::PUSH32.as_u64() + gas_cost;
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(Word::from(gas_limit));

@@ -1,5 +1,7 @@
-use super::bytecode_unroller::{unroll, UnrolledBytecode};
-use super::circuit::BytecodeCircuit;
+use super::{
+    bytecode_unroller::{unroll, UnrolledBytecode},
+    circuit::BytecodeCircuit,
+};
 
 use eth_types::Field;
 
@@ -43,5 +45,5 @@ pub fn test_bytecode_circuit_unrolled<F: Field>(
         }
     }
     let error_msg = if success { "valid" } else { "invalid" };
-    assert_eq!(result.is_ok(), success, "proof must be {}", error_msg);
+    assert_eq!(result.is_ok(), success, "proof must be {error_msg}");
 }

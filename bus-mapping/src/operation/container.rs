@@ -188,11 +188,16 @@ impl OperationContainer {
 
 #[cfg(test)]
 mod container_test {
-    use super::*;
-
-    use crate::operation::{RWCounter, RW};
-    use eth_types::evm_types::{MemoryAddress, StackAddress};
-    use eth_types::{Address, Word};
+    use crate::{
+        exec_trace::OperationRef,
+        operation::{
+            MemoryOp, Operation, OperationContainer, RWCounter, StackOp, StorageOp, Target, RW,
+        },
+    };
+    use eth_types::{
+        evm_types::{MemoryAddress, StackAddress},
+        Address, Word,
+    };
 
     #[test]
     fn operation_container_test() {

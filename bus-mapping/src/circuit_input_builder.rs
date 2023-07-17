@@ -11,35 +11,48 @@ mod tracer_tests;
 mod transaction;
 
 use self::access::gen_state_access_trace;
+#[cfg(feature = "kroma")]
+use crate::evm::opcodes::{gen_end_deposit_tx_ops, gen_kroma_ops};
+use crate::{
+    error::Error,
+    evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops},
+    operation::{CallContextField, Operation, RWCounter, StartOp, RW},
+    rpc::GethClient,
+    state_db::{self, CodeDB, StateDB},
+};
+use core::fmt::Debug;
+#[cfg(feature = "kroma")]
+use eth_types::kroma_params;
+use eth_types::{
+    self,
+    evm_types::OpcodeId,
+    geth_types,
+    sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData},
+    Address, GethExecStep, GethExecTrace, ToBigEndian, ToWord, Word, H256, U256,
+};
+use ethers_core::{
+    k256::ecdsa::SigningKey,
+    types::{Bytes, NameOrAddress, Signature, TransactionRequest},
+    utils::keccak256,
+};
+use ethers_providers::JsonRpcClient;
+use hex::decode_to_slice;
+use itertools::Itertools;
+use log::warn;
+use std::{
+    collections::{BTreeMap, HashMap},
+    iter,
+};
+
 pub use self::block::BlockHead;
-use crate::error::Error;
-use crate::evm::opcodes::{gen_associated_ops, gen_begin_tx_ops, gen_end_tx_ops};
-use crate::operation::{CallContextField, Operation, RWCounter, StartOp, RW};
-use crate::rpc::GethClient;
-use crate::state_db::{self, CodeDB, StateDB};
 pub use access::{Access, AccessSet, AccessValue, CodeSource};
 pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
-use core::fmt::Debug;
-use eth_types::evm_types::{GasCost, OpcodeId};
-use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
-use eth_types::{self, Address, GethExecStep, GethExecTrace, ToWord, Word, H256, U256};
-use eth_types::{geth_types, ToBigEndian};
-use ethers_core::k256::ecdsa::SigningKey;
-use ethers_core::types::{Bytes, NameOrAddress, Signature, TransactionRequest};
-use ethers_providers::JsonRpcClient;
 pub use execution::{
     CopyDataType, CopyEvent, CopyStep, ExecState, ExecStep, ExpEvent, ExpStep, NumberOrHash,
 };
-use hex::decode_to_slice;
-
-use ethers_core::utils::keccak256;
 pub use input_state_ref::CircuitInputStateRef;
-use itertools::Itertools;
-use log::warn;
-use std::collections::{BTreeMap, HashMap};
-use std::iter;
-pub use transaction::{Transaction, TransactionContext};
+pub use transaction::{Transaction, TransactionContext, TxL1Fee};
 
 /// Circuit Setup Parameters
 #[derive(Debug, Clone, Copy)]
@@ -63,24 +76,26 @@ pub struct CircuitsParams {
     /// Maximum number of bytes supported in the Bytecode Circuit
     pub max_bytecode: usize,
     /// Pad evm circuit number of rows.
-    /// When 0, the EVM circuit number of row will be dynamically calculated, so
-    /// the same circuit will not be able to proof different witnesses. In this
-    /// case it will contain as many rows for all steps + 1 row
+    /// When 0, the EVM circuit number of rows will be dynamically calculated,
+    /// so the same circuit will not be able to proof different witnesses.
+    /// In this case it will contain as many rows for all steps + 1 row
     /// for EndBlock.
     pub max_evm_rows: usize,
-    // TODO: Rename for consistency
     /// Pad the keccak circuit with this number of invocations to a static
     /// capacity.  Number of keccak_f that the Keccak circuit will support.
-    pub keccak_padding: Option<usize>,
+    /// When 0, the Keccak circuit number of rows will be dynamically
+    /// calculated, so the same circuit will not be able to prove different
+    /// witnesses.
+    pub max_keccak_rows: usize,
 }
 
 impl Default for CircuitsParams {
     /// Default values for most of the unit tests of the Circuit Parameters
     fn default() -> Self {
         CircuitsParams {
-            max_rws: 1000,
-            max_txs: 1,
-            max_calldata: 256,
+            max_rws: 4200,
+            max_txs: 5,
+            max_calldata: 400,
             max_inner_blocks: 64,
             // TODO: Check whether this value is correct or we should increase/decrease based on
             // this lib tests
@@ -88,7 +103,7 @@ impl Default for CircuitsParams {
             max_exp_steps: 1000,
             max_bytecode: 512,
             max_evm_rows: 0,
-            keccak_padding: None,
+            max_keccak_rows: 0,
         }
     }
 }
@@ -298,6 +313,7 @@ impl<'a> CircuitInputBuilder {
         };
 
         let total_rws = state.block_ctx.rwc.0 - 1;
+        let max_rws = if max_rws == 0 { total_rws + 2 } else { max_rws };
         // We need at least 1 extra Start row
         #[allow(clippy::int_plus_one)]
         {
@@ -352,14 +368,7 @@ impl<'a> CircuitInputBuilder {
         // - execution_state: BeginTx
         // - op: None
         // Generate BeginTx step
-        let mut begin_tx_step = gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
-        begin_tx_step.gas_cost = if geth_trace.struct_logs.is_empty() {
-            GasCost(geth_trace.gas.0)
-        } else {
-            GasCost(tx.gas - geth_trace.struct_logs[0].gas.0)
-        };
-        log::trace!("begin_tx_step {:?}", begin_tx_step);
-        tx.steps_mut().push(begin_tx_step);
+        gen_begin_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx), geth_trace)?;
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
             let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
@@ -397,6 +406,18 @@ impl<'a> CircuitInputBuilder {
                         geth_step.stack.nth_last(5),
                         geth_step.stack.nth_last(6),
                     )
+                } else if geth_step.op.is_create() {
+                    format!(
+                        "value {:?} offset {:?} size {:?} {}",
+                        geth_step.stack.nth_last(0),
+                        geth_step.stack.nth_last(1),
+                        geth_step.stack.nth_last(2),
+                        if geth_step.op == OpcodeId::CREATE2 {
+                            format!("salt {:?}", geth_step.stack.nth_last(3))
+                        } else {
+                            "".to_string()
+                        }
+                    )
                 } else if matches!(geth_step.op, OpcodeId::MLOAD) {
                     format!(
                         "{:?}",
@@ -428,12 +449,24 @@ impl<'a> CircuitInputBuilder {
         }
 
         // TODO: Move into gen_associated_steps with
-        // - execution_state: EndTx
+        // - execution_state: EndTx, EndDepositTx
         // - op: None
-        // Generate EndTx step
-        log::trace!("gen_end_tx_ops");
-        let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
-        tx.steps_mut().push(end_tx_step);
+        // Generate EndTx / EndDepositTx step
+        if tx.is_deposit() {
+            #[cfg(feature = "kroma")]
+            let end_deposit_tx_step =
+                gen_end_deposit_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            #[cfg(feature = "kroma")]
+            tx.steps_mut().push(end_deposit_tx_step);
+        } else {
+            #[cfg(feature = "kroma")]
+            let kroma_steps = gen_kroma_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            #[cfg(feature = "kroma")]
+            tx.steps_mut().extend(kroma_steps);
+
+            let end_tx_step = gen_end_tx_ops(&mut self.state_ref(&mut tx, &mut tx_ctx))?;
+            tx.steps_mut().push(end_tx_step);
+        }
 
         self.sdb.commit_tx();
         self.block.txs.push(tx);
@@ -464,7 +497,7 @@ pub fn keccak_inputs(block: &Block, code_db: &CodeDB) -> Result<Vec<Vec<u8>>, Er
     ));
     // Bytecode Circuit
     for _bytecode in code_db.0.values() {
-        //keccak_inputs.push(bytecode.clone());
+        // keccak_inputs.push(bytecode.clone());
     }
     log::debug!(
         "keccak total len after bytecodes: {}",
@@ -571,7 +604,6 @@ fn keccak_inputs_pi_circuit(
                 .count() as u16;
             let parent_hash = block.eth_block.parent_hash;
             let block_hash = block.eth_block.hash.unwrap_or(H256::zero());
-            let num_l1_msgs = 0_u16; // 0 for now
 
             iter::empty()
                 // Block Values
@@ -582,7 +614,6 @@ fn keccak_inputs_pi_circuit(
                 .chain(block.base_fee.to_be_bytes())
                 .chain(block.gas_limit.to_be_bytes())
                 .chain(num_txs.to_be_bytes())
-                .chain(num_l1_msgs.to_be_bytes())
         }))
         // Tx Hashes
         .chain(transactions.iter().flat_map(|tx| tx.hash.to_fixed_bytes()))
@@ -670,10 +701,17 @@ pub fn get_create_init_code<'a>(
     call_ctx: &'a CallContext,
     step: &GethExecStep,
 ) -> Result<&'a [u8], Error> {
-    let offset = step.stack.nth_last(1)?;
-    let length = step.stack.nth_last(2)?;
-    Ok(&call_ctx.memory.0
-        [offset.low_u64() as usize..(offset.low_u64() + length.low_u64()) as usize])
+    let offset = step.stack.nth_last(1)?.low_u64() as usize;
+    let length = step.stack.nth_last(2)?.as_usize();
+
+    let mem_len = call_ctx.memory.0.len();
+    if offset >= mem_len {
+        return Ok(&[]);
+    }
+
+    let offset_end = offset.checked_add(length).unwrap_or(mem_len);
+
+    Ok(&call_ctx.memory.0[offset..offset_end])
 }
 
 /// Retrieve the memory offset and length of call.
@@ -718,6 +756,32 @@ pub fn get_state_accesses(
         block_access_trace.extend(tx_access_trace);
     }
 
+    #[cfg(feature = "kroma")]
+    // Assuming there are more than two transactions, rollup fees are collected.
+    if eth_block.transactions.len() > 1 {
+        block_access_trace.push(Access::new(
+            None,
+            RW::WRITE,
+            AccessValue::Account {
+                address: *kroma_params::VALIDATOR_REWARD_VAULT,
+            },
+        ));
+        block_access_trace.push(Access::new(
+            None,
+            RW::WRITE,
+            AccessValue::Account {
+                address: *kroma_params::PROTOCOL_VAULT,
+            },
+        ));
+        block_access_trace.push(Access::new(
+            None,
+            RW::WRITE,
+            AccessValue::Account {
+                address: *kroma_params::PROPOSER_REWARD_VAULT,
+            },
+        ));
+    }
+
     Ok(block_access_trace)
 }
 
@@ -735,7 +799,7 @@ pub fn build_state_code_db(
         sdb.set_account(
             &proof.address,
             state_db::Account {
-                nonce: proof.nonce,
+                nonce: proof.nonce.as_u64(),
                 balance: proof.balance,
                 storage,
                 code_hash: proof.code_hash,
@@ -775,7 +839,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         let geth_traces = self.cli.trace_block_by_number(block_num.into()).await?;
 
         // fetch up to 256 blocks
-        let mut n_blocks = 0; //std::cmp::min(256, block_num as usize);
+        let mut n_blocks = 0; // std::cmp::min(256, block_num as usize);
         let mut next_hash = eth_block.parent_hash;
         let mut prev_state_root: Option<Word> = None;
         let mut history_hashes = vec![Word::default(); n_blocks];

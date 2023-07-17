@@ -1,17 +1,20 @@
 //! witness generator
-use super::builder::{extend_address_to_h256, AccountData, BytesArray, CanRead, TrieProof};
-use super::{MPTProofType, ZktrieState};
+use super::{
+    builder::{extend_address_to_h256, AccountData, BytesArray, CanRead, TrieProof},
+    MPTProofType, ZktrieState,
+};
 use bus_mapping::state_db::CodeDB;
 use eth_types::{Address, Hash, Word, H256, U256};
 use halo2_proofs::halo2curves::group::ff::PrimeField;
 use mpt_circuits::serde::{
     AccountData as SMTAccount, Hash as SMTHash, HexBytes, SMTNode, SMTPath, SMTTrace, StateData,
 };
-use std::collections::HashMap;
-use zktrie::{ZkTrie, ZkTrieNode};
-
 use num_bigint::BigUint;
-use std::io::{Error as IoError, Read};
+use std::{
+    collections::HashMap,
+    io::{Error as IoError, Read},
+};
+use zktrie::{ZkTrie, ZkTrieNode};
 
 impl From<AccountData> for SMTAccount {
     fn from(acc: AccountData) -> Self {
@@ -50,10 +53,16 @@ impl From<&ZktrieState> for WitnessGenerator {
                     existed,
                     "expected to be consistented between records in sdb and account root"
                 );
+                (*addr, acc_data, storage_root)
+            })
+            // filter out the account data which is empty can provide update applying some
+            // convenient
+            .filter(|(_, acc_data, _)| !acc_data.is_empty())
+            .map(|(addr, acc_data, storage_root)| {
                 (
-                    *addr,
+                    addr,
                     AccountData {
-                        nonce: acc_data.nonce.as_u64(),
+                        nonce: acc_data.nonce,
                         balance: acc_data.balance,
                         code_hash: acc_data.code_hash,
                         storage_root: H256::from(storage_root),
@@ -66,6 +75,8 @@ impl From<&ZktrieState> for WitnessGenerator {
             .accounts
             .iter()
             .map(|(addr, storage_root)| (*addr, state.zk_db.borrow_mut().new_trie(storage_root)))
+            // if an account has no storage slot being touched in execution, they do not need
+            // storage trie and would be filter out here
             .filter(|(_, storage_root)| storage_root.is_some())
             .map(|(addr, storage_root)| (addr, storage_root.expect("None has been filtered")))
             .collect();
@@ -79,6 +90,11 @@ impl From<&ZktrieState> for WitnessGenerator {
 }
 
 impl WitnessGenerator {
+    /// dump inner data for debugging
+    pub fn dump(&self) {
+        log::info!("account data {:#?}", self.accounts);
+    }
+
     fn trace_storage_update(
         &mut self,
         address: Address,
@@ -111,17 +127,20 @@ impl WitnessGenerator {
                 value: HexBytes(word_buf),
             }
         };
-        let storage_before_proofs = trie.prove(key.as_ref());
+        let storage_before_proofs = trie.prove(key.as_ref()).unwrap();
         let storage_before_path = decode_proof_for_mpt_path(storage_key, storage_before_proofs);
         if !new_value.is_zero() {
             trie.update_store(key.as_ref(), &store_after.value.0)
                 .unwrap();
         } else if !old_value.is_zero() {
             trie.delete(key.as_ref());
+            if trie.get_store(key.as_ref()).is_some() {
+                log::error!("fail to delete key {} in {:?}", key.hex(), address);
+            }
         } // notice if the value is both zero we never touch the trie layer
 
         let storage_root_after = H256(trie.root());
-        let storage_after_proofs = trie.prove(key.as_ref());
+        let storage_after_proofs = trie.prove(key.as_ref()).unwrap();
         let storage_after_path = decode_proof_for_mpt_path(storage_key, storage_after_proofs);
 
         // sanity check
@@ -161,7 +180,7 @@ impl WitnessGenerator {
     {
         let account_data_before = self.accounts.get(&address).copied();
 
-        let proofs = self.trie.prove(address.as_bytes());
+        let proofs = self.trie.prove(address.as_bytes()).unwrap();
         let address_key = hash_zktrie_key(&extend_address_to_h256(&address));
 
         let account_path_before = decode_proof_for_mpt_path(address_key, proofs).unwrap();
@@ -170,7 +189,7 @@ impl WitnessGenerator {
 
         if let Some(account_data_after) = account_data_after {
             let mut nonce = [0u8; 32];
-            U256::from(account_data_after.nonce).to_big_endian(nonce.as_mut_slice());
+            (U256::from(account_data_after.nonce)).to_big_endian(nonce.as_mut_slice());
             let mut balance = [0u8; 32];
             account_data_after
                 .balance
@@ -178,17 +197,19 @@ impl WitnessGenerator {
             let mut code_hash = [0u8; 32];
             U256::from(account_data_after.code_hash.0).to_big_endian(code_hash.as_mut_slice());
 
-            let acc_data = [nonce, balance, code_hash, account_data_after.storage_root.0];
-            self.trie
-                .update_account(address.as_bytes(), &acc_data)
-                .expect("todo: handle this");
+            let acc_data = [nonce, balance, account_data_after.storage_root.0, code_hash];
+            let rs = self.trie.update_account(address.as_bytes(), &acc_data);
+            if rs.is_err() {
+                log::warn!("invalid update {:?}", rs);
+            }
             self.accounts.insert(address, account_data_after);
-        } else {
+        } else if account_data_before.is_some() {
+            log::warn!("trace update try delete account {address:?} trie while we have no SELFDESTRUCT yet");
             self.trie.delete(address.as_bytes());
             self.accounts.remove(&address);
-        }
+        } // no touch for non-exist proof
 
-        let proofs = self.trie.prove(address.as_bytes());
+        let proofs = self.trie.prove(address.as_bytes()).unwrap();
         let account_path_after = decode_proof_for_mpt_path(address_key, proofs).unwrap();
 
         SMTTrace {
@@ -240,19 +261,28 @@ impl WitnessGenerator {
                     MPTProofType::CodeHashExists => {
                         let mut code_hash = [0u8; 32];
                         old_val.to_big_endian(code_hash.as_mut_slice());
-                        if H256::from(code_hash) != acc_data.code_hash {
-                            if H256::from(code_hash).is_zero()
-                                && acc_data.code_hash == CodeDB::empty_code_hash()
-                            {
-                                log::trace!("codehash 0->keccak(nil)");
-                            } else {
-                                debug_assert_eq!(H256::from(code_hash), acc_data.code_hash);
-                            }
+                        if acc_data.code_hash != CodeDB::empty_code_hash() {
+                            debug_assert_eq!(H256::from(code_hash), acc_data.code_hash);
                         }
                         new_val.to_big_endian(code_hash.as_mut_slice());
                         acc_data.code_hash = H256::from(code_hash);
                     }
-                    MPTProofType::AccountDoesNotExist => (),
+                    MPTProofType::AccountDoesNotExist => {
+                        // for proof NotExist, the account_before must be empty
+                        assert!(
+                            acc_data.balance.is_zero(),
+                            "not-exist proof on existed account balance: {address}"
+                        );
+                        assert_eq!(
+                            0, acc_data.nonce,
+                            "not-exist proof on existed account nonce: {address}"
+                        );
+                        assert!(
+                            acc_data.storage_root.is_zero(),
+                            "not-exist proof on existed account storage: {address}"
+                        );
+                        return None;
+                    }
                     _ => unreachable!("invalid proof type: {:?}", proof_type),
                 }
                 Some(acc_data)
@@ -274,8 +304,7 @@ fn smt_hash_from_bytes(bt: &[u8]) -> SMTHash {
 }
 
 fn hash_zktrie_key(key_buf: &[u8; 32]) -> Word {
-    use halo2_proofs::arithmetic::FieldExt;
-    use halo2_proofs::halo2curves::bn256::Fr;
+    use halo2_proofs::{arithmetic::FieldExt, halo2curves::bn256::Fr};
     use mpt_circuits::hash::Hashable;
 
     let first_16bytes: [u8; 16] = key_buf[..16].try_into().expect("expect first 16 bytes");
@@ -315,7 +344,7 @@ impl AsRef<[u8]> for LeafNodeHash {
 fn decode_proof_for_mpt_path(mut key: Word, proofs: Vec<Vec<u8>>) -> Result<SMTPath, IoError> {
     let root = if let Some(arr) = proofs.first() {
         let n = ZkTrieNode::parse(arr.as_slice());
-        smt_hash_from_bytes(n.key().as_slice())
+        smt_hash_from_bytes(n.node_hash().as_slice())
     } else {
         HexBytes::<32>([0; 32])
     };

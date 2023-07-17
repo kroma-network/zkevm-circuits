@@ -1,8 +1,10 @@
 //! Connection to external EVM tracer.
 
 use core::fmt::{Display, Formatter, Result as FmtResult};
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
+use std::{
+    ffi::{CStr, CString},
+    os::raw::c_char,
+};
 
 extern "C" {
     fn CreateTrace(str: *const c_char) -> *const c_char;
@@ -44,7 +46,7 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

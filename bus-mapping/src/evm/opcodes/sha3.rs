@@ -1,3 +1,4 @@
+use super::Opcode;
 use crate::{
     circuit_input_builder::{
         CircuitInputStateRef, CopyDataType, CopyEvent, ExecStep, NumberOrHash,
@@ -6,8 +7,6 @@ use crate::{
 };
 use eth_types::{GethExecStep, Word, U256};
 use ethers_core::utils::keccak256;
-
-use super::Opcode;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Sha3;
@@ -40,7 +39,7 @@ impl Opcode for Sha3 {
         let memory = state
             .call_ctx()?
             .memory
-            .read_chunk(offset.as_usize().into(), size.as_usize().into());
+            .read_chunk(offset.low_u64().into(), size.as_usize().into());
 
         // keccak-256 hash of the given data in memory.
         let sha3 = keccak256(&memory);
@@ -62,18 +61,24 @@ impl Opcode for Sha3 {
         state.block.sha3_inputs.push(memory);
 
         let call_id = state.call()?.call_id;
-        state.push_copy(CopyEvent {
-            src_addr: offset.as_u64(),
-            src_addr_end: offset.as_u64() + size.as_u64(),
-            src_type: CopyDataType::Memory,
-            src_id: NumberOrHash::Number(call_id),
-            dst_addr: 0,
-            dst_type: CopyDataType::RlcAcc,
-            dst_id: NumberOrHash::Number(call_id),
-            log_id: None,
-            rw_counter_start,
-            bytes: steps,
-        });
+        state.push_copy(
+            &mut exec_step,
+            CopyEvent {
+                src_addr: offset.low_u64(),
+                src_addr_end: offset
+                    .low_u64()
+                    .checked_add(size.as_u64())
+                    .unwrap_or(u64::MAX),
+                src_type: CopyDataType::Memory,
+                src_id: NumberOrHash::Number(call_id),
+                dst_addr: 0,
+                dst_type: CopyDataType::RlcAcc,
+                dst_id: NumberOrHash::Number(call_id),
+                log_id: None,
+                rw_counter_start,
+                bytes: steps,
+            },
+        );
 
         Ok(vec![exec_step])
     }
@@ -81,19 +86,21 @@ impl Opcode for Sha3 {
 
 #[cfg(any(feature = "test", test))]
 pub mod sha3_tests {
-    use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, Bytecode, Word};
-    use ethers_core::utils::keccak256;
-    use mock::{
-        test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
-    };
-    use rand::{random, Rng};
-
     use crate::{
         circuit_input_builder::{CircuitsParams, ExecState},
         mock::BlockData,
         operation::{MemoryOp, StackOp, RW},
     };
+    use eth_types::{bytecode, evm_types::OpcodeId, geth_types::GethData, Bytecode, Word};
+    use ethers_core::utils::keccak256;
+    use mock::{
+        test_ctx::{
+            helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
+            SimpleTestContext,
+        },
+        tx_idx,
+    };
+    use rand::{random, Rng};
 
     /// Generate bytecode for SHA3 opcode after having populated sufficient
     /// memory given the offset and size arguments for SHA3.
@@ -179,7 +186,7 @@ pub mod sha3_tests {
         memory_view.resize(size, 0);
         let expected_sha3_value = keccak256(&memory_view);
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -191,7 +198,7 @@ pub mod sha3_tests {
         let mut builder = BlockData::new_from_geth_data_with_params(
             block.clone(),
             CircuitsParams {
-                max_rws: 2048,
+                max_rws: 2500,
                 ..Default::default()
             },
         )
@@ -200,13 +207,13 @@ pub mod sha3_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::SHA3))
             .unwrap();
 
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
+        let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
 
         // stack read and write.
         assert_eq!(
@@ -229,12 +236,20 @@ pub mod sha3_tests {
             ]
         );
 
+        let memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == call_id)
+            .unwrap();
+
         // Memory reads.
         // Initial memory_len bytes are the memory writes from MSTORE instruction, so we
         // skip them.
         assert_eq!(
             (memory_len..(memory_len + size))
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             {

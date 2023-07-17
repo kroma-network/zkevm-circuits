@@ -14,7 +14,8 @@ pub(crate) use account::MockAccount;
 pub(crate) use block::MockBlock;
 pub use test_ctx::TestContext;
 pub use transaction::{AddrOrWallet, MockTransaction, CORRECT_MOCK_TXS};
-
+// 0x2386f26fc10000 -> 10000000000000000
+// 0x2386f278b1d180 -> 10000000000000000 + test_ctx::DEPOSIT_TX_GAS
 lazy_static! {
     /// Mock 1 ETH
     pub static ref MOCK_1_ETH: Word = eth(1);
@@ -25,8 +26,10 @@ lazy_static! {
     pub static ref MOCK_GASPRICE: Word = Word::from(1u8);
     /// Mock BASEFEE value
     pub static ref MOCK_BASEFEE: Word = Word::zero();
-     /// Mock GASLIMIT value
+    /// Mock GASLIMIT value
     pub static ref MOCK_GASLIMIT: Word = Word::from(0x2386f26fc10000u64);
+    /// Kroma Mock GASLIMIT value
+    pub static ref KROMA_MOCK_GASLIMIT: Word = Word::from(0x2386f278b1d180u64);
     /// Mock chain ID value
     pub static ref MOCK_CHAIN_ID: Word = Word::from(1338u64);
     /// Mock DIFFICULTY value
