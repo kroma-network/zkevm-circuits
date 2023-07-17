@@ -128,11 +128,7 @@ impl<F: Field> Chip<F> {
             |mut region| {
                 for field_tag in CallContextFieldTag::iter() {
                     region.assign_fixed(
-                        || {
-                            format!(
-                                "assign {field_tag:?} in call_context_field_tag fixed column"
-                            )
-                        },
+                        || format!("assign {field_tag:?} in call_context_field_tag fixed column"),
                         self.config.call_context_field_tag,
                         field_tag as usize,
                         || Value::known(F::from(field_tag as u64)),

@@ -584,11 +584,7 @@ arith:
 
         let ccccc = address!("cccccccccccccccccccccccccccccccccccccccc");
         let check_ccccc_balance = |id: &str, v: u64| {
-            assert_eq!(
-                tcs[id].result[&ccccc].balance,
-                Some(U256::from(v)),
-                "{id}"
-            )
+            assert_eq!(tcs[id].result[&ccccc].balance, Some(U256::from(v)), "{id}")
         };
 
         check_ccccc_balance("arith_d0_g0_v0", 1000000000001);
