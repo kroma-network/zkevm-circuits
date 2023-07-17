@@ -6,7 +6,7 @@ use crate::{
     Error,
 };
 use eth_types::{
-    evm_types::Memory, geth_types, Address, GethExecTrace, Signature, Word, H256, U64,
+    evm_types::Memory, geth_types, Address, GethExecTrace, Hash, Signature, Word, H256, U64,
 };
 use ethers_core::utils::get_contract_address;
 #[cfg(feature = "kroma")]
@@ -195,7 +195,7 @@ pub struct Transaction {
     /// From / Caller Address
     pub from: Address,
     /// To / Callee Address
-    pub to: Address,
+    pub to: Option<Address>,
     /// Value
     pub value: Word,
     /// Input / Call Data
@@ -213,6 +213,10 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// Mint
     pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// Source Hash
+    pub source_hash: Hash,
+
     /// Kroma non-deposit tx.
     #[cfg(feature = "kroma")]
     /// Rollup data gas cost
@@ -228,7 +232,7 @@ impl From<&Transaction> for geth_types::Transaction {
                 Some(U64::from(tx.transaction_type))
             },
             from: tx.from,
-            to: Some(tx.to),
+            to: tx.to,
             nonce: Word::from(tx.nonce),
             gas_limit: Word::from(tx.gas),
             value: tx.value,
@@ -240,6 +244,8 @@ impl From<&Transaction> for geth_types::Transaction {
             hash: tx.hash,
             #[cfg(feature = "kroma")]
             mint: tx.mint,
+            #[cfg(feature = "kroma")]
+            source_hash: tx.source_hash,
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: tx.rollup_data_gas_cost,
             ..Default::default()
@@ -256,7 +262,7 @@ impl Transaction {
             gas: 0,
             gas_price: Word::zero(),
             from: Address::zero(),
-            to: Address::zero(),
+            to: Some(Address::zero()),
             value: Word::zero(),
             input: Vec::new(),
             chain_id: 0,
@@ -271,6 +277,8 @@ impl Transaction {
             hash: Default::default(),
             #[cfg(feature = "kroma")]
             mint: Word::zero(),
+            #[cfg(feature = "kroma")]
+            source_hash: Hash::zero(),
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: Default::default(),
         }
@@ -352,7 +360,7 @@ impl Transaction {
             gas: eth_tx.gas.as_u64(),
             gas_price: eth_tx.gas_price.unwrap_or_default(),
             from: eth_tx.from,
-            to: eth_tx.to.unwrap_or_default(),
+            to: eth_tx.to,
             value: eth_tx.value,
             input: eth_tx.input.to_vec(),
             chain_id: eth_tx.chain_id.unwrap_or_default().as_u64(), // FIXME
@@ -365,6 +373,9 @@ impl Transaction {
             },
             #[cfg(feature = "kroma")]
             mint: eth_types::geth_types::Transaction::get_mint(eth_tx).unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            source_hash: eth_types::geth_types::Transaction::get_source_hash(eth_tx)
+                .unwrap_or_default(),
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: if transaction_type != DEPOSIT_TX_TYPE {
                 eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(eth_tx)

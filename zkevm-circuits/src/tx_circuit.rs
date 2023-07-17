@@ -44,8 +44,8 @@ use std::{
 
 use crate::table::TxFieldTag::{
     BlockNumber, CallData, CallDataGasCost, CallDataLength, CalleeAddress, CallerAddress, Gas,
-    GasPrice, IsCreate, Nonce, SigR, SigS, SigV, TxHashLength, TxHashRLC, TxSignHash, TxSignLength,
-    TxSignRLC, Type,
+    GasPrice, IsCreate, Mint, Nonce, SigR, SigS, SigV, SourceHash, TxHashLength, TxHashRLC,
+    TxSignHash, TxSignLength, TxSignRLC, Type,
 };
 use gadgets::is_zero::{IsZeroChip, IsZeroConfig, IsZeroInstruction};
 pub use halo2_proofs::halo2curves::{
@@ -74,15 +74,17 @@ use halo2_proofs::{circuit::SimpleFloorPlanner, plonk::Circuit};
 // This contains followings:
 // - transaction type
 // - mint
+// - source hash
 // - rollup data gas cost
-const ADDITIONAL_KROMA_TX_LEN: usize = 3;
+#[cfg(feature = "kroma")]
+const ADDITIONAL_KROMA_TX_LEN: usize = 4;
 #[cfg(not(feature = "kroma"))]
 const ADDITIONAL_KROMA_TX_LEN: usize = 0;
 
 /// Number of rows of one tx occupies in the fixed part of tx table
 pub const TX_LEN: usize = 19 + ADDITIONAL_KROMA_TX_LEN;
 /// Offset of TxHash tag in the tx table
-pub const TX_HASH_OFFSET: usize = 18;
+pub const TX_HASH_OFFSET: usize = 19;
 
 #[derive(Clone, Debug)]
 struct TagTable {
@@ -109,6 +111,8 @@ enum LookupCondition {
     RlpCalldata,
     RlpSignTag,
     RlpHashTag,
+    #[cfg(feature = "kroma")]
+    RlpHashTagDeposit,
     // lookup into keccak table
     Keccak,
 }
@@ -214,6 +218,9 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             LookupCondition::RlpCalldata,
             LookupCondition::RlpSignTag,
             LookupCondition::RlpHashTag,
+            #[cfg(feature = "kroma")]
+            // True when it is the RLP encoding members of the TxHash for the deposit tx.
+            LookupCondition::RlpHashTagDeposit,
             LookupCondition::Keccak,
         ]
         .into_iter()
@@ -251,6 +258,12 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
         is_tx_tag!(is_hash_length, TxHashLength);
         is_tx_tag!(is_hash_rlc, TxHashRLC);
         is_tx_tag!(is_block_num, BlockNumber);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_type, Type);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_source_hash, SourceHash);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_mint, Mint);
 
         let tx_id_is_zero = IsEqualChip::configure(
             meta,
@@ -354,34 +367,69 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
         });
 
-        meta.create_gate("hash tag lookup into rlp table condition", |meta| {
-            let mut cb = BaseConstraintBuilder::default();
+        meta.create_gate(
+            "hash tag lookup into rlp table condition for legacy tx",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::default();
 
-            let is_tag_in_tx_hash = sum::expr([
-                is_nonce(meta),
-                is_gas_price(meta),
-                is_gas(meta),
-                is_to(meta),
-                is_value(meta),
-                is_data_length(meta),
-                is_sig_v(meta),
-                is_sig_r(meta),
-                is_sig_s(meta),
-                is_hash_length(meta),
-                is_hash_rlc(meta),
-            ]);
+                let is_tag_in_tx_hash = sum::expr([
+                    is_nonce(meta),
+                    is_gas_price(meta),
+                    is_gas(meta),
+                    is_to(meta),
+                    is_value(meta),
+                    is_data_length(meta),
+                    is_sig_v(meta),
+                    is_sig_r(meta),
+                    is_sig_s(meta),
+                    is_hash_length(meta),
+                    is_hash_rlc(meta),
+                ]);
 
-            cb.require_equal(
-                "condition",
-                is_tag_in_tx_hash,
-                meta.query_advice(
-                    lookup_conditions[&LookupCondition::RlpHashTag],
-                    Rotation::cur(),
-                ),
-            );
+                cb.require_equal(
+                    "condition",
+                    is_tag_in_tx_hash,
+                    meta.query_advice(
+                        lookup_conditions[&LookupCondition::RlpHashTag],
+                        Rotation::cur(),
+                    ),
+                );
 
-            cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
-        });
+                cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
+            },
+        );
+
+        #[cfg(feature = "kroma")]
+        meta.create_gate(
+            "hash tag lookup into rlp table condition for deposit tx",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::default();
+
+                let is_tag_in_tx_sign = sum::expr([
+                    is_type(meta),
+                    is_source_hash(meta),
+                    is_caller_addr(meta),
+                    is_to(meta),
+                    is_mint(meta),
+                    is_value(meta),
+                    is_gas(meta),
+                    is_data_length(meta),
+                    is_hash_length(meta),
+                    is_hash_rlc(meta),
+                ]);
+
+                cb.require_equal(
+                    "condition",
+                    is_tag_in_tx_sign,
+                    meta.query_advice(
+                        lookup_conditions[&LookupCondition::RlpHashTagDeposit],
+                        Rotation::cur(),
+                    ),
+                );
+
+                cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
+            },
+        );
 
         meta.create_gate("calldata length lookup condition", |meta| {
             let mut cb = BaseConstraintBuilder::default();
@@ -497,6 +545,8 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             tx_table.clone(),
             keccak_table.clone(),
             rlp_table,
+            #[cfg(feature = "kroma")]
+            is_deposit_tx,
         );
 
         let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone());
@@ -858,6 +908,28 @@ impl<F: Field> TxCircuitConfig<F> {
             let is_tag_in_set = hash_set.into_iter().filter(|_tag| tag == *_tag).count();
             Value::known(F::from(is_tag_in_set as u64))
         });
+
+        // NOTE(dongchangYoo): The rlp hash tag differs depending on the transaction type.
+        // So `RlpHashTagDeposit` is additionally defined. However, type 126 transactions do not
+        // include sig data, so `RlpSignTagDeposit` is not necessary.
+        #[cfg(feature = "kroma")]
+        conditions.insert(LookupCondition::RlpHashTagDeposit, {
+            let hash_set = [
+                Type,
+                SourceHash,
+                CallerAddress,
+                CalleeAddress,
+                Mint,
+                TxFieldTag::Value,
+                Gas,
+                CallDataLength,
+                TxHashLength,
+                TxHashRLC,
+            ];
+            let is_tag_in_set = hash_set.into_iter().filter(|_tag| tag == *_tag).count();
+            Value::known(F::from(is_tag_in_set as u64))
+        });
+
         conditions.insert(LookupCondition::Keccak, {
             let set = [TxSignLength, TxHashLength];
             let is_tag_in_set = set.into_iter().filter(|_tag| tag == *_tag).count();
@@ -1038,6 +1110,7 @@ impl<F: Field> TxCircuitConfig<F> {
         tx_table: TxTable,
         keccak_table: KeccakTable,
         rlp_table: RlpTable,
+        #[cfg(feature = "kroma")] is_deposit_tx: Column<Advice>,
     ) {
         /////////////////////////////////////////////////////////////////
         /////////////////    block table lookups     ////////////////////
@@ -1121,6 +1194,9 @@ impl<F: Field> TxCircuitConfig<F> {
                     lookup_conditions[&LookupCondition::RlpSignTag],
                     Rotation::cur(),
                 ),
+                #[cfg(feature = "kroma")]
+                // NOTE(dongchangYoo): does not check RlpSignTag in case of deposit tx
+                not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
             ]);
             let rlp_tag = meta.query_fixed(rlp_tag, Rotation::cur());
 
@@ -1140,13 +1216,38 @@ impl<F: Field> TxCircuitConfig<F> {
         // lookup tx tag in rlp table for TxHash
         meta.lookup_any("tx tag in RLP Table::TxHash", |meta| {
             let rlp_tag = meta.query_fixed(rlp_tag, Rotation::cur());
-            let enable = and::expr(vec![
+
+            #[cfg(feature = "kroma")]
+            let is_deposit_expr = meta.query_advice(is_deposit_tx, Rotation::cur());
+
+            let legacy_enable = and::expr(vec![
                 meta.query_fixed(q_enable, Rotation::cur()),
                 meta.query_advice(
                     lookup_conditions[&LookupCondition::RlpHashTag],
                     Rotation::cur(),
                 ),
+                // NOTE(dongchangYoo): For example, since `GasPrice` is an rlp member of Legacy
+                // tx, so `RlpHashTag` is True. Thus, this lookup is also executed during
+                // the inspection of GasPrice in Deposit tx. As a result,
+                // is_deposit_exp=False is required.
+                #[cfg(feature = "kroma")]
+                not::expr(is_deposit_expr.clone()),
             ]);
+
+            #[cfg(feature = "kroma")]
+            let deposit_enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpHashTagDeposit],
+                    Rotation::cur(),
+                ),
+                is_deposit_expr.clone(),
+            ]);
+
+            #[cfg(not(feature = "kroma"))]
+            let enable = legacy_enable;
+            #[cfg(feature = "kroma")]
+            let enable = select::expr(is_deposit_expr, deposit_enable, legacy_enable);
 
             vec![
                 meta.query_advice(tx_table.tx_id, Rotation::cur()),
@@ -1161,6 +1262,7 @@ impl<F: Field> TxCircuitConfig<F> {
             .collect()
         });
 
+        // TODO(dongchangYoo): impl or remove constraint after finding out comment below.
         // lookup RLP table to check Chain ID.
         // meta.lookup_any("rlp table Chain ID", |meta| {
         // let enable = and::expr(vec![
@@ -1496,7 +1598,10 @@ impl<F: Field> TxCircuit<F> {
                         (Gas, RlpTxTag::Gas, Value::known(F::from(tx.gas))),
                         (
                             CallerAddress,
-                            RlpTxTag::Padding, // no corresponding rlp tag
+                            #[cfg(not(feature = "kroma"))]
+                            RlpTxTag::Padding,
+                            #[cfg(feature = "kroma")]
+                            RlpTxTag::From,
                             Value::known(tx.caller_address.to_scalar().expect("tx.from too big")),
                         ),
                         (
@@ -1603,6 +1708,19 @@ impl<F: Field> TxCircuit<F> {
                             challenges
                                 .evm_word()
                                 .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
+                        ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            TxFieldTag::SourceHash,
+                            RlpTxTag::SourceHash,
+                            challenges.evm_word().map(|challenge| {
+                                tx.source_hash
+                                    .to_fixed_bytes()
+                                    .into_iter()
+                                    .fold(F::zero(), |acc, byte| {
+                                        acc * challenge + F::from(byte as u64)
+                                    })
+                            }),
                         ),
                         #[cfg(feature = "kroma")]
                         // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
@@ -2058,6 +2176,66 @@ mod tx_circuit_tests {
                 [
                     mock::CORRECT_MOCK_TXS[1].clone(),
                     mock::CORRECT_MOCK_TXS[3].clone()
+                ]
+                .iter()
+                .enumerate()
+                .map(|(i, tx)| {
+                    let mut mock_tx = tx.clone();
+                    mock_tx.transaction_idx((i + 1) as u64);
+                    mock_tx.into()
+                })
+                .collect(),
+                mock::MOCK_CHAIN_ID.as_u64(),
+                MAX_TXS,
+                MAX_CALLDATA
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "kroma")]
+    /// test with 1 deposit tx and 1 legacy tx.
+    fn tx_circuit_1d_1l_2max_tx() {
+        const NUM_TXS: usize = 2;
+        const MAX_TXS: usize = 2;
+        const MAX_CALLDATA: usize = 300;
+
+        assert_eq!(
+            run::<Fr>(
+                [
+                    mock::CORRECT_MOCK_TXS[6].clone(),
+                    mock::CORRECT_MOCK_TXS[7].clone()
+                ]
+                .iter()
+                .enumerate()
+                .map(|(i, tx)| {
+                    let mut mock_tx = tx.clone();
+                    mock_tx.transaction_idx((i + 1) as u64);
+                    mock_tx.into()
+                })
+                .collect(),
+                mock::MOCK_CHAIN_ID.as_u64(),
+                MAX_TXS,
+                MAX_CALLDATA
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "kroma")]
+    /// test with 1 deposit tx and 1 deploy tx.
+    fn tx_circuit_1d_1d_2max_tx() {
+        const NUM_TXS: usize = 2;
+        const MAX_TXS: usize = 2;
+        const MAX_CALLDATA: usize = 400;
+
+        assert_eq!(
+            run::<Fr>(
+                [
+                    mock::CORRECT_MOCK_TXS[6].clone(),
+                    mock::CORRECT_MOCK_TXS[8].clone()
                 ]
                 .iter()
                 .enumerate()
