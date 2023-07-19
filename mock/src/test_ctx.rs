@@ -11,7 +11,7 @@ use itertools::Itertools;
 
 pub use external_tracer::LoggerConfig;
 #[cfg(feature = "kroma")]
-pub const DEPOSIT_TX_GAS: u64 = 1000000u64;
+pub const SYSTEM_DEPOSIT_TX_GAS: u64 = 1000000u64;
 #[cfg(not(feature = "kroma"))]
 pub const DEPOSIT_TX_GAS: u64 = 0u64;
 /// TestContext is a type that contains all the information from a block
@@ -333,7 +333,8 @@ pub fn gen_geth_traces(
 /// builder pattern used to construct [`TestContext`]s.
 pub mod helpers {
     use super::{eth, Bytecode, MockAccount, MockTransaction};
-    use crate::{test_ctx::DEPOSIT_TX_GAS, MOCK_ACCOUNTS};
+    use crate::{test_ctx::SYSTEM_DEPOSIT_TX_GAS, MOCK_ACCOUNTS};
+    use eth_types::H256;
     #[cfg(feature = "kroma")]
     use eth_types::{
         geth_types::DEPOSIT_TX_TYPE,
@@ -344,6 +345,7 @@ pub mod helpers {
         },
         Bytes, Word,
     };
+    use std::str::FromStr;
 
     /// Generate a simple setup which adds balance to two default accounts from
     /// [`static@MOCK_ACCOUNTS`]:
@@ -456,8 +458,15 @@ pub mod helpers {
         tx.transaction_type(DEPOSIT_TX_TYPE)
             .from(*SYSTEM_TX_CALLER)
             .to(*L1_BLOCK)
-            .gas(Word::from(DEPOSIT_TX_GAS))
+            .gas(Word::from(SYSTEM_DEPOSIT_TX_GAS))
             .gas_price(Word::zero())
+            .source_hash(
+                H256::from_str(
+                    "0x7f9da519dd53cd0705760f80addc46233ba6c3124f4566798ad1ae1fb7189307",
+                )
+                .unwrap(),
+            )
+            .mint(Word::from("0x0"))
             .input(Bytes::from(calldata));
     }
 }

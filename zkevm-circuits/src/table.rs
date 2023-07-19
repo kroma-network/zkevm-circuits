@@ -152,6 +152,9 @@ pub enum TxFieldTag {
     #[cfg(feature = "kroma")]
     /// Mint
     Mint,
+    #[cfg(feature = "kroma")]
+    /// Source hash
+    SourceHash,
     /// Kroma Non-deposit Tx
     #[cfg(feature = "kroma")]
     /// The gas cost that needs to be rolled up to L1.
@@ -1421,11 +1424,11 @@ impl CopyTable {
             };
             // is_pad
             let is_pad = Value::known(F::from(
-                is_read_step && copy_step_addr >= copy_event.src_addr_end,
+                (is_read_step && copy_step_addr >= copy_event.src_addr_end) as u64,
             ));
 
             // is_code
-            let is_code = Value::known(copy_step.is_code.map_or(F::zero(), |v| F::from(v)));
+            let is_code = Value::known(copy_step.is_code.map_or(F::zero(), |v| F::from(v as u64)));
 
             assignments.push((
                 tag,

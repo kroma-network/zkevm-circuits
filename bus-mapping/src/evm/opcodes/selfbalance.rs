@@ -97,7 +97,7 @@ mod selfbalance_tests {
             .unwrap();
 
         let call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
-        let callee_address = builder.block.txs()[tx_idx!(0)].to;
+        let callee_address = builder.block.txs()[tx_idx!(0)].to.unwrap_or_default();
         let self_balance = builder.sdb.get_account(&callee_address).1.balance;
 
         assert_eq!(

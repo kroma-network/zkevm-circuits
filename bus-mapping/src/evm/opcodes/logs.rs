@@ -269,7 +269,7 @@ mod log_tests {
             .unwrap();
 
         let is_persistent = builder.block.txs()[tx_idx!(0)].calls()[0].is_persistent;
-        let callee_address = builder.block.txs()[tx_idx!(0)].to;
+        let callee_address = builder.block.txs()[tx_idx!(0)].to.unwrap_or_default();
 
         let step = builder.block.txs()[tx_idx!(0)]
             .steps()

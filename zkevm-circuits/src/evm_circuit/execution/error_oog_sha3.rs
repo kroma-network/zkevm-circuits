@@ -147,12 +147,12 @@ mod tests {
         eth,
         test_ctx::{
             helpers::account_0_code_account_1_no_code, SimpleTestContext, TestContext3_1,
-            DEPOSIT_TX_GAS,
+            SYSTEM_DEPOSIT_TX_GAS,
         },
         tx_idx, MOCK_ACCOUNTS,
     };
 
-    const BLOCK_GAS_LIMIT: u64 = 10_000_000_000_000_000 - DEPOSIT_TX_GAS;
+    const BLOCK_GAS_LIMIT: u64 = 10_000_000_000_000_000 - SYSTEM_DEPOSIT_TX_GAS;
 
     #[test]
     fn test_oog_sha3_less_than_constant_gas() {

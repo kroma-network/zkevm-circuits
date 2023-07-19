@@ -9,18 +9,16 @@ use bus_mapping::{
     circuit_input_builder::{get_dummy_tx, get_dummy_tx_hash},
 };
 #[cfg(feature = "kroma")]
-use eth_types::geth_types::DEPOSIT_TX_TYPE;
+use eth_types::geth_types::{Transaction as GethTransaction, DEPOSIT_TX_TYPE};
 use eth_types::{
     evm_types::rwc_util::end_tx_rwc,
     sign_types::{biguint_to_32bytes_le, ct_option_ok_or, recover_pk, SignData, SECP256K1_Q},
-    Address, Error, Field, Signature, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H256,
+    Address, Error, Field, Hash, Signature, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word,
+    H256,
 };
-use ethers_core::{
-    types::TransactionRequest,
-    utils::{
-        keccak256,
-        rlp::{Encodable, RlpStream},
-    },
+use ethers_core::utils::{
+    keccak256,
+    rlp::{Encodable, RlpStream},
 };
 use halo2_proofs::{
     circuit::Value,
@@ -82,6 +80,9 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// The mint
     pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// The source hash
+    pub source_hash: Hash,
 
     /// Kroma non-deposit tx
     #[cfg(feature = "kroma")]
@@ -192,6 +193,7 @@ impl Transaction {
         }
         let tx_hash_be_bytes = rlp_signed_hash.to_fixed_bytes();
         let tx_sign_hash_be_bytes = keccak256(&self.rlp_unsigned);
+        let source_hash_be_bytes = self.source_hash.to_fixed_bytes();
 
         let ret = vec![
             #[cfg(feature = "kroma")]
@@ -334,6 +336,13 @@ impl Transaction {
                     .map(|challenge| rlc::value(&self.mint.to_le_bytes(), challenge)),
             ],
             #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::SourceHash as u64)),
+                Value::known(F::zero()),
+                rlc_be_bytes(&source_hash_be_bytes, challenges.evm_word()),
+            ],
+            #[cfg(feature = "kroma")]
             // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
             // because it is used to add with another rlc value in RollupFeeHook gadget.
             [
@@ -371,20 +380,41 @@ impl Transaction {
 
 impl Encodable for Transaction {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(9);
-        s.append(&Word::from(self.nonce));
-        s.append(&self.gas_price);
-        s.append(&Word::from(self.gas));
-        if let Some(addr) = self.callee_address {
-            s.append(&addr);
-        } else {
-            s.append(&"");
+        match self.transaction_type {
+            0 => {
+                s.begin_list(9);
+                s.append(&Word::from(self.nonce));
+                s.append(&self.gas_price);
+                s.append(&Word::from(self.gas));
+                if let Some(addr) = self.callee_address {
+                    s.append(&addr);
+                } else {
+                    s.append(&"");
+                }
+                s.append(&self.value);
+                s.append(&self.call_data);
+                s.append(&Word::from(self.chain_id));
+                s.append(&Word::zero());
+                s.append(&Word::zero());
+            }
+            #[cfg(feature = "kroma")]
+            DEPOSIT_TX_TYPE => {
+                s.append(&self.transaction_type);
+                s.begin_list(7);
+                s.append(&Word::from(self.source_hash.to_fixed_bytes()));
+                s.append(&self.caller_address);
+                if let Some(addr) = self.callee_address {
+                    s.append(&addr);
+                } else {
+                    s.append(&"");
+                }
+                s.append(&self.mint);
+                s.append(&self.value);
+                s.append(&self.gas);
+                s.append(&self.call_data);
+            }
+            _ => panic!("not supported transaction type"),
         }
-        s.append(&self.value);
-        s.append(&self.call_data);
-        s.append(&Word::from(self.chain_id));
-        s.append(&Word::zero());
-        s.append(&Word::zero());
     }
 }
 
@@ -399,20 +429,41 @@ pub struct SignedTransaction {
 
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(9);
-        s.append(&Word::from(self.tx.nonce));
-        s.append(&self.tx.gas_price);
-        s.append(&Word::from(self.tx.gas));
-        if let Some(addr) = self.tx.callee_address {
-            s.append(&addr);
-        } else {
-            s.append(&"");
+        match self.tx.transaction_type {
+            0 => {
+                s.begin_list(9);
+                s.append(&Word::from(self.tx.nonce));
+                s.append(&self.tx.gas_price);
+                s.append(&Word::from(self.tx.gas));
+                if let Some(addr) = self.tx.callee_address {
+                    s.append(&addr);
+                } else {
+                    s.append(&"");
+                }
+                s.append(&self.tx.value);
+                s.append(&self.tx.call_data);
+                s.append(&self.signature.v);
+                s.append(&self.signature.r);
+                s.append(&self.signature.s);
+            }
+            #[cfg(feature = "kroma")]
+            DEPOSIT_TX_TYPE => {
+                s.append(&self.tx.transaction_type);
+                s.begin_list(7);
+                s.append(&Word::from(self.tx.source_hash.to_fixed_bytes()));
+                s.append(&self.tx.caller_address);
+                if let Some(addr) = self.tx.callee_address {
+                    s.append(&addr);
+                } else {
+                    s.append(&"");
+                }
+                s.append(&self.tx.mint);
+                s.append(&self.tx.value);
+                s.append(&self.tx.gas);
+                s.append(&self.tx.call_data);
+            }
+            _ => panic!("not supported transaction type"),
         }
-        s.append(&self.tx.value);
-        s.append(&self.tx.call_data);
-        s.append(&self.signature.v);
-        s.append(&self.signature.r);
-        s.append(&self.signature.s);
     }
 }
 
@@ -424,25 +475,11 @@ impl From<MockTransaction> for Transaction {
             s: mock_tx.s.expect("tx expected to be signed"),
             v: mock_tx.v.expect("tx expected to be signed").as_u64(),
         };
-        let (rlp_unsigned, rlp_signed) = {
-            let mut legacy_tx = TransactionRequest::new()
-                .from(mock_tx.from.address())
-                .nonce(mock_tx.nonce)
-                .gas_price(mock_tx.gas_price)
-                .gas(mock_tx.gas)
-                .value(mock_tx.value)
-                .data(mock_tx.input.clone())
-                .chain_id(mock_tx.chain_id.as_u64());
-            if !is_create {
-                legacy_tx = legacy_tx.to(mock_tx.to.as_ref().map(|to| to.address()).unwrap());
-            }
+        let rlp_unsigned = GethTransaction::from(&mock_tx)
+            .rlp_unsigned(mock_tx.chain_id.as_u64())
+            .to_vec();
+        let rlp_signed = GethTransaction::from(&mock_tx).rlp_signed().to_vec();
 
-            let unsigned = legacy_tx.rlp().to_vec();
-
-            let signed = legacy_tx.rlp_signed(&sig).to_vec();
-
-            (unsigned, signed)
-        };
         Self {
             block_number: 1,
             id: mock_tx.transaction_index.as_usize(),
@@ -472,6 +509,8 @@ impl From<MockTransaction> for Transaction {
             #[cfg(feature = "kroma")]
             mint: mock_tx.mint,
             #[cfg(feature = "kroma")]
+            source_hash: mock_tx.source_hash,
+            #[cfg(feature = "kroma")]
             rollup_data_gas_cost: 1000,
         }
     }
@@ -495,26 +534,9 @@ pub(super) fn tx_convert(
     //     "block.chain_id = {}, tx.chain_id = {}",
     //     chain_id, tx.chain_id
     // );
-    let (rlp_unsigned, rlp_signed) = {
-        let mut legacy_tx = TransactionRequest::new()
-            .from(tx.from)
-            .nonce(tx.nonce)
-            .gas_price(tx.gas_price)
-            .gas(tx.gas)
-            .value(tx.value)
-            .data(tx.input.clone())
-            .chain_id(chain_id);
-        if !tx.is_create() {
-            legacy_tx = legacy_tx.to(tx.to);
-        }
 
-        let unsigned = legacy_tx.rlp().to_vec();
-        let signed = legacy_tx.rlp_signed(&tx.signature).to_vec();
-
-        (unsigned, signed)
-    };
-
-    let callee_address = if tx.is_create() { None } else { Some(tx.to) };
+    let rlp_unsigned = GethTransaction::from(tx).rlp_unsigned(chain_id).to_vec();
+    let rlp_signed = GethTransaction::from(tx).rlp_signed().to_vec();
 
     Transaction {
         block_number: tx.block_num,
@@ -526,13 +548,15 @@ pub(super) fn tx_convert(
         gas: tx.gas,
         gas_price: tx.gas_price,
         caller_address: tx.from,
-        callee_address,
+        callee_address: tx.to,
         is_create: tx.is_create(),
         value: tx.value,
         call_data: tx.input.clone(),
         call_data_length: tx.input.len(),
         #[cfg(feature = "kroma")]
         mint: tx.mint,
+        #[cfg(feature = "kroma")]
+        source_hash: tx.source_hash,
         #[cfg(feature = "kroma")]
         rollup_data_gas_cost: tx.rollup_data_gas_cost,
         call_data_gas_cost: tx

@@ -1,18 +1,24 @@
 //! Mock Transaction definition and builder related methods.
 
-use super::{MOCK_ACCOUNTS, MOCK_CHAIN_ID, MOCK_GASPRICE};
+use super::{test_ctx::SYSTEM_DEPOSIT_TX_GAS, MOCK_ACCOUNTS, MOCK_CHAIN_ID, MOCK_GASPRICE};
 use eth_types::{
-    geth_types::Transaction as GethTransaction, word, AccessList, Address, Bytes, Hash,
-    Transaction, Word, U64,
+    address,
+    geth_types::{Transaction as GethTransaction, DEPOSIT_TX_TYPE},
+    kroma_params::{L1_BLOCK, SYSTEM_TX_CALLER},
+    word, AccessList, Address, Bytes, Hash, Transaction, Word, U64,
 };
+#[cfg(not(feature = "kroma"))]
+use ethers_core::types::OtherFields;
 use ethers_core::{
     rand::{CryptoRng, RngCore},
-    types::{OtherFields, TransactionRequest},
+    types::TransactionRequest,
+    utils::hex,
 };
 use ethers_signers::{LocalWallet, Signer};
 use lazy_static::lazy_static;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+use std::str::FromStr;
 
 lazy_static! {
     /// Collection of correctly hashed and signed Transactions which can be used to test circuits or opcodes that have to check integrity of the Tx itself.
@@ -75,6 +81,71 @@ lazy_static! {
                 .gas_price(word!("0x4d2"))
                 .input(Bytes::from(b"hello"))
                 .build(),
+            #[cfg(feature = "kroma")]
+            // deposit tx from kroma
+            MockTransaction::default()
+                .transaction_type(DEPOSIT_TX_TYPE)
+                .hash(Hash::from_str("0xba940eddf4c601ec510443b19f31ca3f354f18b844cebda8ce4c43fe5d53fa70").unwrap())
+                .transaction_idx(1u64)
+                .from(AddrOrWallet::Addr(*SYSTEM_TX_CALLER))
+                .to(AddrOrWallet::Addr(*L1_BLOCK))
+                .nonce(72u64)
+                .value(word!("0x0"))
+                .gas(Word::from(SYSTEM_DEPOSIT_TX_GAS))
+                .input(
+                    hex::decode(
+                    "efc674eb\
+                    000000000000000000000000000000000000000000000000000000000000001a\
+                    0000000000000000000000000000000000000000000000000000000064a50e70\
+                    0000000000000000000000000000000000000000000000000000000001e18791\
+                    3d0f4db630aef9e4d7a5f94be45dc18820b7cae5602d6f056cd60bc52eb74245\
+                    0000000000000000000000000000000000000000000000000000000000000000\
+                    0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc\
+                    0000000000000000000000000000000000000000000000000000000000000834\
+                    00000000000000000000000000000000000000000000000000000000000f4240\
+                    00000000000000000000000000000000000000000000000000000000000007d0"
+                    ).unwrap().into()
+                )
+                .mint(word!("0x0"))
+                .source_hash(
+                    Hash::from_str("0x20bae9fe252823414190884e97a5219704d96df8451ac61e52f8ebe11df4161d").unwrap()
+                ).build_kroma(),
+            #[cfg(feature = "kroma")]
+            // legacy tx from kroma
+            MockTransaction::default()
+                .transaction_type(0u64)
+                .hash(Hash::from_str("0x6e9d05e31c45653dc8c188ce67a0038ce7f8707a44c2add4fe5ba6ce0caec1fa").unwrap())
+                .transaction_idx(2u64)
+                .from(AddrOrWallet::Addr(address!("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")))
+                .to(AddrOrWallet::Addr(address!("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")))
+                .nonce(0u64)
+                .value(word!("0xde0b6b3a7640000"))
+                .gas(word!("0x5208"))
+                .gas_price(word!("0x3b9c2b4a"))
+                .input(Bytes::from(b""))
+                .sig_data(
+                    (
+                        1837u64,
+                        Word::from("0x70e69cab41c0933ab4bbdb43232c23271209770c561681f4118636777232bb3c"),
+                        Word::from("0x2d102204d2e8e80177cc9f02b88552e6a6a400b13e8d7b8585603c29b49e4fa8"),
+                    )
+                )
+                .build(),
+            // deploy tx from kroma
+            MockTransaction::default()
+                .hash(Hash::from_str("0x1b384a5effb97623025407c4dcc0e947e7ea4f52f0ed4bf1548db337a6501356").unwrap())
+                .nonce(0u64)
+                .from(AddrOrWallet::Addr(address!("0xeefca179f40d3b8b3d941e6a13e48835a3af8241")))
+                .value(Word::zero())
+                .gas(word!("0xf4240"))
+                .gas_price(Word::from(1))
+                .input(hex::decode("6960606060606060606060600052610014610142f3").unwrap().into())
+                .sig_data((
+                    2711,
+                    Word::from_str("0xabfa2ed41f429e227e7cf9f2e64b3935c1514f39011c43618bc1005d29a41f1d").unwrap(),
+                    Word::from_str("0x6d9c6ba0f8c435d79c2016488b52756cc5553b1140a1a11f8b2b4cc4b97cb406").unwrap()
+                ))
+                .build()
         ]
     };
 }
@@ -165,6 +236,9 @@ pub struct MockTransaction {
     /// Kroma deposit tx.
     #[cfg(feature = "kroma")]
     pub mint: Word,
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
+    pub source_hash: Hash,
 }
 
 impl Default for MockTransaction {
@@ -191,13 +265,15 @@ impl Default for MockTransaction {
             chain_id: *MOCK_CHAIN_ID,
             #[cfg(feature = "kroma")]
             mint: Word::zero(),
+            #[cfg(feature = "kroma")]
+            source_hash: Hash::zero(),
         }
     }
 }
 
 impl From<MockTransaction> for Transaction {
     fn from(mock: MockTransaction) -> Self {
-        Transaction {
+        let mut tx = Transaction {
             hash: mock.hash.unwrap_or_default(),
             nonce: mock.nonce.into(),
             block_hash: Some(mock.block_hash),
@@ -217,14 +293,70 @@ impl From<MockTransaction> for Transaction {
             max_priority_fee_per_gas: Some(mock.max_priority_fee_per_gas),
             max_fee_per_gas: Some(mock.max_fee_per_gas),
             chain_id: Some(mock.chain_id),
+            #[cfg(feature = "kroma")]
+            other: Default::default(),
+            #[cfg(not(feature = "kroma"))]
             other: OtherFields::default(),
+        };
+
+        #[cfg(feature = "kroma")]
+        if let Some(tx_type) = tx.transaction_type {
+            if tx_type == U64::from(DEPOSIT_TX_TYPE) {
+                let mint = mock.mint;
+                let source_hash = mock.source_hash;
+
+                let mint_json_string = format!("\"mint\": \"{mint:#?}\"");
+                let source_hash_json_string = format!("\"sourceHash\": \"{source_hash:#?}\"");
+                let json_value = format!("{{{mint_json_string}, {source_hash_json_string}}}");
+                tx.other = serde_json::from_str(json_value.as_str()).unwrap();
+            }
         }
+        tx
     }
 }
 
-impl From<MockTransaction> for GethTransaction {
-    fn from(mock: MockTransaction) -> Self {
-        GethTransaction::from(&Transaction::from(mock))
+impl From<&MockTransaction> for GethTransaction {
+    fn from(mock: &MockTransaction) -> Self {
+        Self {
+            transaction_type: Some(mock.transaction_type),
+            from: mock.from.address(),
+            to: mock.to.as_ref().map(|addr| addr.address()),
+            nonce: Word::from(mock.nonce),
+            gas_limit: mock.gas,
+            value: mock.value,
+            gas_price: mock.gas_price,
+            gas_fee_cap: Word::default(),
+            gas_tip_cap: Word::default(),
+            call_data: mock.input.clone(),
+            access_list: Some(mock.access_list.clone()),
+            v: match mock.v {
+                Some(v) => v.as_u64(),
+                None => U64::default().as_u64(),
+            },
+            r: match mock.r {
+                Some(r) => r,
+                None => Word::default(),
+            },
+            s: match mock.s {
+                Some(s) => s,
+                None => Word::default(),
+            },
+            hash: match mock.hash {
+                Some(hash) => hash,
+                None => panic!("mock_transaction without tx_hash not allowed"),
+            },
+            #[cfg(feature = "kroma")]
+            mint: mock.mint,
+            #[cfg(feature = "kroma")]
+            source_hash: mock.source_hash,
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: match mock.transaction_type.as_u64() {
+                DEPOSIT_TX_TYPE => 0,
+                _ => {
+                    GethTransaction::compute_rollup_data_gas_cost(&Transaction::from(mock.clone()))
+                }
+            },
+        }
     }
 }
 
@@ -341,6 +473,13 @@ impl MockTransaction {
         self
     }
 
+    #[cfg(feature = "kroma")]
+    /// Set source hash field for the MockTransaction.
+    pub fn source_hash(&mut self, source_hash: Hash) -> &mut Self {
+        self.source_hash = source_hash;
+        self
+    }
+
     /// Consumes the mutable ref to the MockTransaction returning the structure
     /// by value.
     pub fn build(&mut self) -> Self {
@@ -368,7 +507,7 @@ impl MockTransaction {
                 }
             }
             (Some(_), Some(_), Some(_)) => (),
-            _ => panic!("Either all or none of the SigData params have to be set"),
+            _ => panic!("either all or none of the SigData params have to be set"),
         }
 
         // Compute tx hash in case is not already set
@@ -379,6 +518,24 @@ impl MockTransaction {
             self.hash(tmp_tx.hash());
         }
 
+        self.to_owned()
+    }
+
+    #[cfg(feature = "kroma")]
+    pub fn build_kroma(&mut self) -> Self {
+        match (self.v, self.r, self.s) {
+            (None, None, None) => {
+                self.v = Some(U64::zero());
+                self.r = Some(Word::zero());
+                self.s = Some(Word::zero());
+            }
+            (Some(_), Some(_), Some(_)) => (),
+            _ => panic!("either all or none of the SigData params have to be set"),
+        }
+
+        if self.hash.is_none() {
+            panic!("mock_transaction without tx_hash not allowed")
+        }
         self.to_owned()
     }
 }

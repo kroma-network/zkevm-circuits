@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use bus_mapping::circuit_input_builder::get_dummy_tx_hash;
-use eth_types::Field;
+use eth_types::{geth_types::DEPOSIT_TX_TYPE, Field};
 use ethers_core::utils::rlp;
 use gadgets::{
     binary_number::{BinaryNumberChip, BinaryNumberConfig},
@@ -17,6 +17,8 @@ use gadgets::{
 use halo2_proofs::plonk::FirstPhase as SecondPhase;
 #[cfg(not(feature = "onephase"))]
 use halo2_proofs::plonk::SecondPhase;
+
+const TAG_BIT_NUM: usize = 5;
 
 use halo2_proofs::{
     circuit::{Layouter, Region, SimpleFloorPlanner, Value},
@@ -34,7 +36,10 @@ use crate::{
     util::{Challenges, Expr, SubCircuit, SubCircuitConfig},
     witness::{
         Block, RlpDataType,
-        RlpTxTag::{ChainId, DataPrefix, Gas, GasPrice, Nonce, Prefix, SigR, SigS, SigV, To},
+        RlpTxTag::{
+            ChainId, DataPrefix, From, Gas, GasPrice, Mint, Nonce, Prefix, SigR, SigS, SigV,
+            SourceHash, To,
+        },
         SignedTransaction, Transaction,
     },
 };
@@ -45,6 +50,8 @@ struct RlpTagROM {
     //       as their type are (u8, u8, u8)
     tag: Column<Fixed>,
     tag_next: Column<Fixed>,
+    #[cfg(feature = "kroma")]
+    tag_deposit_next: Column<Fixed>,
     max_length: Column<Fixed>,
 }
 
@@ -74,7 +81,7 @@ pub struct RlpCircuitConfig<F> {
     /// Denotes the RLC accumulator value used for call data bytes.
     calldata_bytes_rlc_acc: Column<Advice>,
     /// Tag bits
-    tag_bits: BinaryNumberConfig<RlpTxTag, 4>,
+    tag_bits: BinaryNumberConfig<RlpTxTag, TAG_BIT_NUM>,
     /// Tag ROM
     tag_rom: RlpTagROM,
     /// Denotes the current tag's span in bytes.
@@ -91,6 +98,9 @@ pub struct RlpCircuitConfig<F> {
     is_prefix_tag: Column<Advice>,
     /// Denotes if tag is DataPrefix
     is_dp_tag: Column<Advice>,
+    #[cfg(feature = "kroma")]
+    /// Denotes if tx is for Deposit
+    is_deposit_tx: Column<Advice>,
     /// Comparison chip to check: 1 <= tag_index.
     tag_index_cmp_1: ComparatorConfig<F, 3>,
     /// Comparison chip to check: tag_index <= tag_length.
@@ -147,10 +157,14 @@ impl<F: Field> RlpCircuitConfig<F> {
         let is_simple_tag = meta.advice_column();
         let is_prefix_tag = meta.advice_column();
         let is_dp_tag = meta.advice_column();
+        #[cfg(feature = "kroma")]
+        let is_deposit_tx = meta.advice_column();
         let tag_bits = BinaryNumberChip::configure(meta, q_usable, Some(rlp_table.tag));
         let tag_rom = RlpTagROM {
             tag: meta.fixed_column(),
             tag_next: meta.fixed_column(),
+            #[cfg(feature = "kroma")]
+            tag_deposit_next: meta.fixed_column(),
             max_length: meta.fixed_column(),
         };
 
@@ -175,6 +189,12 @@ impl<F: Field> RlpCircuitConfig<F> {
         is_tx_tag!(is_sig_r, SigR);
         is_tx_tag!(is_sig_s, SigS);
         is_tx_tag!(is_padding, Padding);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_from, From);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_source_hash, SourceHash);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_mint, Mint);
 
         // Enable the comparator and lt chips if the current row is enabled.
         let cmp_lt_enabled = |meta: &mut VirtualCells<F>| {
@@ -290,6 +310,12 @@ impl<F: Field> RlpCircuitConfig<F> {
                 is_sig_r(meta),
                 is_sig_s(meta),
                 is_chainid(meta),
+                #[cfg(feature = "kroma")]
+                is_source_hash(meta),
+                #[cfg(feature = "kroma")]
+                is_from(meta),
+                #[cfg(feature = "kroma")]
+                is_mint(meta),
             ]);
             vec![
                 q_usable.expr() * (is_simple_tag - tags),
@@ -302,13 +328,25 @@ impl<F: Field> RlpCircuitConfig<F> {
 
         meta.lookup_any("(tag, tag_next) in tag_ROM", |meta| {
             let is_simple_tag = meta.query_advice(is_simple_tag, Rotation::cur());
+
+            // actual tags (from rlp_table)
             let tag = meta.query_advice(rlp_table.tag, Rotation::cur());
             let tag_next = meta.query_advice(rlp_table.tag, Rotation::next());
+
+            // expected tags (from tag_rom)
             let rom_tag = meta.query_fixed(tag_rom.tag, Rotation::cur());
             let rom_tag_next = meta.query_fixed(tag_rom.tag_next, Rotation::cur());
+
+            // determine condition
             let q_usable = meta.query_fixed(q_usable, Rotation::cur());
             let (_, tag_idx_eq_one) = tag_index_cmp_1.expr(meta, None);
-            let condition = q_usable * is_simple_tag * tag_idx_eq_one;
+
+            let condition = and::expr(vec![q_usable, is_simple_tag, tag_idx_eq_one]);
+            #[cfg(feature = "kroma")]
+            let condition = and::expr(vec![
+                condition,
+                not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
+            ]);
 
             vec![
                 (condition.expr() * tag, rom_tag),
@@ -316,8 +354,37 @@ impl<F: Field> RlpCircuitConfig<F> {
             ]
         });
 
+        #[cfg(feature = "kroma")]
+        meta.lookup_any("(tag, tag_deposit_next) in tag_ROM", |meta| {
+            let is_simple_tag = meta.query_advice(is_simple_tag, Rotation::cur());
+
+            // actual tags (from rlp_table)
+            let tag = meta.query_advice(rlp_table.tag, Rotation::cur());
+            let tag_next = meta.query_advice(rlp_table.tag, Rotation::next());
+
+            // expected tags (from tag_rom)
+            let rom_tag = meta.query_fixed(tag_rom.tag, Rotation::cur());
+            let rom_tag_deposit_next = meta.query_fixed(tag_rom.tag_deposit_next, Rotation::cur());
+
+            // determine condition
+            let q_usable = meta.query_fixed(q_usable, Rotation::cur());
+            let (_, tag_idx_eq_one) = tag_index_cmp_1.expr(meta, None);
+            let is_deposit_exp = meta.query_advice(is_deposit_tx, Rotation::cur());
+            let condition = and::expr(vec![
+                q_usable,
+                is_simple_tag,
+                tag_idx_eq_one,
+                is_deposit_exp,
+            ]);
+
+            vec![
+                (condition.expr() * tag, rom_tag),
+                (condition * tag_next, rom_tag_deposit_next),
+            ]
+        });
+
         meta.create_gate("Common constraints", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(11);
 
             let (tindex_lt, tindex_eq) = tag_index_cmp_1.expr(meta, None);
             assert_eq!(tindex_lt.degree(), 1, "{}", tindex_lt.degree());
@@ -333,6 +400,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                 is_value(meta),
                 is_sig_r(meta),
                 is_sig_s(meta),
+                #[cfg(feature = "kroma")]
+                is_source_hash(meta),
             ]);
 
             //////////////////////////////////////////////////////////////////////////////////////
@@ -374,10 +443,22 @@ impl<F: Field> RlpCircuitConfig<F> {
 
             // if tag_index == 1
             cb.condition(is_prefix_tag.expr() * tindex_eq.clone(), |cb| {
+                #[cfg(not(feature = "kroma"))]
+                let next_tag = RlpTxTag::Nonce.expr();
+                #[cfg(feature = "kroma")]
+                let next_tag = {
+                    let is_deposit_tx_expr = meta.query_advice(is_deposit_tx, Rotation::cur());
+                    select::expr(
+                        is_deposit_tx_expr,
+                        RlpTxTag::SourceHash.expr(),
+                        RlpTxTag::Nonce.expr(),
+                    )
+                };
+
                 cb.require_equal(
-                    "tag::next == RlpTxTag::Nonce",
+                    "tag::next == $next_tag",
                     meta.query_advice(rlp_table.tag, Rotation::next()),
-                    RlpTxTag::Nonce.expr(),
+                    next_tag,
                 );
                 cb.require_equal(
                     "tag_index::next == tag_length::next",
@@ -718,6 +799,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                     is_data(meta),
                     tindex_eq.clone(),
                     not::expr(meta.query_advice(rlp_table.data_type, Rotation::cur())),
+                    #[cfg(feature = "kroma")]
+                    not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
                 ]),
                 |cb| {
                     cb.require_equal(
@@ -739,6 +822,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                     is_data(meta),
                     tindex_eq.clone(),
                     meta.query_advice(rlp_table.data_type, Rotation::cur()),
+                    #[cfg(feature = "kroma")]
+                    not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
                 ]),
                 |cb| {
                     cb.require_equal(
@@ -758,7 +843,7 @@ impl<F: Field> RlpCircuitConfig<F> {
         });
 
         meta.create_gate("DataType::TxSign (unsigned transaction)", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             let (_, tindex_eq) = tag_index_cmp_1.expr(meta, None);
 
@@ -879,7 +964,7 @@ impl<F: Field> RlpCircuitConfig<F> {
         });
 
         meta.create_gate("DataType::TxHash (signed transaction)", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             let (_, tindex_eq) = tag_index_cmp_1.expr(meta, None);
 
@@ -934,7 +1019,7 @@ impl<F: Field> RlpCircuitConfig<F> {
 
         // Constraints that always need to be satisfied.
         meta.create_gate("always", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             cb.require_boolean(
                 "is_first is boolean",
@@ -955,7 +1040,7 @@ impl<F: Field> RlpCircuitConfig<F> {
 
         // Constraints for the first row in the layout.
         meta.create_gate("is_first == 1", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             cb.require_equal(
                 "value_rlc == value",
@@ -977,7 +1062,7 @@ impl<F: Field> RlpCircuitConfig<F> {
 
         // Constraints for every row except the last row in one RLP instance.
         meta.create_gate("is_last == 0", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             cb.condition(
                 not::expr(meta.query_advice(placeholder, Rotation::cur())),
@@ -1065,7 +1150,7 @@ impl<F: Field> RlpCircuitConfig<F> {
 
         // Constraints for the last row, i.e. RLP summary row.
         meta.create_gate("is_last == 1", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             cb.require_equal(
                 "is_last == 1 then tag == RlpTxTag::Rlp",
@@ -1089,10 +1174,23 @@ impl<F: Field> RlpCircuitConfig<F> {
                         meta.query_advice(rlp_table.data_type, Rotation::next()),
                         RlpDataType::TxSign.expr(),
                     );
+
+                    #[cfg(not(feature = "kroma"))]
+                    let next_tag = RlpTxTag::Prefix;
+                    #[cfg(feature = "kroma")]
+                    let next_tag = {
+                        let is_deposit_tx_expr = meta.query_advice(is_deposit_tx, Rotation::cur());
+                        select::expr(
+                            is_deposit_tx_expr,
+                            RlpTxTag::TransactionType.expr(),
+                            RlpTxTag::Prefix.expr(),
+                        )
+                    };
+
                     cb.require_equal(
-                        "TxSign rows' first row is Prefix again",
+                        "TxSign rows' first row is Prefix or TransactionType again",
                         meta.query_advice(rlp_table.tag, Rotation::next()),
-                        RlpTxTag::Prefix.expr(),
+                        next_tag,
                     );
                     cb.require_equal(
                         "TxSign rows' first row starts with rlp_table.tag_rindex = tag_length",
@@ -1144,7 +1242,7 @@ impl<F: Field> RlpCircuitConfig<F> {
         });
 
         meta.create_gate("padding rows", |meta| {
-            let mut cb = BaseConstraintBuilder::new(9);
+            let mut cb = BaseConstraintBuilder::new(10);
 
             cb.condition(is_padding(meta), |cb| {
                 cb.require_equal(
@@ -1193,6 +1291,8 @@ impl<F: Field> RlpCircuitConfig<F> {
             is_simple_tag,
             is_prefix_tag,
             is_dp_tag,
+            #[cfg(feature = "kroma")]
+            is_deposit_tx,
             tag_index_cmp_1,
             tag_index_length_cmp,
             tag_length_cmp_1,
@@ -1250,16 +1350,24 @@ impl<F: Field> RlpCircuitConfig<F> {
         layouter.assign_region(
             || "assign tag rom",
             |mut region| {
-                for (i, (tag, tag_next, max_length)) in [
-                    (RlpTxTag::Nonce, RlpTxTag::GasPrice, 10),
-                    (RlpTxTag::GasPrice, RlpTxTag::Gas, 34),
-                    (RlpTxTag::Gas, RlpTxTag::To, 10),
-                    (RlpTxTag::To, RlpTxTag::Value, 22),
-                    (RlpTxTag::Value, RlpTxTag::DataPrefix, 34),
-                    (RlpTxTag::ChainId, RlpTxTag::Zero, 10),
-                    (RlpTxTag::SigV, RlpTxTag::SigR, 10),
-                    (RlpTxTag::SigR, RlpTxTag::SigS, 34),
-                    (RlpTxTag::SigS, RlpTxTag::RlpLength, 34),
+                // NOTE(dongchangYoo): The new column named "tag_deposit_next" indicates what is
+                // the next tag in case of deposit tx.
+                for (i, (tag, tag_next, tag_deposit_next, max_length)) in [
+                    (RlpTxTag::Nonce, RlpTxTag::GasPrice, RlpTxTag::Padding, 10),
+                    (RlpTxTag::GasPrice, RlpTxTag::Gas, RlpTxTag::Padding, 34),
+                    (RlpTxTag::Gas, RlpTxTag::To, RlpTxTag::DataPrefix, 10),
+                    (RlpTxTag::To, RlpTxTag::Value, RlpTxTag::Mint, 22),
+                    (RlpTxTag::Value, RlpTxTag::DataPrefix, RlpTxTag::Gas, 34),
+                    (RlpTxTag::ChainId, RlpTxTag::Zero, RlpTxTag::Padding, 10),
+                    (RlpTxTag::SigV, RlpTxTag::SigR, RlpTxTag::Padding, 10),
+                    (RlpTxTag::SigR, RlpTxTag::SigS, RlpTxTag::Padding, 34),
+                    (RlpTxTag::SigS, RlpTxTag::RlpLength, RlpTxTag::Padding, 34),
+                    #[cfg(feature = "kroma")]
+                    (RlpTxTag::SourceHash, RlpTxTag::Padding, RlpTxTag::From, 34),
+                    #[cfg(feature = "kroma")]
+                    (RlpTxTag::From, RlpTxTag::Padding, RlpTxTag::To, 22),
+                    #[cfg(feature = "kroma")]
+                    (RlpTxTag::Mint, RlpTxTag::Padding, RlpTxTag::Value, 34),
                 ]
                 .into_iter()
                 .enumerate()
@@ -1276,6 +1384,13 @@ impl<F: Field> RlpCircuitConfig<F> {
                         self.tag_rom.tag_next,
                         offset,
                         || Value::known(F::from(tag_next as u64)),
+                    )?;
+                    #[cfg(feature = "kroma")]
+                    region.assign_fixed(
+                        || "tag_deposit_next",
+                        self.tag_rom.tag_deposit_next,
+                        offset,
+                        || Value::known(F::from(tag_deposit_next as u64)),
                     )?;
                     region.assign_fixed(
                         || "max_length",
@@ -1303,6 +1418,12 @@ impl<F: Field> RlpCircuitConfig<F> {
                     SigR,
                     SigS,
                     ChainId,
+                    #[cfg(feature = "kroma")]
+                    SourceHash,
+                    #[cfg(feature = "kroma")]
+                    From,
+                    #[cfg(feature = "kroma")]
+                    Mint,
                 ];
 
                 for (signed_tx_idx, signed_tx) in signed_txs.iter().enumerate() {
@@ -1360,6 +1481,9 @@ impl<F: Field> RlpCircuitConfig<F> {
                             simple_tags.iter().filter(|tag| **tag == row.tag).count();
                         let is_prefix_tag = (row.tag == Prefix).into();
                         let is_dp_tag = (row.tag == DataPrefix).into();
+                        #[cfg(feature = "kroma")]
+                        let is_deposit_tx =
+                            (signed_tx.tx.transaction_type == DEPOSIT_TX_TYPE).into();
 
                         for (name, column, value) in [
                             ("is_last", self.is_last, (row.index == n_rows + 2).into()),
@@ -1368,6 +1492,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ("is_simple_tag", self.is_simple_tag, is_simple_tag as u64),
                             ("is_prefix_tag", self.is_prefix_tag, is_prefix_tag),
                             ("is_dp_tag", self.is_dp_tag, is_dp_tag),
+                            #[cfg(feature = "kroma")]
+                            ("is_deposit_tx", self.is_deposit_tx, is_deposit_tx),
                             ("tag_index", rlp_table.tag_rindex, (row.tag_rindex as u64)),
                             (
                                 "tag_length_eq_one",
@@ -1447,6 +1573,7 @@ impl<F: Field> RlpCircuitConfig<F> {
                                 F::from(rhs as u64),
                             )?;
                         }
+
                         for (chip, lhs, rhs) in [
                             (&value_gt_127_chip, 127, row.value),
                             (&value_gt_183_chip, 183, row.value),
@@ -1514,6 +1641,10 @@ impl<F: Field> RlpCircuitConfig<F> {
                             simple_tags.iter().filter(|tag| **tag == row.tag).count();
                         let is_prefix_tag = (row.tag == Prefix).into();
                         let is_dp_tag = (row.tag == DataPrefix).into();
+                        #[cfg(feature = "kroma")]
+                        let is_deposit_tx =
+                            (signed_tx.tx.transaction_type == DEPOSIT_TX_TYPE).into();
+
                         for (name, column, value) in [
                             ("is_last", self.is_last, (row.index == n_rows + 2).into()),
                             ("tx_id", rlp_table.tx_id, row.tx_id as u64),
@@ -1521,6 +1652,8 @@ impl<F: Field> RlpCircuitConfig<F> {
                             ("is_simple_tag", self.is_simple_tag, is_simple_tag as u64),
                             ("is_prefix_tag", self.is_prefix_tag, is_prefix_tag),
                             ("is_dp_tag", self.is_dp_tag, is_dp_tag),
+                            #[cfg(feature = "kroma")]
+                            ("is_deposit_tx", self.is_deposit_tx, is_deposit_tx),
                             ("tag_rindex", rlp_table.tag_rindex, row.tag_rindex as u64),
                             (
                                 "tag_length_eq_one",
@@ -1614,7 +1747,6 @@ impl<F: Field> RlpCircuitConfig<F> {
                                 F::from(rhs as u64),
                             )?;
                         }
-
                         offset += 1;
                     }
                 }
@@ -1849,7 +1981,7 @@ mod tests {
 
     #[test]
     fn rlp_circuit_tx_2() {
-        verify_txs::<Fr>(8, vec![CORRECT_MOCK_TXS[1].clone().into()], 2, true);
+        verify_txs::<Fr>(10, vec![CORRECT_MOCK_TXS[6].clone().into()], 2, true);
     }
 
     #[test]
