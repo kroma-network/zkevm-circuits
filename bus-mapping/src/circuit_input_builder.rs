@@ -30,9 +30,11 @@ use eth_types::{
     sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData},
     Address, GethExecStep, GethExecTrace, ToBigEndian, ToWord, Word, H256, U256,
 };
+#[cfg(not(feature = "kroma"))]
+use ethers_core::types::NameOrAddress;
 use ethers_core::{
     k256::ecdsa::SigningKey,
-    types::{Bytes, NameOrAddress, Signature, TransactionRequest},
+    types::{Bytes, Signature, TransactionRequest},
     utils::keccak256,
 };
 use ethers_providers::JsonRpcClient;
@@ -637,25 +639,31 @@ pub fn keccak_inputs_tx_circuit(
     let hash_datas = txs
         .iter()
         .map(|tx| {
-            let sig = Signature {
-                r: tx.r,
-                s: tx.s,
-                v: tx.v,
-            };
-            let mut tx: TransactionRequest = tx.into();
-            if tx.to.is_some() {
-                let to = tx.to.clone().unwrap();
-                match to {
-                    NameOrAddress::Name(_) => {}
-                    NameOrAddress::Address(addr) => {
-                        // the rlp of zero addr is 0x80
-                        if addr == Address::zero() {
-                            tx.to = None;
+            #[cfg(not(feature = "kroma"))]
+            let bytes = {
+                let sig = Signature {
+                    r: tx.r,
+                    s: tx.s,
+                    v: tx.v,
+                };
+                let mut tx: TransactionRequest = tx.into();
+                if tx.to.is_some() {
+                    let to = tx.to.clone().unwrap();
+                    match to {
+                        NameOrAddress::Name(_) => {}
+                        NameOrAddress::Address(addr) => {
+                            // the rlp of zero addr is 0x80
+                            if addr == Address::zero() {
+                                tx.to = None;
+                            }
                         }
                     }
                 }
-            }
-            tx.rlp_signed(&sig).to_vec()
+                tx.rlp_signed(&sig).to_vec()
+            };
+            #[cfg(feature = "kroma")]
+            let bytes = tx.rlp_signed().to_vec();
+            bytes
         })
         .collect::<Vec<Vec<u8>>>();
     let dummy_hash_data = {
