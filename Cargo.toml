@@ -14,6 +14,12 @@ members = [
     "testool"
 ]
 
+[patch.crates-io]
+ethers-core = { git = "https://github.com/kroma-network/ethers-rs.git", rev = "b2edd32" }
+ethers-providers = { git = "https://github.com/kroma-network/ethers-rs.git", rev = "b2edd32" }
+ethers-etherscan = { git = "https://github.com/kroma-network/ethers-rs.git", rev = "b2edd32" }
+ethers-signers = { git = "https://github.com/kroma-network/ethers-rs.git", rev = "b2edd32" }
+ethers = { git = "https://github.com/kroma-network/ethers-rs.git", rev = "b2edd32" }
 [patch."https://github.com/privacy-scaling-explorations/halo2.git"]
 halo2_proofs = { git = "https://github.com/kroma-network/halo2.git", rev = "9922fbb" }
 
