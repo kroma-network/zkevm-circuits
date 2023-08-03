@@ -78,12 +78,12 @@ use halo2_proofs::{circuit::SimpleFloorPlanner, plonk::Circuit};
 // - source hash
 // - rollup data gas cost
 #[cfg(feature = "kroma")]
-const ADDITIONAL_KROMA_TX_LEN: usize = 4;
+const ADDITIONAL_KROMA_TX_LEN: usize = 2;
 #[cfg(not(feature = "kroma"))]
 const ADDITIONAL_KROMA_TX_LEN: usize = 0;
 
 /// Number of rows of one tx occupies in the fixed part of tx table
-pub const TX_LEN: usize = 19 + ADDITIONAL_KROMA_TX_LEN;
+pub const TX_LEN: usize = 22 + ADDITIONAL_KROMA_TX_LEN;
 /// Offset of TxHash tag in the tx table
 pub const TX_HASH_OFFSET: usize = 19;
 
@@ -232,7 +232,7 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
 
         let sv_address = meta.advice_column();
         meta.enable_equality(tx_table.value);
-        // meta.enable_equality(sv_address);  // TODO maintain it
+        meta.enable_equality(sv_address); // TODO maintain it
 
         let log_deg = |s: &'static str, meta: &mut ConstraintSystem<F>| {
             log::info!("after {}, meta.degree: {}", s, meta.degree());
