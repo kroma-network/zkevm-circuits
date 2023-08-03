@@ -38,7 +38,7 @@ pub struct MockBlock {
     // This field is handled here as we assume that all block txs have the same ChainId.
     // Also, the field is stored in the block_table since we don't have a chain_config
     // structure/table.
-    pub(crate) chain_id: Word,
+    pub(crate) chain_id: u64,
 }
 
 impl Default for MockBlock {
@@ -99,11 +99,10 @@ impl From<MockBlock> for Block<Transaction> {
                 .transactions
                 .iter_mut()
                 .map(|mock_tx| {
-                    (mock_tx
+                    let tx = mock_tx
                         .chain_id(mock.chain_id)
-                        .block_number(mock.number.as_u64())
-                        .to_owned())
-                    .into()
+                        .block_number(mock.number.as_u64());
+                    (&*tx).into()
                 })
                 .collect::<Vec<Transaction>>(),
             size: Some(mock.size),
@@ -283,7 +282,7 @@ impl MockBlock {
     }
 
     /// Set chain_id field for the MockBlock.
-    pub fn chain_id(&mut self, chain_id: Word) -> &mut Self {
+    pub fn chain_id(&mut self, chain_id: u64) -> &mut Self {
         self.chain_id = chain_id;
         self
     }

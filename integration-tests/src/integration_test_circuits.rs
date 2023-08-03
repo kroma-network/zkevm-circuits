@@ -58,6 +58,8 @@ const MAX_TXS: usize = 5;
 const MAX_CALLDATA: usize = 512;
 #[cfg(feature = "kroma")]
 const MAX_CALLDATA: usize = 4000;
+/// MAX_RLP_ROWS
+const MAX_RLP_ROWS: usize = 1000;
 /// MAX_INNER_BLOCKS
 pub const MAX_INNER_BLOCKS: usize = 64;
 /// MAX_BYTECODE
@@ -83,6 +85,7 @@ const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_evm_rows: MAX_EVM_ROWS,
     max_exp_steps: MAX_EXP_STEPS,
     max_keccak_rows: MAX_KECCAK_ROWS,
+    max_rlp_rows: MAX_RLP_ROWS,
 };
 
 const EVM_CIRCUIT_DEGREE: u32 = 18;

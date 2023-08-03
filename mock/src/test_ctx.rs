@@ -82,7 +82,7 @@ pub const DEPOSIT_TX_GAS: u64 = 0u64;
 #[derive(Debug)]
 pub struct TestContext<const NACC: usize, const NTX: usize> {
     /// chain id
-    pub chain_id: Word,
+    pub chain_id: u64,
     /// Account list
     pub accounts: [Account; NACC],
     /// history hashes contains most recent 256 block hashes in history, where
@@ -304,7 +304,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
 /// Generates execution traces for the transactions included in the provided
 /// Block
 pub fn gen_geth_traces(
-    chain_id: Word,
+    chain_id: u64,
     block: Block<Transaction>,
     accounts: Vec<Account>,
     history_hashes: Option<Vec<Word>>,

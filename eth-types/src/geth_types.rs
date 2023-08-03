@@ -5,9 +5,9 @@ use crate::{
     AccessList, Address, Block, Bytes, Error, GethExecTrace, Hash, ToBigEndian, ToLittleEndian,
     Word, U64,
 };
-use ethers_core::{
-    types::{NameOrAddress, TransactionRequest, H256},
-    utils::rlp::RlpStream,
+use ethers_core::types::{
+    Eip1559TransactionRequest, Eip2930TransactionRequest, Transaction as ResponseTransaction,
+    TransactionRequest, TypedTransaction, H256,
 };
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::halo2curves::{group::ff::PrimeField, secp256k1};
@@ -17,10 +17,132 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
 use std::{collections::HashMap, str::FromStr};
+use strum_macros::EnumIter;
 
 #[cfg(feature = "kroma")]
 /// Kroma deposit transaction type
 pub const DEPOSIT_TX_TYPE: u64 = 0x7e;
+
+/// Tx type
+#[derive(Default, Debug, Copy, Clone, EnumIter, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TxType {
+    /// EIP 155 tx
+    #[default]
+    Eip155 = 0,
+    /// Pre EIP 155 tx
+    PreEip155,
+    /// EIP 1559 tx
+    Eip1559,
+    /// EIP 2930 tx
+    Eip2930,
+    /// Kroma deposit tx
+    Deposit,
+}
+
+impl From<TxType> for usize {
+    fn from(value: TxType) -> Self {
+        value as usize
+    }
+}
+
+impl From<TxType> for u64 {
+    fn from(value: TxType) -> Self {
+        value as u64
+    }
+}
+
+impl TxType {
+    /// If this type is Deposit or not
+    pub fn is_deposit_tx(&self) -> bool {
+        matches!(*self, TxType::Deposit)
+    }
+
+    /// Get the type of transaction
+    pub fn get_tx_type(tx: &crate::Transaction) -> Self {
+        match tx.transaction_type {
+            Some(x) if x == U64::from(1) => Self::Eip2930,
+            Some(x) if x == U64::from(2) => Self::Eip2930,
+            Some(x) if x == U64::from(0x7e) => Self::Deposit,
+            _ => match tx.v.as_u64() {
+                0 | 1 | 27 | 28 => Self::PreEip155,
+                _ => Self::Eip155,
+            },
+        }
+    }
+
+    /// Get the type relate to the value
+    pub fn get_tx_type_by_value(tx_type: u64, v: u64) -> Self {
+        match tx_type {
+            1 => TxType::Eip2930,
+            2 => TxType::Eip1559,
+            126 => TxType::Deposit,
+            _ => match v {
+                0 | 1 | 27 | 28 => Self::PreEip155,
+                _ => Self::Eip155,
+            },
+        }
+    }
+
+    /// Return the value related to the TxType
+    pub fn to_value(&self) -> u64 {
+        match self {
+            TxType::Eip155 | TxType::PreEip155 => 0,
+            TxType::Eip2930 => 1,
+            TxType::Eip1559 => 2,
+            TxType::Deposit => 126,
+        }
+    }
+
+    /// Return the recovery id of signature for recovering the signing pk
+    pub fn get_recovery_id(&self, v: u64) -> u8 {
+        let recovery_id = match *self {
+            TxType::Eip155 => (v + 1) % 2,
+            TxType::PreEip155 => {
+                assert!(v == 0x1b || v == 0x1c, "v: {v}");
+                v - 27
+            }
+            TxType::Eip1559 => {
+                assert!(v <= 1);
+                v
+            }
+            TxType::Eip2930 => {
+                assert!(v <= 1);
+                v
+            }
+            TxType::Deposit => {
+                unreachable!("L1 msg does not have signature")
+            }
+        };
+
+        recovery_id as u8
+    }
+}
+
+/// Get the RLP bytes for signing
+pub fn get_rlp_unsigned(tx: &ResponseTransaction) -> Vec<u8> {
+    match TxType::get_tx_type(tx) {
+        TxType::Eip155 => {
+            let tx: TransactionRequest = tx.into();
+            tx.rlp().to_vec()
+        }
+        TxType::PreEip155 => {
+            let tx: TransactionRequest = tx.into();
+            tx.rlp_unsigned().to_vec()
+        }
+        TxType::Eip1559 => {
+            let tx: Eip1559TransactionRequest = tx.into();
+            tx.rlp().to_vec()
+        }
+        TxType::Eip2930 => {
+            let tx: Eip2930TransactionRequest = tx.into();
+            tx.rlp().to_vec()
+        }
+        TxType::Deposit => {
+            // L1 msg does not have signature
+            vec![]
+        }
+    }
+}
 
 /// Definition of all of the data related to an account.
 #[serde_as]
@@ -119,7 +241,7 @@ impl BlockConstants {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     /// Transaction type
-    pub transaction_type: Option<U64>,
+    pub tx_type: TxType,
     /// Sender address
     pub from: Address,
     /// Recipient address (None for contract creation)
@@ -150,6 +272,11 @@ pub struct Transaction {
     /// "s" value of the transaction signature
     pub s: Word,
 
+    /// RLP bytes
+    pub rlp_bytes: Vec<u8>,
+    /// RLP unsigned bytes
+    pub rlp_unsigned_bytes: Vec<u8>,
+
     /// Transaction hash
     pub hash: H256,
     /// Kroma Deposit tx
@@ -167,10 +294,10 @@ pub struct Transaction {
 }
 
 /// Casting `GethTransaction` to `Transaction` for response
-impl From<&Transaction> for ethers_core::types::Transaction {
-    fn from(tx: &Transaction) -> crate::Transaction {
+impl From<&Transaction> for ResponseTransaction {
+    fn from(tx: &Transaction) -> ResponseTransaction {
         crate::Transaction {
-            transaction_type: tx.transaction_type,
+            transaction_type: Some(U64::from(tx.tx_type.to_value())),
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -190,11 +317,18 @@ impl From<&Transaction> for ethers_core::types::Transaction {
     }
 }
 
+impl From<&Transaction> for TypedTransaction {
+    fn from(tx: &Transaction) -> Self {
+        let resp_tx: ResponseTransaction = tx.into();
+        (&resp_tx).into()
+    }
+}
+
 /// Casting `Transaction` for response to `GethTransaction`
 impl From<&ethers_core::types::Transaction> for Transaction {
     fn from(tx: &crate::Transaction) -> Transaction {
         Transaction {
-            transaction_type: tx.transaction_type,
+            tx_type: TxType::get_tx_type(tx),
             from: tx.from,
             to: tx.to,
             nonce: tx.nonce,
@@ -208,6 +342,8 @@ impl From<&ethers_core::types::Transaction> for Transaction {
             v: tx.v.as_u64(),
             r: tx.r,
             s: tx.s,
+            rlp_bytes: tx.rlp().to_vec(),
+            rlp_unsigned_bytes: get_rlp_unsigned(tx),
             hash: tx.hash,
             #[cfg(feature = "kroma")]
             mint: Transaction::get_mint(tx).unwrap_or_default(),
@@ -219,21 +355,21 @@ impl From<&ethers_core::types::Transaction> for Transaction {
     }
 }
 
-/// Casting `GethTransaction` to `TransactionRequest`
-impl From<&Transaction> for TransactionRequest {
-    fn from(tx: &Transaction) -> TransactionRequest {
-        TransactionRequest {
-            from: Some(tx.from),
-            to: tx.to.map(NameOrAddress::Address),
-            gas: Some(tx.gas_limit),
-            gas_price: Some(tx.gas_price),
-            value: Some(tx.value),
-            data: Some(tx.call_data.clone()),
-            nonce: Some(tx.nonce),
-            ..Default::default()
-        }
-    }
-}
+// /// Casting `GethTransaction` to `TransactionRequest`
+// impl From<&Transaction> for TransactionRequest {
+//     fn from(tx: &Transaction) -> TransactionRequest {
+//         TransactionRequest {
+//             from: Some(tx.from),
+//             to: tx.to.map(NameOrAddress::Address),
+//             gas: Some(tx.gas_limit),
+//             gas_price: Some(tx.gas_price),
+//             value: Some(tx.value),
+//             data: Some(tx.call_data.clone()),
+//             nonce: Some(tx.nonce),
+//             ..Default::default()
+//         }
+//     }
+// }
 
 impl Transaction {
     /// Retrieve mint from `Transaction.other`.
@@ -260,93 +396,94 @@ impl Transaction {
         zeros * 4 + non_zeros * 16
     }
 
-    /// Whether this Transaction is a deposit transaction.
+    /// Whether this Transaction is a Kroma deposit transaction.
     pub fn is_deposit(&self) -> bool {
         #[cfg(feature = "kroma")]
-        return self.transaction_type.unwrap_or_default().as_u64() == DEPOSIT_TX_TYPE;
+        return self.tx_type.is_deposit_tx();
         #[cfg(not(feature = "kroma"))]
         return false;
     }
 
-    #[cfg(feature = "kroma")]
-    /// Return rlp encoded bytes which is used to sign tx.
-    pub fn rlp_unsigned<T: Into<U64>>(&self, chain_id: T) -> Bytes {
-        match self.transaction_type.unwrap_or_default().as_u64() {
-            0 => {
-                let mut legacy_tx = TransactionRequest::new()
-                    .from(self.from)
-                    .nonce(self.nonce)
-                    .gas_price(self.gas_price)
-                    .gas(self.gas_limit)
-                    .value(self.value)
-                    .data(self.call_data.clone())
-                    .chain_id(chain_id);
-                if self.to.is_some() {
-                    legacy_tx = legacy_tx.to(NameOrAddress::Address(self.to.unwrap()));
-                }
+    // #[cfg(feature = "kroma")]
+    // /// Return rlp encoded bytes which is used to sign tx.
+    // pub fn rlp_unsigned<T: Into<U64>>(&self, chain_id: T) -> Bytes {
+    //     match self.transaction_type.unwrap_or_default().as_u64() {
+    //         0 => {
+    //             let mut legacy_tx = TransactionRequest::new()
+    //                 .from(self.from)
+    //                 .nonce(self.nonce)
+    //                 .gas_price(self.gas_price)
+    //                 .gas(self.gas_limit)
+    //                 .value(self.value)
+    //                 .data(self.call_data.clone())
+    //                 .chain_id(chain_id);
+    //             if self.to.is_some() {
+    //                 legacy_tx = legacy_tx.to(NameOrAddress::Address(self.to.unwrap()));
+    //             }
+    //
+    //             legacy_tx.rlp()
+    //         }
+    //         DEPOSIT_TX_TYPE => {
+    //             // NOTE(dongchangYoo): For deposit transactions, this function returns a byte
+    // array             // equivalent to the output of rlp_signed(). Even though the returned
+    // bytes are not             // used for transaction signing, they still need to conform to
+    // the rlp-circuit rule.             self.rlp_signed()
+    //         }
+    //         _ => panic!("not supported transaction type"),
+    //     }
+    // }
+    //
+    // #[cfg(feature = "kroma")]
+    // /// Return rlp encoded bytes which is used to calculate transaction hash
+    // pub fn rlp_signed(&self) -> Bytes {
+    //     let tx_type = self.transaction_type.unwrap_or_default().as_u64();
+    //     match tx_type {
+    //         0 => {
+    //             let mut legacy_tx = TransactionRequest::new()
+    //                 .from(self.from)
+    //                 .nonce(self.nonce)
+    //                 .gas_price(self.gas_price)
+    //                 .gas(self.gas_limit)
+    //                 .value(self.value)
+    //                 .data(self.call_data.clone());
+    //             if self.to.is_some() {
+    //                 legacy_tx = legacy_tx.to(NameOrAddress::Address(self.to.unwrap()));
+    //             }
+    //
+    //             let sig = ethers_core::types::Signature {
+    //                 r: self.r,
+    //                 s: self.s,
+    //                 v: self.v,
+    //             };
+    //
+    //             legacy_tx.rlp_signed(&sig)
+    //         }
+    //         #[cfg(feature = "kroma")]
+    //         DEPOSIT_TX_TYPE => {
+    //             let mut s = RlpStream::new();
+    //
+    //             s.append(&tx_type);
+    //
+    //             s.begin_list(7);
+    //             s.append(&self.source_hash);
+    //             s.append(&self.from);
+    //             if self.to.is_some() {
+    //                 s.append(&self.to.unwrap());
+    //             } else {
+    //                 s.append(&"");
+    //             }
+    //             s.append(&self.mint);
+    //             s.append(&self.value);
+    //             s.append(&self.gas_limit);
+    //             s.append(&self.call_data.to_vec());
+    //
+    //             s.out().freeze().into()
+    //         }
+    //         _ => panic!("not supported transaction type"),
+    //     }
+    // }
 
-                legacy_tx.rlp()
-            }
-            DEPOSIT_TX_TYPE => {
-                // NOTE(dongchangYoo): For deposit transactions, this function returns a byte array
-                // equivalent to the output of rlp_signed(). Even though the returned bytes are not
-                // used for transaction signing, they still need to conform to the rlp-circuit rule.
-                self.rlp_signed()
-            }
-            _ => panic!("not supported transaction type"),
-        }
-    }
-
-    #[cfg(feature = "kroma")]
-    /// Return rlp encoded bytes which is used to calculate transaction hash
-    pub fn rlp_signed(&self) -> Bytes {
-        let tx_type = self.transaction_type.unwrap_or_default().as_u64();
-        match tx_type {
-            0 => {
-                let mut legacy_tx = TransactionRequest::new()
-                    .from(self.from)
-                    .nonce(self.nonce)
-                    .gas_price(self.gas_price)
-                    .gas(self.gas_limit)
-                    .value(self.value)
-                    .data(self.call_data.clone());
-                if self.to.is_some() {
-                    legacy_tx = legacy_tx.to(NameOrAddress::Address(self.to.unwrap()));
-                }
-
-                let sig = ethers_core::types::Signature {
-                    r: self.r,
-                    s: self.s,
-                    v: self.v,
-                };
-
-                legacy_tx.rlp_signed(&sig)
-            }
-            #[cfg(feature = "kroma")]
-            DEPOSIT_TX_TYPE => {
-                let mut s = RlpStream::new();
-
-                s.append(&tx_type);
-
-                s.begin_list(7);
-                s.append(&self.source_hash);
-                s.append(&self.from);
-                if self.to.is_some() {
-                    s.append(&self.to.unwrap());
-                } else {
-                    s.append(&"");
-                }
-                s.append(&self.mint);
-                s.append(&self.value);
-                s.append(&self.gas_limit);
-                s.append(&self.call_data.to_vec());
-
-                s.out().freeze().into()
-            }
-            _ => panic!("not supported transaction type"),
-        }
-    }
-
+    // TODO refactoring
     /// Return the SignData associated with this Transaction.
     pub fn sign_data(&self, chain_id: u64) -> Result<SignData, Error> {
         let sig_r_le = self.r.to_le_bytes();
@@ -372,21 +509,22 @@ impl Transaction {
             )?
         };
         // msg = rlp([nonce, gasPrice, gas, to, value, data, chain_id, 0, 0])
-        let mut req: TransactionRequest = self.into();
-        if req.to.is_some() {
-            let to = req.to.clone().unwrap();
-            match to {
-                NameOrAddress::Name(_) => {}
-                NameOrAddress::Address(addr) => {
-                    if addr == Address::zero() {
-                        // the rlp of zero addr is 0x80 instead of
-                        // [0x94, 0, ..., 0]
-                        req.to = None;
-                    }
-                }
-            }
-        }
-        let msg = req.chain_id(chain_id).rlp();
+        // let mut req: TransactionRequest = self.into();
+        // if req.to.is_some() {
+        //     let to = req.to.clone().unwrap();
+        //     match to {
+        //         NameOrAddress::Name(_) => {}
+        //         NameOrAddress::Address(addr) => {
+        //             if addr == Address::zero() {
+        //                 // the rlp of zero addr is 0x80 instead of
+        //                 // [0x94, 0, ..., 0]
+        //                 req.to = None;
+        //             }
+        //         }
+        //     }
+        // }
+        // let msg = req.chain_id(chain_id).rlp();
+        let msg = self.rlp_unsigned_bytes.clone().into();
         let msg_hash: [u8; 32] = Keccak256::digest(&msg)
             .as_slice()
             .to_vec()
@@ -419,7 +557,7 @@ impl Transaction {
 #[derive(Debug, Clone)]
 pub struct GethData {
     /// chain id
-    pub chain_id: Word,
+    pub chain_id: u64,
     /// history hashes contains most recent 256 block hashes in history, where
     /// the lastest one is at history_hashes[history_hashes.len() - 1].
     pub history_hashes: Vec<Word>,
@@ -440,10 +578,10 @@ impl GethData {
                 continue;
             }
             let wallet = wallets.get(&tx.from).unwrap();
-            assert_eq!(Word::from(wallet.chain_id()), self.chain_id);
-            let geth_tx: Transaction = (&*tx).into();
-            let req: TransactionRequest = (&geth_tx).into();
-            let sig = wallet.sign_transaction_sync(&req.chain_id(self.chain_id.as_u64()).into());
+            assert_eq!(wallet.chain_id(), self.chain_id);
+
+            let typed_tx: TypedTransaction = (&*tx).into();
+            let sig = wallet.sign_transaction_sync(&typed_tx);
             tx.v = U64::from(sig.v);
             tx.r = sig.r;
             tx.s = sig.s;

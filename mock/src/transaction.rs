@@ -3,7 +3,7 @@
 use super::{test_ctx::SYSTEM_DEPOSIT_TX_GAS, MOCK_ACCOUNTS, MOCK_CHAIN_ID, MOCK_GASPRICE};
 use eth_types::{
     address,
-    geth_types::{Transaction as GethTransaction, DEPOSIT_TX_TYPE},
+    geth_types::{Transaction as GethTransaction, TxType, DEPOSIT_TX_TYPE},
     kroma_params::{L1_BLOCK, SYSTEM_TX_CALLER},
     word, AccessList, Address, Bytes, Hash, Transaction, Word, U64,
 };
@@ -227,11 +227,11 @@ pub struct MockTransaction {
     pub v: Option<U64>,
     pub r: Option<Word>,
     pub s: Option<Word>,
-    pub transaction_type: U64,
+    pub transaction_type: TxType,
     pub access_list: AccessList,
     pub max_priority_fee_per_gas: Word,
     pub max_fee_per_gas: Word,
-    pub chain_id: Word,
+    pub chain_id: u64,
 
     /// Kroma deposit tx.
     #[cfg(feature = "kroma")]
@@ -258,7 +258,7 @@ impl Default for MockTransaction {
             v: None,
             r: None,
             s: None,
-            transaction_type: U64::zero(),
+            transaction_type: TxType::default(),
             access_list: AccessList::default(),
             max_priority_fee_per_gas: Word::zero(),
             max_fee_per_gas: Word::zero(),
@@ -271,8 +271,8 @@ impl Default for MockTransaction {
     }
 }
 
-impl From<MockTransaction> for Transaction {
-    fn from(mock: MockTransaction) -> Self {
+impl From<&MockTransaction> for Transaction {
+    fn from(mock: &MockTransaction) -> Self {
         let mut tx = Transaction {
             hash: mock.hash.unwrap_or_default(),
             nonce: mock.nonce.into(),
@@ -280,19 +280,19 @@ impl From<MockTransaction> for Transaction {
             block_number: Some(mock.block_number),
             transaction_index: Some(mock.transaction_index),
             from: mock.from.address(),
-            to: mock.to.map(|addr| addr.address()),
+            to: mock.to.as_ref().map(|addr| addr.address()),
             value: mock.value,
             gas_price: Some(mock.gas_price),
             gas: mock.gas,
-            input: mock.input,
+            input: mock.input.clone(),
             v: mock.v.unwrap_or_default(),
             r: mock.r.unwrap_or_default(),
             s: mock.s.unwrap_or_default(),
-            transaction_type: Some(mock.transaction_type),
-            access_list: Some(mock.access_list),
+            transaction_type: Some(U64::from(mock.transaction_type.to_value())),
+            access_list: Some(mock.access_list.clone()),
             max_priority_fee_per_gas: Some(mock.max_priority_fee_per_gas),
             max_fee_per_gas: Some(mock.max_fee_per_gas),
-            chain_id: Some(mock.chain_id),
+            chain_id: Some(mock.chain_id.into()),
             #[cfg(feature = "kroma")]
             other: Default::default(),
             #[cfg(not(feature = "kroma"))]
@@ -317,47 +317,52 @@ impl From<MockTransaction> for Transaction {
 
 impl From<&MockTransaction> for GethTransaction {
     fn from(mock: &MockTransaction) -> Self {
-        Self {
-            transaction_type: Some(mock.transaction_type),
-            from: mock.from.address(),
-            to: mock.to.as_ref().map(|addr| addr.address()),
-            nonce: Word::from(mock.nonce),
-            gas_limit: mock.gas,
-            value: mock.value,
-            gas_price: mock.gas_price,
-            gas_fee_cap: Word::default(),
-            gas_tip_cap: Word::default(),
-            call_data: mock.input.clone(),
-            access_list: Some(mock.access_list.clone()),
-            v: match mock.v {
-                Some(v) => v.as_u64(),
-                None => U64::default().as_u64(),
-            },
-            r: match mock.r {
-                Some(r) => r,
-                None => Word::default(),
-            },
-            s: match mock.s {
-                Some(s) => s,
-                None => Word::default(),
-            },
-            hash: match mock.hash {
-                Some(hash) => hash,
-                None => panic!("mock_transaction without tx_hash not allowed"),
-            },
-            #[cfg(feature = "kroma")]
-            mint: mock.mint,
-            #[cfg(feature = "kroma")]
-            source_hash: mock.source_hash,
-            #[cfg(feature = "kroma")]
-            rollup_data_gas_cost: match mock.transaction_type.as_u64() {
-                DEPOSIT_TX_TYPE => 0,
-                _ => {
-                    GethTransaction::compute_rollup_data_gas_cost(&Transaction::from(mock.clone()))
-                }
-            },
-        }
+        GethTransaction::from(&Transaction::from(mock))
     }
+    // fn from(mock: &MockTransaction) -> Self {
+    //     Self {
+    //         tx_type: mock.transaction_type,
+    //         from: mock.from.address(),
+    //         to: mock.to.as_ref().map(|addr| addr.address()),
+    //         nonce: Word::from(mock.nonce),
+    //         gas_limit: mock.gas,
+    //         value: mock.value,
+    //         gas_price: mock.gas_price,
+    //         gas_fee_cap: Word::default(),
+    //         gas_tip_cap: Word::default(),
+    //         call_data: mock.input.clone(),
+    //         access_list: Some(mock.access_list.clone()),
+    //         v: match mock.v {
+    //             Some(v) => v.as_u64(),
+    //             None => U64::default().as_u64(),
+    //         },
+    //         r: match mock.r {
+    //             Some(r) => r,
+    //             None => Word::default(),
+    //         },
+    //         s: match mock.s {
+    //             Some(s) => s,
+    //             None => Word::default(),
+    //         },
+    //         rlp_bytes: mock.
+    //         hash: match mock.hash {
+    //             Some(hash) => hash,
+    //             None => panic!("mock_transaction without tx_hash not allowed"),
+    //         },
+    //         #[cfg(feature = "kroma")]
+    //         mint: mock.mint,
+    //         #[cfg(feature = "kroma")]
+    //         source_hash: mock.source_hash,
+    //         #[cfg(feature = "kroma")]
+    //         rollup_data_gas_cost: match mock.transaction_type {
+    //             TxType::L1Msg => 0,
+    //             _ => {
+    //
+    // GethTransaction::compute_rollup_data_gas_cost(&Transaction::from(mock.clone()))
+    //             }
+    //         },
+    //     }
+    // }
 }
 
 impl MockTransaction {
@@ -438,7 +443,8 @@ impl MockTransaction {
 
     /// Set transaction_type field for the MockTransaction.
     pub fn transaction_type(&mut self, transaction_type: u64) -> &mut Self {
-        self.transaction_type = U64::from(transaction_type);
+        // get tx type by value with dummy v.
+        self.transaction_type = TxType::get_tx_type_by_value(transaction_type, 100);
         self
     }
 
@@ -461,7 +467,7 @@ impl MockTransaction {
     }
 
     /// Set chain_id field for the MockTransaction.
-    pub fn chain_id(&mut self, chain_id: Word) -> &mut Self {
+    pub fn chain_id(&mut self, chain_id: u64) -> &mut Self {
         self.chain_id = chain_id;
         self
     }
@@ -491,7 +497,7 @@ impl MockTransaction {
             .data(self.input.clone())
             .gas(self.gas)
             .gas_price(self.gas_price)
-            .chain_id(self.chain_id.low_u64());
+            .chain_id(U64::from(self.chain_id));
 
         match (self.v, self.r, self.s) {
             (None, None, None) => {
@@ -500,7 +506,7 @@ impl MockTransaction {
                     let sig = self
                         .from
                         .as_wallet()
-                        .with_chain_id(self.chain_id.low_u64())
+                        .with_chain_id(self.chain_id)
                         .sign_transaction_sync(&tx.into());
                     // Set sig parameters
                     self.sig_data((sig.v, sig.r, sig.s));
@@ -512,7 +518,8 @@ impl MockTransaction {
 
         // Compute tx hash in case is not already set
         if self.hash.is_none() {
-            let tmp_tx = Transaction::from(self.to_owned());
+            // let tx= (&*self);
+            let tmp_tx = Transaction::from(&*self);
             // FIXME: Note that tmp_tx does not have sigs if self.from.is_wallet() = false.
             //  This means tmp_tx.hash() is not correct.
             self.hash(tmp_tx.hash());

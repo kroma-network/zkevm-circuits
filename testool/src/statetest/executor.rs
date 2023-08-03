@@ -4,7 +4,7 @@ use bus_mapping::{
     circuit_input_builder::{CircuitInputBuilder, CircuitsParams},
     mock::BlockData,
 };
-use eth_types::{geth_types, Address, Bytes, GethExecTrace, U256, U64};
+use eth_types::{geth_types, geth_types::TxType, Address, Bytes, GethExecTrace, U256, U64};
 use ethers_core::{
     k256::ecdsa::SigningKey,
     types::{transaction::eip2718::TypedTransaction, TransactionRequest},
@@ -156,7 +156,7 @@ fn into_traceconfig(st: StateTest) -> (String, TraceConfig, StateTestResult) {
     (
         st.id,
         TraceConfig {
-            chain_id: U256::one(),
+            chain_id: 1,
             history_hashes: vec![U256::from_big_endian(st.env.previous_hash.as_bytes())],
             block_constants: geth_types::BlockConstants {
                 coinbase: st.env.current_coinbase,
@@ -182,7 +182,10 @@ fn into_traceconfig(st: StateTest) -> (String, TraceConfig, StateTestResult) {
                 r: sig.r,
                 s: sig.s,
                 hash: tx_hash.into(),
-                transaction_type: st.transaction_type,
+                tx_type: TxType::get_tx_type_by_value(
+                    st.transaction_type.unwrap_or_default().as_u64(),
+                    0,
+                ),
                 ..Default::default()
             }],
             accounts,
@@ -260,7 +263,7 @@ pub fn run_test(
             s: tx.s,
             v: U64::from(tx.v),
             block_number: Some(U64::from(trace_config.block_constants.number.as_u64())),
-            chain_id: Some(trace_config.chain_id),
+            chain_id: Some(trace_config.chain_id.into()),
             ..eth_types::Transaction::default()
         })
         .collect();
@@ -281,7 +284,7 @@ pub fn run_test(
     let mut wallets = HashMap::new();
     wallets.insert(
         wallet.address(),
-        wallet.with_chain_id(trace_config.chain_id.as_u64()),
+        wallet.with_chain_id(trace_config.chain_id),
     );
 
     // process the transaction
@@ -306,6 +309,7 @@ pub fn run_test(
             max_exp_steps: 5000,
             max_keccak_rows: 0,
             max_inner_blocks: 64,
+            max_rlp_rows: 6000,
         };
         let block_data = BlockData::new_from_geth_data_with_params(geth_data, circuits_params);
 
@@ -332,6 +336,7 @@ pub fn run_test(
             max_evm_rows: 0,
             max_keccak_rows: 0,
             max_inner_blocks: 64,
+            max_rlp_rows: 512,
         };
         let (k, circuit, instance, _builder) =
             SuperCircuit::<Fr, MAX_TXS, MAX_CALLDATA, 64, 0x100>::build(geth_data, circuits_params)

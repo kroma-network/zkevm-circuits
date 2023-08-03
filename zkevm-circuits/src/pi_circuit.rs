@@ -75,7 +75,7 @@ pub(crate) static DIFFICULTY: Lazy<Word> = Lazy::new(|| read_env_var("DIFFICULTY
 #[derive(Debug, Clone)]
 pub struct PublicData {
     /// chain id
-    pub chain_id: Word,
+    pub chain_id: u64,
     /// Block Transactions
     pub transactions: Vec<Transaction>,
     /// Block contexts
@@ -89,7 +89,7 @@ pub struct PublicData {
 impl Default for PublicData {
     fn default() -> Self {
         PublicData {
-            chain_id: Word::default(),
+            chain_id: 0,
             transactions: vec![],
             prev_state_root: H256::zero(),
             withdraw_trie_root: H256::zero(),
@@ -101,7 +101,7 @@ impl Default for PublicData {
 impl PublicData {
     /// Compute the raw_public_inputs bytes from the verifier's perspective.
     fn raw_public_input_bytes(&self, max_txs: usize) -> Vec<u8> {
-        let dummy_tx_hash = get_dummy_tx_hash(self.chain_id.as_u64());
+        let dummy_tx_hash = get_dummy_tx_hash(self.chain_id);
         let withdraw_trie_root = self.withdraw_trie_root;
 
         let result = iter::empty()
@@ -178,7 +178,7 @@ impl PublicData {
 impl Default for BlockContext {
     fn default() -> Self {
         Self {
-            chain_id: *CHAIN_ID,
+            chain_id: 0,
             coinbase: *COINBASE,
             difficulty: *DIFFICULTY,
             gas_limit: 0,
@@ -299,7 +299,8 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         let q_block_tag = meta.fixed_column();
         let cum_num_txs = meta.advice_column();
-        let block_tag_bits = BinaryNumberChip::configure(meta, q_block_tag, Some(block_table.tag));
+        let block_tag_bits =
+            BinaryNumberChip::configure(meta, q_block_tag, Some(block_table.tag.into()));
 
         meta.enable_equality(constant);
         meta.enable_equality(rpi_bytes);
@@ -536,7 +537,7 @@ impl<F: Field> PiCircuitConfig<F> {
         let mut tx_copy_cells = vec![];
         let mut block_table_offset = 1; // first row of block is all-zeros.
         let mut rpi_rlc_acc = Value::known(F::zero());
-        let dummy_tx_hash = get_dummy_tx_hash(public_data.chain_id.as_u64());
+        let dummy_tx_hash = get_dummy_tx_hash(public_data.chain_id);
 
         self.q_start.enable(region, offset)?;
 
@@ -1426,7 +1427,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize, const MAX_INNER_
             &self.0.public_data.transactions,
             self.0.max_txs,
             self.0.max_calldata,
-            self.0.public_data.chain_id.as_u64(),
+            self.0.public_data.chain_id,
             &challenges,
         )?;
         // assign keccak table

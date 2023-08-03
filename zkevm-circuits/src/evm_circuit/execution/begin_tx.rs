@@ -623,12 +623,12 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
         #[cfg(feature = "kroma")]
         self.tx_type
-            .assign(region, offset, Value::known(F::from(tx.transaction_type)))?;
+            .assign(region, offset, Value::known(F::from(tx.tx_type.to_value())))?;
         #[cfg(feature = "kroma")]
         self.is_tx_type_deposit.assign(
             region,
             offset,
-            F::from(tx.transaction_type),
+            F::from(tx.tx_type.to_value()),
             F::from(DEPOSIT_TX_TYPE),
         )?;
         #[cfg(feature = "kroma")]

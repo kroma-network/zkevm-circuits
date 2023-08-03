@@ -68,7 +68,7 @@ pub struct Block<F> {
     /// Mpt updates
     pub mpt_updates: MptUpdates,
     /// Chain ID
-    pub chain_id: Word,
+    pub chain_id: u64,
 
     /// Kroma
     #[cfg(feature = "kroma")]
@@ -200,7 +200,7 @@ pub struct BlockContext {
     /// The hash of previous blocks
     pub history_hashes: Vec<Word>,
     /// The chain id
-    pub chain_id: Word,
+    pub chain_id: u64,
     /// Original Block from geth
     pub eth_block: eth_types::Block<eth_types::Transaction>,
 }
@@ -370,7 +370,7 @@ pub fn block_convert<F: Field>(
                 } else {
                     last_block_num + 1
                 };
-                tx_convert(tx, idx + 1, chain_id.as_u64(), next_block_num)
+                tx_convert(tx, idx + 1, chain_id, next_block_num)
             })
             .collect(),
         sigs: block.txs().iter().map(|tx| tx.signature).collect(),

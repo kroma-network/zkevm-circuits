@@ -178,7 +178,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        debug_assert!(tx.transaction_type == DEPOSIT_TX_TYPE);
+        debug_assert!(tx.tx_type.is_deposit_tx());
 
         let gas_used = tx.gas;
         let (refund, _) = block.rws[step.rw_indices[2]].tx_refund_value_pair();
@@ -188,7 +188,7 @@ impl<F: Field> ExecutionGadget<F> for EndDepositTxGadget<F> {
         self.tx_id
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
         self.tx_type
-            .assign(region, offset, Value::known(F::from(tx.transaction_type)))?;
+            .assign(region, offset, Value::known(F::from(tx.tx_type.to_value())))?;
         self.tx_gas
             .assign(region, offset, Value::known(F::from(tx.gas)))?;
 

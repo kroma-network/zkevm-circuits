@@ -6,11 +6,12 @@ use crate::{
     Error,
 };
 use eth_types::{
-    evm_types::Memory, geth_types, Address, GethExecTrace, Hash, Signature, Word, H256, U64,
+    evm_types::Memory,
+    geth_types,
+    geth_types::{get_rlp_unsigned, TxType},
+    Address, GethExecTrace, Hash, Signature, Word, H256,
 };
 use ethers_core::utils::get_contract_address;
-#[cfg(feature = "kroma")]
-use geth_types::DEPOSIT_TX_TYPE;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Default)]
@@ -183,7 +184,7 @@ pub struct Transaction {
     /// ..
     pub block_num: u64,
     /// Transaction Type
-    pub transaction_type: u64,
+    pub tx_type: TxType,
     /// Nonce
     pub nonce: u64,
     /// Hash
@@ -192,6 +193,10 @@ pub struct Transaction {
     pub gas: u64,
     /// Gas price
     pub gas_price: Word,
+    /// Gas fee cap
+    pub gas_fee_cap: Word,
+    /// Gas tip cap
+    pub gas_tip_cap: Word,
     /// From / Caller Address
     pub from: Address,
     /// To / Callee Address
@@ -204,6 +209,10 @@ pub struct Transaction {
     pub chain_id: u64,
     /// Signature
     pub signature: Signature,
+    /// RLP bytes
+    pub rlp_bytes: Vec<u8>,
+    /// RLP bytes for signing
+    pub rlp_unsigned_bytes: Vec<u8>,
     /// Calls made in the transaction
     pub(crate) calls: Vec<Call>,
     /// Execution steps
@@ -226,11 +235,7 @@ pub struct Transaction {
 impl From<&Transaction> for geth_types::Transaction {
     fn from(tx: &Transaction) -> geth_types::Transaction {
         geth_types::Transaction {
-            transaction_type: if tx.transaction_type == 0 {
-                None
-            } else {
-                Some(U64::from(tx.transaction_type))
-            },
+            tx_type: tx.tx_type,
             from: tx.from,
             to: tx.to,
             nonce: Word::from(tx.nonce),
@@ -248,6 +253,10 @@ impl From<&Transaction> for geth_types::Transaction {
             source_hash: tx.source_hash,
             #[cfg(feature = "kroma")]
             rollup_data_gas_cost: tx.rollup_data_gas_cost,
+            gas_fee_cap: tx.gas_fee_cap,
+            gas_tip_cap: tx.gas_tip_cap,
+            rlp_unsigned_bytes: tx.rlp_unsigned_bytes.clone(),
+            rlp_bytes: tx.rlp_bytes.clone(),
             ..Default::default()
         }
     }
@@ -257,10 +266,12 @@ impl Transaction {
     /// Create a dummy Transaction with zero values
     pub fn dummy() -> Self {
         Self {
-            transaction_type: 0,
+            tx_type: TxType::default(),
             nonce: 0,
             gas: 0,
             gas_price: Word::zero(),
+            gas_fee_cap: Word::zero(),
+            gas_tip_cap: Word::zero(),
             from: Address::zero(),
             to: Some(Address::zero()),
             value: Word::zero(),
@@ -271,6 +282,8 @@ impl Transaction {
                 s: Word::zero(),
                 v: 0,
             },
+            rlp_bytes: vec![],
+            rlp_unsigned_bytes: vec![],
             calls: Vec::new(),
             steps: Vec::new(),
             block_num: Default::default(),
@@ -340,10 +353,10 @@ impl Transaction {
             }
         };
 
-        let transaction_type = eth_tx.transaction_type.unwrap_or_default().as_u64();
+        let tx_type = TxType::get_tx_type(eth_tx);
         log::debug!(
             "eth_tx's type: {:?}, idx: {:?}, hash: {:?}, tx: {:?}",
-            transaction_type,
+            tx_type.to_value(),
             eth_tx.transaction_index,
             eth_tx.hash,
             {
@@ -353,12 +366,16 @@ impl Transaction {
             }
         );
         Ok(Self {
-            transaction_type,
+            tx_type,
             block_num: eth_tx.block_number.unwrap().as_u64(),
             hash: eth_tx.hash,
+            rlp_bytes: eth_tx.rlp().to_vec(),
+            rlp_unsigned_bytes: get_rlp_unsigned(eth_tx),
             nonce: eth_tx.nonce.as_u64(),
             gas: eth_tx.gas.as_u64(),
             gas_price: eth_tx.gas_price.unwrap_or_default(),
+            gas_fee_cap: eth_tx.max_fee_per_gas.unwrap_or_default(),
+            gas_tip_cap: eth_tx.max_priority_fee_per_gas.unwrap_or_default(),
             from: eth_tx.from,
             to: eth_tx.to,
             value: eth_tx.value,
@@ -377,7 +394,7 @@ impl Transaction {
             source_hash: eth_types::geth_types::Transaction::get_source_hash(eth_tx)
                 .unwrap_or_default(),
             #[cfg(feature = "kroma")]
-            rollup_data_gas_cost: if transaction_type != DEPOSIT_TX_TYPE {
+            rollup_data_gas_cost: if tx_type.is_deposit_tx() {
                 eth_types::geth_types::Transaction::compute_rollup_data_gas_cost(eth_tx)
             } else {
                 0
@@ -393,7 +410,7 @@ impl Transaction {
     /// Whether this [`Transaction`] is a Kroma deposit transaction.
     pub fn is_deposit(&self) -> bool {
         #[cfg(feature = "kroma")]
-        return self.transaction_type == DEPOSIT_TX_TYPE;
+        return self.tx_type.is_deposit_tx();
         #[cfg(not(feature = "kroma"))]
         return false;
     }

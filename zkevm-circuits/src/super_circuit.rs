@@ -73,18 +73,18 @@ use crate::mpt_circuit::{MptCircuit, MptCircuitConfig, MptCircuitConfigArgs};
 
 #[cfg(not(feature = "onephase"))]
 use crate::util::Challenges;
-#[cfg(feature = "onephase")]
-use crate::util::MockChallenges as Challenges;
+// #[cfg(feature = "onephase")]
+// use crate::util::MockChallenges as Challenges;
 
 use crate::{
     state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs},
     table::{
         BlockTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, MptTable, PoseidonTable,
-        RlpTable, RwTable, TxTable,
+        RlpFsmRlpTable, RwTable, TxTable,
     },
 };
 
-use crate::{util::circuit_stats, witness::SignedTransaction};
+use crate::util::circuit_stats;
 use bus_mapping::{
     circuit_input_builder::{CircuitInputBuilder, CircuitsParams},
     mock::BlockData,
@@ -92,12 +92,13 @@ use bus_mapping::{
 use eth_types::{geth_types::GethData, Field};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{Circuit, ConstraintSystem, Error, Expression},
+    plonk::{Circuit, ConstraintSystem, Error},
 };
 
 use crate::{
     pi_circuit::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
-    rlp_circuit::{RlpCircuit, RlpCircuitConfig},
+    rlp_circuit_fsm::{RlpCircuit, RlpCircuitConfig, RlpCircuitConfigArgs},
+    witness::Transaction,
 };
 
 /// Configuration of the Super Circuit
@@ -105,7 +106,7 @@ use crate::{
 pub struct SuperCircuitConfig<F: Field> {
     block_table: BlockTable,
     mpt_table: MptTable,
-    rlp_table: RlpTable,
+    rlp_table: RlpFsmRlpTable,
     tx_table: TxTable,
     poseidon_table: PoseidonTable,
     evm_circuit: EvmCircuitConfig<F>,
@@ -127,7 +128,7 @@ pub struct SuperCircuitConfig<F: Field> {
 }
 
 /// Circuit configuration arguments
-pub struct SuperCircuitConfigArgs<F: Field> {
+pub struct SuperCircuitConfigArgs {
     /// Max txs
     pub max_txs: usize,
     /// Max calldata
@@ -137,11 +138,11 @@ pub struct SuperCircuitConfigArgs<F: Field> {
     /// Mock randomness
     pub mock_randomness: u64,
     /// Challenges
-    pub challenges: crate::util::Challenges<Expression<F>>,
+    pub challenges: crate::util::Challenges, //<Expression<F>>,
 }
 
 impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
-    type ConfigArgs = SuperCircuitConfigArgs<F>;
+    type ConfigArgs = SuperCircuitConfigArgs;
 
     /// Configure SuperCircuitConfig
     fn new(
@@ -157,6 +158,8 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let log_circuit_info = |meta: &ConstraintSystem<F>, tag: &str| {
             log::debug!("circuit info after {}: {:#?}", tag, circuit_stats(meta));
         };
+        let challenges_expr = challenges.exprs(meta);
+
         let tx_table = TxTable::construct(meta);
         log_circuit_info(meta, "tx table");
         let rw_table = RwTable::construct(meta);
@@ -177,7 +180,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         log_circuit_info(meta, "copy table");
         let exp_table = ExpTable::construct(meta);
         log_circuit_info(meta, "exp table");
-        let rlp_table = RlpTable::construct(meta);
+        let rlp_table = RlpFsmRlpTable::construct(meta);
         log_circuit_info(meta, "rlp table");
         let keccak_table = KeccakTable::construct(meta);
         log_circuit_info(meta, "keccak table");
@@ -186,7 +189,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             meta,
             KeccakCircuitConfigArgs {
                 keccak_table: keccak_table.clone(),
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         log_circuit_info(meta, "keccak circuit");
@@ -195,7 +198,14 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             PoseidonCircuitConfig::new(meta, PoseidonCircuitConfigArgs { poseidon_table });
         log_circuit_info(meta, "poseidon circuit");
 
-        let rlp_circuit = RlpCircuitConfig::configure(meta, &rlp_table, &challenges);
+        // let rlp_circuit = RlpCircuitConfig::configure(meta, &rlp_table, &challenges);
+        let rlp_circuit = RlpCircuitConfig::new(
+            meta,
+            RlpCircuitConfigArgs {
+                rlp_table,
+                challenges: challenges_expr.clone(),
+            },
+        );
         log_circuit_info(meta, "rlp circuit");
 
         let pi_circuit = PiCircuitConfig::new(
@@ -207,7 +217,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 tx_table: tx_table.clone(),
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         log_circuit_info(meta, "pi circuit");
@@ -219,7 +229,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 tx_table: tx_table.clone(),
                 keccak_table: keccak_table.clone(),
                 rlp_table,
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         log_circuit_info(meta, "tx circuit");
@@ -230,7 +240,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             BytecodeCircuitConfigArgs {
                 bytecode_table: bytecode_table.clone(),
                 keccak_table: keccak_table.clone(),
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         #[cfg(feature = "poseidon-codehash")]
@@ -240,7 +250,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 base_args: BytecodeCircuitConfigArgs {
                     bytecode_table: bytecode_table.clone(),
                     keccak_table: keccak_table.clone(),
-                    challenges: challenges.clone(),
+                    challenges: challenges_expr.clone(),
                 },
                 poseidon_table,
             },
@@ -256,7 +266,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 bytecode_table: bytecode_table.clone(),
                 copy_table,
                 q_enable: q_copy_table,
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         log_circuit_info(meta, "copy circuit");
@@ -267,7 +277,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             MptCircuitConfigArgs {
                 poseidon_table,
                 mpt_table,
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         #[cfg(feature = "zktrie")]
@@ -278,7 +288,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             StateCircuitConfigArgs {
                 rw_table,
                 mpt_table,
-                challenges: challenges.clone(),
+                challenges: challenges_expr.clone(),
             },
         );
         log_circuit_info(meta, "state circuit");
@@ -289,7 +299,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let evm_circuit = EvmCircuitConfig::new(
             meta,
             EvmCircuitConfigArgs {
-                challenges,
+                challenges: challenges_expr,
                 tx_table: tx_table.clone(),
                 rw_table,
                 bytecode_table,
@@ -356,7 +366,7 @@ pub struct SuperCircuit<
     /// Poseidon hash Circuit
     pub poseidon_circuit: PoseidonCircuit<F>,
     /// Rlp Circuit
-    pub rlp_circuit: RlpCircuit<F, SignedTransaction>,
+    pub rlp_circuit: RlpCircuit<F, Transaction>,
     /// Mpt Circuit
     #[cfg(feature = "zktrie")]
     pub mpt_circuit: MptCircuit<F>,
@@ -534,7 +544,7 @@ impl<
         const MOCK_RANDOMNESS: u64,
     > Circuit<F> for SuperCircuit<F, MAX_TXS, MAX_CALLDATA, MAX_INNER_BLOCKS, MOCK_RANDOMNESS>
 {
-    type Config = (SuperCircuitConfig<F>, Challenges);
+    type Config = (SuperCircuitConfig<F>, crate::util::Challenges);
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -542,8 +552,8 @@ impl<
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let challenges = Challenges::construct(meta);
-        let challenge_exprs = challenges.exprs(meta);
+        let challenges = crate::util::Challenges::construct(meta);
+        // let challenge_exprs = challenges.exprs(meta);
         (
             SuperCircuitConfig::new(
                 meta,
@@ -552,7 +562,7 @@ impl<
                     max_calldata: MAX_CALLDATA,
                     max_inner_blocks: MAX_INNER_BLOCKS,
                     mock_randomness: MOCK_RANDOMNESS,
-                    challenges: challenge_exprs,
+                    challenges,
                 },
             ),
             challenges,
@@ -579,7 +589,7 @@ impl<
             &block.txs,
             block.circuits_params.max_txs,
             block.circuits_params.max_calldata,
-            block.chain_id.as_u64(),
+            block.chain_id,
             &challenges,
         )?;
 
@@ -703,11 +713,10 @@ pub(crate) mod super_circuit_tests {
         block: GethData,
         circuits_params: CircuitsParams,
     ) {
+        set_var("COINBASE", "0x0000000000000000000000000000000000000000");
+        set_var("CHAIN_ID", MOCK_CHAIN_ID.to_string());
         let mut difficulty_be_bytes = [0u8; 32];
-        let mut chain_id_be_bytes = [0u8; 32];
         MOCK_DIFFICULTY.to_big_endian(&mut difficulty_be_bytes);
-        MOCK_CHAIN_ID.to_big_endian(&mut chain_id_be_bytes);
-        set_var("CHAIN_ID", hex::encode(chain_id_be_bytes));
         set_var("DIFFICULTY", hex::encode(difficulty_be_bytes));
 
         let (k, circuit, instance, _) =
@@ -746,7 +755,7 @@ pub(crate) mod super_circuit_tests {
     fn block_1tx_deploy() -> GethData {
         let mut rng = ChaCha20Rng::seed_from_u64(2);
 
-        let chain_id = (*MOCK_CHAIN_ID).as_u64();
+        let chain_id = *MOCK_CHAIN_ID;
 
         let wallet_a = LocalWallet::new(&mut rng).with_chain_id(chain_id);
         let addr_a = wallet_a.address();
@@ -778,7 +787,7 @@ pub(crate) mod super_circuit_tests {
     pub(crate) fn block_1tx() -> GethData {
         let mut rng = ChaCha20Rng::seed_from_u64(2);
 
-        let chain_id = (*MOCK_CHAIN_ID).as_u64();
+        let chain_id = *MOCK_CHAIN_ID;
 
         let bytecode = bytecode! {
             GAS
@@ -823,7 +832,7 @@ pub(crate) mod super_circuit_tests {
     fn block_2tx() -> GethData {
         let mut rng = ChaCha20Rng::seed_from_u64(2);
 
-        let chain_id = (*MOCK_CHAIN_ID).as_u64();
+        let chain_id = *MOCK_CHAIN_ID;
 
         let bytecode = bytecode! {
             GAS
@@ -890,6 +899,8 @@ pub(crate) mod super_circuit_tests {
             max_evm_rows: 0,
             max_keccak_rows: 0,
             max_inner_blocks: MAX_INNER_BLOCKS,
+            max_rlp_rows: 500,
+            ..Default::default()
         };
         test_super_circuit::<MAX_TXS, MAX_CALLDATA, MAX_INNER_BLOCKS, TEST_MOCK_RANDOMNESS>(
             block,
@@ -915,6 +926,8 @@ pub(crate) mod super_circuit_tests {
             max_inner_blocks: MAX_INNER_BLOCKS,
             max_exp_steps: 256,
             max_evm_rows: 0,
+            max_rlp_rows: 500,
+            ..Default::default()
         };
         test_super_circuit::<MAX_TXS, MAX_CALLDATA, MAX_INNER_BLOCKS, TEST_MOCK_RANDOMNESS>(
             block,
@@ -938,6 +951,8 @@ pub(crate) mod super_circuit_tests {
             max_evm_rows: 0,
             max_keccak_rows: 0,
             max_inner_blocks: MAX_INNER_BLOCKS,
+            max_rlp_rows: 500,
+            ..Default::default()
         };
         test_super_circuit::<MAX_TXS, MAX_CALLDATA, MAX_INNER_BLOCKS, TEST_MOCK_RANDOMNESS>(
             block,
@@ -963,6 +978,8 @@ pub(crate) mod super_circuit_tests {
             max_inner_blocks: MAX_INNER_BLOCKS,
             max_exp_steps: 256,
             max_evm_rows: 0,
+            max_rlp_rows: 800,
+            ..Default::default()
         };
         test_super_circuit::<MAX_TXS, MAX_CALLDATA, MAX_INNER_BLOCKS, TEST_MOCK_RANDOMNESS>(
             block,
@@ -986,6 +1003,8 @@ pub(crate) mod super_circuit_tests {
             max_evm_rows: 0,
             max_keccak_rows: 0,
             max_inner_blocks: MAX_INNER_BLOCKS,
+            max_rlp_rows: 500,
+            ..Default::default()
         };
         test_super_circuit::<MAX_TXS, MAX_CALLDATA, MAX_INNER_BLOCKS, TEST_MOCK_RANDOMNESS>(
             block,

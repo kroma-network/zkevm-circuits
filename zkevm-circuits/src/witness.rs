@@ -15,11 +15,16 @@ mod mpt;
 pub use mpt::{MptUpdate, MptUpdateRow, MptUpdates};
 mod receipt;
 pub use receipt::Receipt;
-mod rlp_encode;
-pub use rlp_encode::{RlpDataType, RlpTxTag, RlpWitnessGen, RlpWitnessRow, N_TX_TAGS};
+pub(crate) mod rlp_fsm;
+pub use rlp_fsm::{
+    DataTable, Format, RlpFsmWitnessGen, RlpFsmWitnessRow, RlpTable, RlpTag, RomTableRow, State,
+    StateMachine, Tag,
+};
 mod rw;
 pub use rw::{Rw, RwMap, RwRow};
 mod step;
 pub use step::ExecStep;
+mod deposit_tx;
 mod tx;
-pub use tx::{SignedTransaction, Transaction};
+
+pub use tx::Transaction;

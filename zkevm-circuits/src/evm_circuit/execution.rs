@@ -1170,7 +1170,7 @@ impl<F: Field> ExecutionConfig<F> {
                         tx.rlp_unsigned.clear();
                         let total_gas = {
                             let gas_used = eth_types::evm_types::gas_utils::gas_used(
-                                tx.transaction_type,
+                                tx.tx_type.to_value(),
                                 tx.gas,
                                 step.gas_left,
                             );

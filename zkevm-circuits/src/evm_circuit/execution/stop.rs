@@ -175,14 +175,17 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
             .assign(region, offset, Value::known(F::from(_tx.id as u64)))?;
 
         #[cfg(feature = "kroma")]
-        self.tx_type
-            .assign(region, offset, Value::known(F::from(_tx.transaction_type)))?;
+        self.tx_type.assign(
+            region,
+            offset,
+            Value::known(F::from(_tx.tx_type.to_value())),
+        )?;
 
         #[cfg(feature = "kroma")]
         self.is_deposit_tx.assign(
             region,
             offset,
-            F::from(_tx.transaction_type),
+            F::from(_tx.tx_type.to_value()),
             F::from(DEPOSIT_TX_TYPE),
         )?;
 

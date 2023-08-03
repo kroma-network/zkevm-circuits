@@ -32,7 +32,7 @@ use eth_types::{
 };
 use ethers_core::{
     k256::ecdsa::SigningKey,
-    types::{Bytes, NameOrAddress, Signature, TransactionRequest},
+    types::{Bytes, Signature, TransactionRequest, TypedTransaction},
     utils::keccak256,
 };
 use ethers_providers::JsonRpcClient;
@@ -66,6 +66,8 @@ pub struct CircuitsParams {
     pub max_txs: usize,
     /// Maximum number of bytes from all txs calldata in the Tx Circuit
     pub max_calldata: usize,
+    /// Maximum number of rows that the RLP Circuit can have
+    pub max_rlp_rows: usize,
     /// Max amount of rows that the CopyCircuit can have.
     pub max_copy_rows: usize,
     /// Maximum number of inner blocks in a batch
@@ -96,6 +98,7 @@ impl Default for CircuitsParams {
             max_rws: 4200,
             max_txs: 5,
             max_calldata: 400,
+            max_rlp_rows: 4200,
             max_inner_blocks: 64,
             // TODO: Check whether this value is correct or we should increase/decrease based on
             // this lib tests
@@ -482,14 +485,14 @@ pub fn keccak_inputs(block: &Block, code_db: &CodeDB) -> Result<Vec<Vec<u8>>, Er
     let mut keccak_inputs = Vec::new();
     // Tx Circuit
     let txs: Vec<geth_types::Transaction> = block.txs.iter().map(|tx| tx.into()).collect();
-    keccak_inputs.extend_from_slice(&keccak_inputs_tx_circuit(&txs, block.chain_id().as_u64())?);
+    keccak_inputs.extend_from_slice(&keccak_inputs_tx_circuit(&txs, block.chain_id())?);
     log::debug!(
         "keccak total len after txs: {}",
         keccak_inputs.iter().map(|i| i.len()).sum::<usize>()
     );
     // PI circuit
     keccak_inputs.push(keccak_inputs_pi_circuit(
-        block.chain_id().as_u64(),
+        block.chain_id(),
         block.prev_state_root,
         &block.headers,
         block.txs(),
@@ -642,19 +645,19 @@ pub fn keccak_inputs_tx_circuit(
                 s: tx.s,
                 v: tx.v,
             };
-            let mut tx: TransactionRequest = tx.into();
-            if tx.to.is_some() {
-                let to = tx.to.clone().unwrap();
-                match to {
-                    NameOrAddress::Name(_) => {}
-                    NameOrAddress::Address(addr) => {
-                        // the rlp of zero addr is 0x80
-                        if addr == Address::zero() {
-                            tx.to = None;
-                        }
-                    }
-                }
-            }
+            let tx: TypedTransaction = tx.into();
+            // if tx.to.is_some() {
+            //     let to = tx.to.clone().unwrap();
+            //     match to {
+            //         NameOrAddress::Name(_) => {}
+            //         NameOrAddress::Address(addr) => {
+            //             // the rlp of zero addr is 0x80
+            //             if addr == Address::zero() {
+            //                 tx.to = None;
+            //             }
+            //         }
+            //     }
+            // }
             tx.rlp_signed(&sig).to_vec()
         })
         .collect::<Vec<Vec<u8>>>();
@@ -732,7 +735,7 @@ type EthBlock = eth_types::Block<eth_types::Transaction>;
 /// the necessary information and using the CircuitInputBuilder.
 pub struct BuilderClient<P: JsonRpcClient> {
     cli: GethClient<P>,
-    chain_id: Word,
+    chain_id: u64,
     circuits_params: CircuitsParams,
 }
 

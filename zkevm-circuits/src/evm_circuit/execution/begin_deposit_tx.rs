@@ -588,7 +588,7 @@ impl<F: Field> ExecutionGadget<F> for BeginDepositTxGadget<F> {
         self.tx_id
             .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
         self.tx_type
-            .assign(region, offset, Value::known(F::from(tx.transaction_type)))?;
+            .assign(region, offset, Value::known(F::from(tx.tx_type.to_value())))?;
         self.tx_nonce
             .assign(region, offset, Value::known(F::from(tx.nonce)))?;
         self.tx_gas

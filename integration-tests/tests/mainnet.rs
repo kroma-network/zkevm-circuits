@@ -12,7 +12,7 @@ use integration_tests::{get_client, log_init, CIRCUIT, END_BLOCK, START_BLOCK, T
 use zkevm_circuits::{
     evm_circuit::{witness::block_convert, EvmCircuit},
     keccak_circuit::keccak_packed_multi::multi_keccak,
-    rlp_circuit::RlpCircuit,
+    rlp_circuit_fsm::RlpCircuit,
     state_circuit::StateCircuit,
     super_circuit::SuperCircuit,
     tx_circuit::TxCircuit,

@@ -176,6 +176,7 @@ mod test {
                 max_evm_rows: 0,
                 max_keccak_rows: 0,
                 max_inner_blocks: 64,
+                max_rlp_rows:
             };
             let (k, circuit, instance, _) =
                 SuperCircuit::<_, MAX_TXS, MAX_CALLDATA, 64, TEST_MOCK_RANDOMNESS>::build(
