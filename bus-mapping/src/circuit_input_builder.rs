@@ -357,7 +357,9 @@ impl<'a> CircuitInputBuilder {
         log::trace!("handle_tx tx {:?}", debug_tx);
         if let Some(al) = &eth_tx.access_list {
             for item in &al.0 {
-                self.sdb.add_account_to_access_list(item.address);
+                if tx.to.is_some() && tx.to.unwrap() != item.address {
+                    self.sdb.add_account_to_access_list(item.address);
+                }
                 for k in &item.storage_keys {
                     self.sdb
                         .add_account_storage_to_access_list((item.address, (*k).to_word()));

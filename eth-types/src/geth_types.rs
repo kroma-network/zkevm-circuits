@@ -272,7 +272,7 @@ impl Transaction {
     /// Return rlp encoded bytes which is used to sign tx.
     pub fn rlp_unsigned<T: Into<U64>>(&self, chain_id: T) -> Bytes {
         match self.transaction_type.unwrap_or_default().as_u64() {
-            0 => {
+            0 | 1 | 2 => {
                 let mut legacy_tx = TransactionRequest::new()
                     .from(self.from)
                     .nonce(self.nonce)
@@ -302,7 +302,7 @@ impl Transaction {
     pub fn rlp_signed(&self) -> Bytes {
         let tx_type = self.transaction_type.unwrap_or_default().as_u64();
         match tx_type {
-            0 => {
+            0 | 1 | 2 => {
                 let mut legacy_tx = TransactionRequest::new()
                     .from(self.from)
                     .nonce(self.nonce)

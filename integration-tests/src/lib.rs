@@ -165,3 +165,5 @@ pub struct CompiledContract {
 
 /// Common code for integration tests of circuits.
 pub mod integration_test_circuits;
+/// Common helper code for constructing scenario.
+pub mod scenario_utils;
