@@ -184,6 +184,28 @@ async fn main() {
     blocks.insert(case_name.to_string(), block_num);
     info!("- Done(height: {:?})", block_num);
 
+    // OpenZeppelin ERC20 multiple type 2 transfers in a single block.
+    let case_name = "Multiple ERC20 OpenZeppelin type 2 transfers";
+    info!("Doing {:?}", case_name);
+    let transfer_map = [(0, 1, true), (1, 2, true), (2, 3, true), (3, 4, true)]
+        .iter()
+        .map(|(from_i, to_i, expected_result)| {
+            TransferContext::new(*from_i, *to_i, WEI_IN_ETHER, *expected_result)
+        })
+        .collect();
+
+    let block_num = transfer_erc20_token(
+        &prov,
+        contract_address,
+        contract_abi,
+        &wallets,
+        transfer_map,
+        2,
+    )
+    .await;
+    blocks.insert(case_name.to_string(), block_num);
+    info!("- Done(height: {:?})", block_num);
+
     let gen_data = GenDataOutput {
         coinbase: address!("0x0000000000000000000000000000000000000000"),
         wallets: wallets.iter().map(|w| w.address()).collect(),

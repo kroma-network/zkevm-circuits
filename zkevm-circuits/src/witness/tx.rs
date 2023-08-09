@@ -381,7 +381,7 @@ impl Transaction {
 impl Encodable for Transaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         match self.transaction_type {
-            0 => {
+            0 | 1 | 2 => {
                 s.begin_list(9);
                 s.append(&Word::from(self.nonce));
                 s.append(&self.gas_price);
@@ -430,7 +430,7 @@ pub struct SignedTransaction {
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         match self.tx.transaction_type {
-            0 => {
+            0 | 1 | 2 => {
                 s.begin_list(9);
                 s.append(&Word::from(self.tx.nonce));
                 s.append(&self.tx.gas_price);

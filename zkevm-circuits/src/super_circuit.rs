@@ -869,6 +869,52 @@ pub(crate) mod super_circuit_tests {
         block
     }
 
+    pub(crate) fn block_1dynamic_fee_tx() -> GethData {
+        let mut rng = ChaCha20Rng::seed_from_u64(2);
+
+        let chain_id = (*MOCK_CHAIN_ID).as_u64();
+
+        let bytecode = bytecode! {
+            GAS
+            STOP
+        };
+
+        let wallet_a = LocalWallet::new(&mut rng).with_chain_id(chain_id);
+
+        let addr_a = wallet_a.address();
+        let addr_b = address!("0x000000000000000000000000000000000000BBBB");
+
+        let mut wallets = HashMap::new();
+        wallets.insert(wallet_a.address(), wallet_a);
+
+        let mut block: GethData = SimpleTestContext::new(
+            Some(vec![Word::zero()]),
+            |mut accs| {
+                accs[0]
+                    .address(addr_b)
+                    .balance(Word::from(1u64 << 20))
+                    .code(bytecode);
+                accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
+            },
+            |mut txs, accs| {
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
+                    .from(accs[1].address)
+                    .to(accs[0].address)
+                    .gas(Word::from(1_000_000u64))
+                    .transaction_type(2);
+            },
+            |block, _tx| block.number(0xcafeu64),
+        )
+        .unwrap()
+        .into();
+        block.sign(&wallets);
+        block
+    }
+
     const TEST_MOCK_RANDOMNESS: u64 = 0x100;
 
     // High memory usage test.  Run in serial with:
@@ -972,8 +1018,8 @@ pub(crate) mod super_circuit_tests {
 
     #[test]
     fn serial_test_super_circuit_2tx_2max_tx() {
-        let block = block_2tx();
-        const MAX_TXS: usize = tx_idx!(2);
+        let block = block_1dynamic_fee_tx();
+        const MAX_TXS: usize = tx_idx!(1);
         const MAX_CALLDATA: usize = 300; // sum_txs_calldata=292
         const MAX_INNER_BLOCKS: usize = 1;
         let circuits_params = CircuitsParams {

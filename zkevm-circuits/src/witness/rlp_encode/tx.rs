@@ -86,7 +86,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for Transaction {
         let mut rows = Vec::with_capacity(rlp_data.len());
 
         let idx = match self.transaction_type {
-            0 => {
+            0 | 1 | 2 => {
                 let idx = handle_prefix(
                     self.id,
                     rlp_data.as_ref(),
@@ -326,7 +326,7 @@ impl<F: FieldExt> RlpWitnessGen<F> for SignedTransaction {
         let mut rows = Vec::with_capacity(rlp_data.len());
 
         let idx = match self.tx.transaction_type {
-            0 => {
+            0 | 1 | 2 => {
                 let idx = handle_prefix(
                     self.tx.id,
                     rlp_data.as_ref(),

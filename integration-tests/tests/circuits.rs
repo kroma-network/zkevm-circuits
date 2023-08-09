@@ -97,5 +97,9 @@ unroll_tests!(
     (
         circuit_multiple_erc20_openzeppelin_transfers,
         "Multiple ERC20 OpenZeppelin transfers"
+    ),
+    (
+        circuit_multiple_erc20_openzeppelin_type_2_transfers,
+        "Multiple ERC20 OpenZeppelin type 2 transfers"
     )
 );
