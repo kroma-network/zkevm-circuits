@@ -32,7 +32,7 @@ use eth_types::{
 };
 use ethers_core::{
     k256::ecdsa::SigningKey,
-    types::{Bytes, NameOrAddress, Signature, TransactionRequest},
+    types::{Bytes, Signature, TransactionRequest},
     utils::keccak256,
 };
 use ethers_providers::JsonRpcClient;
@@ -638,27 +638,7 @@ pub fn keccak_inputs_tx_circuit(
 
     let hash_datas = txs
         .iter()
-        .map(|tx| {
-            let sig = Signature {
-                r: tx.r,
-                s: tx.s,
-                v: tx.v,
-            };
-            let mut tx: TransactionRequest = tx.into();
-            if tx.to.is_some() {
-                let to = tx.to.clone().unwrap();
-                match to {
-                    NameOrAddress::Name(_) => {}
-                    NameOrAddress::Address(addr) => {
-                        // the rlp of zero addr is 0x80
-                        if addr == Address::zero() {
-                            tx.to = None;
-                        }
-                    }
-                }
-            }
-            tx.rlp_signed(&sig).to_vec()
-        })
+        .map(|tx| tx.rlp_signed().to_vec())
         .collect::<Vec<Vec<u8>>>();
     let dummy_hash_data = {
         // dummy tx is a legacy tx.
