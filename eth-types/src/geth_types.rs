@@ -371,22 +371,7 @@ impl Transaction {
                 Error::Signature(libsecp256k1::Error::InvalidSignature),
             )?
         };
-        // msg = rlp([nonce, gasPrice, gas, to, value, data, chain_id, 0, 0])
-        let mut req: TransactionRequest = self.into();
-        if req.to.is_some() {
-            let to = req.to.clone().unwrap();
-            match to {
-                NameOrAddress::Name(_) => {}
-                NameOrAddress::Address(addr) => {
-                    if addr == Address::zero() {
-                        // the rlp of zero addr is 0x80 instead of
-                        // [0x94, 0, ..., 0]
-                        req.to = None;
-                    }
-                }
-            }
-        }
-        let msg = req.chain_id(chain_id).rlp();
+        let msg = self.rlp_unsigned(chain_id);
         let msg_hash: [u8; 32] = Keccak256::digest(&msg)
             .as_slice()
             .to_vec()
