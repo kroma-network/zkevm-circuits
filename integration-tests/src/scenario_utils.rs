@@ -16,7 +16,7 @@ use crate::{get_provider, get_wallet, CompiledContract, CONTRACTS, CONTRACTS_PAT
 
 /// Number of transactions in each scenario
 /// it must be >= 4 for the rest of the cases to work.
-pub const NUM_TXS: usize = 4;
+pub const NUM_TXS: usize = 99;
 /// Wallet Type
 pub type WalletType = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
@@ -144,6 +144,7 @@ pub async fn wait_pending_txs(pending_txs: Vec<PendingTransaction<'_, Http>>) ->
     let mut block_num = 0;
     for tx in pending_txs.into_iter() {
         let receipt = tx.await.expect("cannot confirm tx").unwrap();
+        log::info!(" - txHash: {}", receipt.transaction_hash);
         if block_num == 0 {
             block_num = receipt.block_number.unwrap().as_u64();
         } else if block_num != receipt.block_number.unwrap().as_u64() {

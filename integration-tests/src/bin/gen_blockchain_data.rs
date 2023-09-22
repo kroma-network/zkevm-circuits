@@ -13,7 +13,7 @@ use integration_tests::{
     log_init,
     scenario_utils::{
         compile_contracts, deploy_contract, distribute_eth, init_wallets, ready_provider,
-        transfer_erc20_token, TransferContext,
+        transfer_erc20_token, TransferContext, NUM_TXS,
     },
     GenDataOutput,
 };
@@ -187,12 +187,12 @@ async fn main() {
     // OpenZeppelin ERC20 multiple type 2 transfers in a single block.
     let case_name = "Multiple ERC20 OpenZeppelin type 2 transfers";
     info!("Doing {:?}", case_name);
-    let transfer_map = [(0, 1, true), (1, 2, true), (2, 3, true), (3, 4, true)]
-        .iter()
-        .map(|(from_i, to_i, expected_result)| {
-            TransferContext::new(*from_i, *to_i, WEI_IN_ETHER, *expected_result)
-        })
-        .collect();
+
+    let mut transfer_map = vec![];
+    for i in 0..NUM_TXS - 1 {
+        let tx_ctx = TransferContext::new(i, i + 1, WEI_IN_ETHER - i, true);
+        transfer_map.push(tx_ctx);
+    }
 
     let block_num = transfer_erc20_token(
         &prov,
