@@ -15,7 +15,14 @@ members = [
 ]
 
 [patch."https://github.com/privacy-scaling-explorations/halo2.git"]
-halo2_proofs = { git = "https://github.com/kroma-network/halo2.git", rev = "9922fbb" }
+# halo2_proofs = { git = "https://github.com/kroma-network/halo2.git", rev = "9922fbb" }
+halo2_proofs = { path = "../halo2/halo2_proofs" }
+
+[patch."https://github.com/kroma-network/halo2wrong"]
+maingate = { path = "../halo2wrong/maingate" }
+
+[patch."https://github.com/kroma-network/poseidon-circuit.git"]
+poseidon-circuit = { path = "../poseidon-circuit" }
 
 # Definition of benchmarks profile to use.
 [profile.bench]

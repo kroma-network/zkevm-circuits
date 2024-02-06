@@ -117,6 +117,7 @@ mod test {
             STOP
         };
 
+
         CircuitTestBuilder::new_from_test_ctx(
             SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )

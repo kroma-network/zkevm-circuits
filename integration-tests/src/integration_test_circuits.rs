@@ -5,6 +5,7 @@ use bus_mapping::{
 };
 use eth_types::geth_types::GethData;
 use halo2_proofs::{
+    arithmetic::Field,
     dev::{CellValue, MockProver},
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
@@ -94,13 +95,14 @@ const KECCAK_CIRCUIT_DEGREE: u32 = 19;
 const SUPER_CIRCUIT_DEGREE: u32 = 20;
 const EXP_CIRCUIT_DEGREE: u32 = 16;
 
+const SEED: [u8; 16] = [
+    0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc, 0xe5,
+];
+
 lazy_static! {
     /// Data generation.
     static ref GEN_DATA: GenDataOutput = GenDataOutput::load();
-    static ref RNG: XorShiftRng = XorShiftRng::from_seed([
-        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
-        0xe5,
-    ]);
+    static ref RNG: XorShiftRng = XorShiftRng::from_seed(SEED);
 }
 
 lazy_static! {
@@ -185,9 +187,10 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             circuit: C,
             general_params: &ParamsKZG<Bn256>,
             proving_key: &ProvingKey<G1Affine>,
-            mut transcript: Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
             instances: &[&[Fr]],
         ) -> Vec<u8> {
+            let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+
             create_proof::<
                 KZGCommitmentScheme<Bn256>,
                 ProverSHPLONK<'_, Bn256>,
@@ -206,6 +209,41 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             .expect("proof generation should not fail");
 
             transcript.finalize()
+        }
+
+        fn test_gen_tachyon_proof<C: Circuit<Fr>>(
+            k: u32,
+            circuit: C,
+            pk: &ProvingKey<G1Affine>,
+            instances: &[&[Fr]],
+        ) -> Vec<u8> {
+            let rng = halo2_proofs::xor_shift_rng::XORShiftRng::from_seed(SEED);
+
+            let s = Fr::random(rng.clone());
+            println!("s: {:?}", s);
+            let mut prover = halo2_proofs::bn254::SHPlonkProver::new(k, &s);
+
+            let mut pk_bytes: Vec<u8> = vec![];
+            pk.write(&mut pk_bytes, halo2_proofs::SerdeFormat::RawBytesUnchecked)
+                .unwrap();
+            let mut tachyon_pk = halo2_proofs::bn254::ProvingKey::from(pk_bytes.as_slice());
+
+            let mut transcript = halo2_proofs::bn254::Blake2bWrite::init(vec![]);
+
+            halo2_proofs::plonk::tachyon::create_proof::<_, _>(
+                &mut prover,
+                &mut tachyon_pk,
+                &[circuit],
+                &[instances],
+                rng,
+                &mut transcript,
+            )
+            .expect("proof generation should not fail");
+
+            let mut proof = transcript.finalize();
+            let proof_last = prover.get_proof();
+            proof.extend_from_slice(&proof_last);
+            proof
         }
 
         fn test_verify(
@@ -237,19 +275,22 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         let general_params = get_general_params(self.degree);
         let verifier_params: ParamsVerifierKZG<Bn256> = general_params.verifier_params().clone();
 
-        let transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
-
         // change instace to slice
         let instance: Vec<&[Fr]> = instance.iter().map(|v| v.as_slice()).collect();
 
-        let proof = test_gen_proof(
-            RNG.clone(),
-            circuit,
-            &general_params,
-            &proving_key,
-            transcript,
-            &instance,
-        );
+        let tachyon = true;
+        let proof = if tachyon {
+            test_gen_tachyon_proof(self.degree, circuit, &proving_key, &instance)
+        } else {
+            test_gen_proof(
+                RNG.clone(),
+                circuit,
+                &general_params,
+                &proving_key,
+                &instance,
+            )
+        };
+        println!("proof: {:?}", proof);
 
         let verifying_key = proving_key.get_vk();
         test_verify(
@@ -332,7 +373,9 @@ fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
     match map.get(&degree) {
         Some(params) => params.clone(),
         None => {
-            let params = ParamsKZG::<Bn256>::setup(degree, RNG.clone());
+            let s = Fr::random(RNG.clone());
+            println!("s: {:?}", s);
+            let params = ParamsKZG::<Bn256>::unsafe_setup_with_s(degree, s);
             map.insert(degree, params.clone());
             params
         }
