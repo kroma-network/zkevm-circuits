@@ -288,6 +288,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindgen"
+version = "0.63.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36d860121800b2a9a94f9b5604b332d5cffb234ce17609ea479d723dbc9d3885"
+dependencies = [
+ "bitflags 1.3.2",
+ "cexpr",
+ "clang-sys",
+ "lazy_static",
+ "lazycell",
+ "log",
+ "peeking_take_while",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex",
+ "syn 1.0.109",
+ "which",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -307,6 +329,12 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
+
+[[package]]
+name = "bitflags"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4682ae6287fcf752ecaabbfcc7b6f9b72aa33933dc23a554d853aea8eea8635"
 
 [[package]]
 name = "bitvec"
@@ -487,7 +515,7 @@ dependencies = [
  "ethers-signers",
  "fp-evm",
  "gadgets",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "hex",
  "itertools",
  "keccak256",
@@ -500,7 +528,7 @@ dependencies = [
  "pallet-evm-precompile-curve25519",
  "pallet-evm-precompile-modexp",
  "pallet-evm-precompile-simple",
- "poseidon-circuit",
+ "poseidon-circuit 0.1.0 (git+https://github.com/kroma-network/poseidon-circuit.git?rev=693e985)",
  "pretty_assertions",
  "primitive-types 0.12.1",
  "rand 0.8.5",
@@ -586,6 +614,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
+name = "cexpr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "cfg-expr"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -640,7 +677,7 @@ dependencies = [
  "eth-types",
  "ethers",
  "ethers-signers",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "itertools",
  "keccak256",
  "log",
@@ -654,12 +691,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "clang-sys"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c688fc74432808e3eb684cae8830a86be1d66a2bd58e1f248ed0960a590baf6f"
+dependencies = [
+ "glob",
+ "libc",
+ "libloading",
+]
+
+[[package]]
 name = "clap"
 version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "textwrap 0.11.0",
  "unicode-width",
 ]
@@ -671,7 +719,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
 dependencies = [
  "atty",
- "bitflags",
+ "bitflags 1.3.2",
  "clap_derive",
  "clap_lex",
  "indexmap",
@@ -733,6 +781,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31c789563b815f77f4250caee12365734369f942439b7defd71e18a48197130"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "codespan-reporting"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3538270d33cc669650c4b093848450d380def10c331d38c768e34cac80576e6e"
+dependencies = [
+ "termcolor",
+ "unicode-width",
 ]
 
 [[package]]
@@ -855,7 +913,7 @@ version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2581bbab3b8ffc6fcbd550bf46c355135d16e9ff2a6ea032ad6b9bf1d7efe4fb"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "core-foundation",
  "core-graphics-types",
  "foreign-types",
@@ -868,7 +926,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a68b68b3446082644c91ac778bf50cd4104bfb002b5a6a7c44cca5a2c70788b"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "core-foundation",
  "foreign-types",
  "libc",
@@ -1141,6 +1199,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "cxx"
+version = "1.0.97"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e88abab2f5abbe4c56e8f1fb431b784d710b709888f35755a160e62e33fe38e8"
+dependencies = [
+ "cc",
+ "cxxbridge-flags",
+ "cxxbridge-macro",
+ "link-cplusplus",
+]
+
+[[package]]
+name = "cxx-build"
+version = "1.0.97"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c0c11acd0e63bae27dcd2afced407063312771212b7a823b4fd72d633be30fb"
+dependencies = [
+ "cc",
+ "codespan-reporting",
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "scratch",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "cxxbridge-flags"
+version = "1.0.97"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d3816ed957c008ccd4728485511e3d9aaf7db419aa321e3d2c5a2f3411e36c8"
+
+[[package]]
+name = "cxxbridge-macro"
+version = "1.0.97"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a26acccf6f445af85ea056362561a24ef56cdc15fcc685f03aec50b9c702cb6d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1406,7 +1508,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=467c015#467c0154af1b724b163c11c13c40aa908df87ddd"
 dependencies = [
  "group 0.12.1",
  "integer",
@@ -1615,14 +1717,14 @@ version = "0.1.0"
 dependencies = [
  "ethers-core",
  "ethers-signers",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "hex",
  "itertools",
  "lazy_static",
  "libsecp256k1",
  "num",
  "num-bigint",
- "poseidon-circuit",
+ "poseidon-circuit 0.1.0 (git+https://github.com/kroma-network/poseidon-circuit.git?rev=b83e3db)",
  "regex",
  "serde",
  "serde_json",
@@ -2137,7 +2239,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21fe28504d371085fae9ac7a3450f0b289ab71e07c8e57baa3fb68b9e57d6ce5"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "byteorder",
  "core-foundation",
  "core-graphics",
@@ -2210,7 +2312,7 @@ name = "frame-support"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=master#6507a79b2baf7e4cc6f5868aa490dfe275144f9a"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "environmental",
  "frame-metadata",
  "frame-support-procedural",
@@ -2432,7 +2534,7 @@ version = "0.1.0"
 dependencies = [
  "digest 0.7.6",
  "eth-types",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "rand 0.8.5",
  "rand_xorshift",
  "sha3 0.7.3",
@@ -2592,14 +2694,14 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 [[package]]
 name = "halo2-mpt-circuits"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/mpt-circuit.git?rev=a5a71bf#a5a71bf18d7a5d58183c7d9d4ed0d28792aa85e7"
+source = "git+https://github.com/kroma-network/mpt-circuit.git?rev=2a5e9e5#2a5e9e57ece81b660ba806c8f518e976c0e471fc"
 dependencies = [
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "hex",
  "lazy_static",
  "log",
  "num-bigint",
- "poseidon-circuit",
+ "poseidon-circuit 0.1.0 (git+https://github.com/kroma-network/poseidon-circuit.git?rev=b83e3db)",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -2612,7 +2714,7 @@ version = "0.1.0"
 source = "git+https://github.com/kroma-network/halo2-lib?rev=31e0c62#31e0c6293789e0b1acef158ec260f968e2057416"
 dependencies = [
  "ff 0.12.1",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2627,7 +2729,7 @@ dependencies = [
  "ff 0.12.1",
  "group 0.12.1",
  "halo2_base",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "halo2curves",
  "num-bigint",
  "num-integer",
@@ -2636,6 +2738,36 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "halo2_proofs"
+version = "0.2.0"
+source = "git+https://github.com/kroma-network/halo2.git?rev=0918c29#0918c29ed04096929ef2d006454b8eea6296d21f"
+dependencies = [
+ "ark-std",
+ "blake2b_simd",
+ "cfg-if 0.1.10",
+ "cxx",
+ "cxx-build",
+ "digest 0.10.6",
+ "ff 0.12.1",
+ "group 0.12.1",
+ "halo2curves",
+ "lazy_static",
+ "log",
+ "num-bigint",
+ "num-integer",
+ "plotters",
+ "poseidon",
+ "rand_core 0.6.4",
+ "rayon",
+ "sha2 0.10.6",
+ "sha3 0.9.1",
+ "stdint",
+ "subtle",
+ "tabbycat",
+ "tracing",
 ]
 
 [[package]]
@@ -2652,20 +2784,18 @@ dependencies = [
  "log",
  "num-bigint",
  "num-integer",
- "plotters",
  "poseidon",
  "rand_core 0.6.4",
  "rayon",
  "sha3 0.9.1",
  "subtle",
- "tabbycat",
  "tracing",
 ]
 
 [[package]]
 name = "halo2curves"
 version = "0.3.1"
-source = "git+https://github.com/kroma-network/halo2curves?rev=c0ac193#c0ac1935e5da2a620204b5b011be2c924b1e0155"
+source = "git+https://github.com/kroma-network/halo2curves.git?rev=c0ac193#c0ac1935e5da2a620204b5b011be2c924b1e0155"
 dependencies = [
  "ff 0.12.1",
  "group 0.12.1",
@@ -2684,10 +2814,10 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=467c015#467c0154af1b724b163c11c13c40aa908df87ddd"
 dependencies = [
  "group 0.12.1",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -3044,7 +3174,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=467c015#467c0154af1b724b163c11c13c40aa908df87ddd"
 dependencies = [
  "group 0.12.1",
  "maingate",
@@ -3072,7 +3202,7 @@ dependencies = [
  "env_logger",
  "eth-types",
  "ethers",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "hex",
  "lazy_static",
  "log",
@@ -3190,7 +3320,7 @@ version = "0.1.0"
 dependencies = [
  "env_logger",
  "eth-types",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "itertools",
  "lazy_static",
  "log",
@@ -3242,10 +3372,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "libc"
-version = "0.2.144"
+name = "lazycell"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b00cc1c228a6782d0f076e7b232802e0c5689d41bb5df366f2a6b6621cfdfe1"
+checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
+
+[[package]]
+name = "libc"
+version = "0.2.148"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdc71e17332e86d2e1d38c1f99edcb6288ee11b815fb1a4b049eaa2114d369b"
 
 [[package]]
 name = "libloading"
@@ -3312,6 +3448,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "link-cplusplus"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d240c6f7e1ba3a28b0249f774e6a9dd0175054b52dfbb61b16eb8505c3785c9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3328,6 +3473,12 @@ name = "linux-raw-sys"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ece97ea872ece730aed82664c424eb4c8291e1ff2480247ccf7409044bc6479f"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a9bad9f94746442c783ca431b22403b519cd7fbeed0533fdd6328b2f2212128"
 
 [[package]]
 name = "lock_api"
@@ -3360,7 +3511,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/halo2wrong?rev=e6cab5d#e6cab5d0191d02e18bd084e2a398f89461a9e04e"
+source = "git+https://github.com/kroma-network/halo2wrong?rev=467c015#467c0154af1b724b163c11c13c40aa908df87ddd"
 dependencies = [
  "group 0.12.1",
  "halo2wrong",
@@ -3456,6 +3607,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3509,7 +3666,7 @@ dependencies = [
  "env_logger",
  "eth-types",
  "halo2-mpt-circuits",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "hex",
  "lazy_static",
  "log",
@@ -3530,6 +3687,16 @@ name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
+name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
+]
 
 [[package]]
 name = "num"
@@ -3914,6 +4081,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "peeking_take_while"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
+
+[[package]]
 name = "percent-encoding"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4137,7 +4310,7 @@ version = "0.17.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aaeebc51f9e7d2c150d3f3bfeb667f2aa985db5ef1e3d212847bdedb488beeaa"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "crc32fast",
  "fdeflate",
  "flate2",
@@ -4160,7 +4333,18 @@ version = "0.1.0"
 source = "git+https://github.com/kroma-network/poseidon-circuit.git?rev=693e985#693e985a48029d89dab84af37445179b5bbd88d2"
 dependencies = [
  "bitvec 1.0.1",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=9922fbb)",
+ "lazy_static",
+ "thiserror",
+]
+
+[[package]]
+name = "poseidon-circuit"
+version = "0.1.0"
+source = "git+https://github.com/kroma-network/poseidon-circuit.git?rev=b83e3db#b83e3db57ff7b092d0c63e9c64596fbc09e5415f"
+dependencies = [
+ "bitvec 1.0.1",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "lazy_static",
  "thiserror",
 ]
@@ -4457,7 +4641,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb5a58c1855b4b6819d59012155603f0b22ad30cad752600aadfcb695265519a"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
 ]
 
 [[package]]
@@ -4726,7 +4910,7 @@ version = "0.36.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a38f9520be93aba504e8ca974197f46158de5dcaa9fa04b57c57cd6a679d658"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "errno",
  "io-lifetimes",
  "libc",
@@ -4740,11 +4924,24 @@ version = "0.37.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acf8729d8542766f1b2cf77eb034d52f40d375bb8b615d0b147089946e16613d"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "errno",
  "io-lifetimes",
  "libc",
  "linux-raw-sys 0.3.7",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "rustix"
+version = "0.38.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "747c788e9ce8e92b12cd485c49ddf90723550b654b32508f979b71a7b1ecda4f"
+dependencies = [
+ "bitflags 2.4.0",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.7",
  "windows-sys 0.48.0",
 ]
 
@@ -4881,6 +5078,12 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "scratch"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3cf7c11c38cb994f3d40e8a8cde3bbd1f72a435e4c49e85d6553d8312306152"
 
 [[package]]
 name = "scrypt"
@@ -5175,6 +5378,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "shlex"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7cee0529a6d40f580e7a5e6c495c8fbfe21b7b52795ed4bb5e62cdf92bc6380"
+
+[[package]]
 name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5230,10 +5439,10 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/snark-verifier?rev=738e42#738e4260706508760e1c1dcb5b531ad55803d7f2"
+source = "git+https://github.com/kroma-network/snark-verifier?rev=1e41320#1e41320a4b1f61a773ac6594b9c1f890de5865a3"
 dependencies = [
  "ecc",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "halo2curves",
  "hex",
  "itertools",
@@ -5335,7 +5544,7 @@ version = "7.0.0"
 source = "git+https://github.com/paritytech/substrate?branch=master#6507a79b2baf7e4cc6f5868aa490dfe275144f9a"
 dependencies = [
  "array-bytes",
- "bitflags",
+ "bitflags 1.3.2",
  "blake2",
  "bounded-collections",
  "bs58",
@@ -5743,6 +5952,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "stdint"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0dbf8733c75f5279d2c97ec99c62ffab4c9cd16587a4375c16e324534fb80c7d"
+dependencies = [
+ "bindgen",
+]
+
+[[package]]
 name = "string_cache"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5900,7 +6118,7 @@ dependencies = [
  "ethers-signers",
  "external-tracer",
  "glob",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "handlebars",
  "hex",
  "keccak256",
@@ -6756,6 +6974,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9193164d4de03a926d909d3bc7c30543cecb35400c02114792c2cae20d5e2dbb"
 
 [[package]]
+name = "which"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
+dependencies = [
+ "either",
+ "home",
+ "once_cell",
+ "rustix 0.38.14",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7060,7 +7290,7 @@ dependencies = [
  "gadgets",
  "halo2_base",
  "halo2_ecc",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/kroma-network/halo2.git?rev=0918c29)",
  "hex",
  "itertools",
  "keccak256",

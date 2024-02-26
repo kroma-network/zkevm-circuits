@@ -5,9 +5,18 @@ use bus_mapping::{
 };
 use eth_types::geth_types::GethData;
 use halo2_proofs::{
+    arithmetic::Field,
+    bn254::{
+        Blake2bWrite as TachyonBlake2bWrite, ProvingKey as TachyonProvingKey,
+        SHPlonkProver as TachyonSHPlonkProver, TachyonProver,
+    },
+    consts::{TranscriptType, SEED},
     dev::{CellValue, MockProver},
     halo2curves::bn256::{Bn256, Fr, G1Affine},
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
+    plonk::{
+        create_proof, keygen_pk, keygen_vk, tachyon::create_proof as create_tachyon_proof,
+        verify_proof, Circuit, ProvingKey, VerifyingKey,
+    },
     poly::{
         commitment::ParamsProver,
         kzg::{
@@ -97,10 +106,7 @@ const EXP_CIRCUIT_DEGREE: u32 = 16;
 lazy_static! {
     /// Data generation.
     static ref GEN_DATA: GenDataOutput = GenDataOutput::load();
-    static ref RNG: XorShiftRng = XorShiftRng::from_seed([
-        0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,
-        0xe5,
-    ]);
+    static ref RNG: XorShiftRng = XorShiftRng::from_seed(SEED);
 }
 
 lazy_static! {
@@ -185,9 +191,10 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             circuit: C,
             general_params: &ParamsKZG<Bn256>,
             proving_key: &ProvingKey<G1Affine>,
-            mut transcript: Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
             instances: &[&[Fr]],
         ) -> Vec<u8> {
+            let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+
             create_proof::<
                 KZGCommitmentScheme<Bn256>,
                 ProverSHPLONK<'_, Bn256>,
@@ -206,6 +213,44 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             .expect("proof generation should not fail");
 
             transcript.finalize()
+        }
+
+        fn test_gen_tachyon_proof<C: Circuit<Fr>>(
+            k: u32,
+            circuit: C,
+            pk: &ProvingKey<G1Affine>,
+            instances: &[&[Fr]],
+        ) -> Vec<u8> {
+            let rng = halo2_proofs::xor_shift_rng::XORShiftRng::from_seed(SEED);
+
+            let s = Fr::random(rng.clone());
+            let mut prover = TachyonSHPlonkProver::<KZGCommitmentScheme<Bn256>>::new(
+                TranscriptType::Blake2b as u8,
+                k,
+                &s,
+            );
+
+            let mut pk_bytes: Vec<u8> = vec![];
+            pk.write(&mut pk_bytes, halo2_proofs::SerdeFormat::RawBytesUnchecked)
+                .unwrap();
+            let mut tachyon_pk = TachyonProvingKey::from(pk_bytes.as_slice());
+
+            let mut transcript = TachyonBlake2bWrite::init(vec![]);
+
+            create_tachyon_proof::<_, _, _, _, _>(
+                &mut prover,
+                &mut tachyon_pk,
+                &[circuit],
+                &[instances],
+                rng,
+                &mut transcript,
+            )
+            .expect("proof generation should not fail");
+
+            let mut proof = transcript.finalize();
+            let proof_last = prover.get_proof();
+            proof.extend_from_slice(&proof_last);
+            proof
         }
 
         fn test_verify(
@@ -234,26 +279,36 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             .expect("failed to verify circuit");
         }
 
-        let general_params = get_general_params(self.degree);
-        let verifier_params: ParamsVerifierKZG<Bn256> = general_params.verifier_params().clone();
-
-        let transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+        let mut general_params: Option<ParamsKZG<Bn256>> = None;
 
         // change instace to slice
         let instance: Vec<&[Fr]> = instance.iter().map(|v| v.as_slice()).collect();
 
-        let proof = test_gen_proof(
-            RNG.clone(),
-            circuit,
-            &general_params,
-            &proving_key,
-            transcript,
-            &instance,
-        );
+        #[cfg(feature = "tachyon")]
+        let proof = test_gen_tachyon_proof(self.degree, circuit, &proving_key, &instance);
+        #[cfg(not(feature = "tachyon"))]
+        let proof = {
+            general_params = Some(get_general_params(self.degree));
+            test_gen_proof(
+                RNG.clone(),
+                circuit,
+                &general_params.as_ref().unwrap(),
+                &proving_key,
+                &instance,
+            )
+        };
+        log::debug!("proof: {:?}", proof);
+
+        #[cfg(feature = "tachyon")]
+        {
+            general_params = Some(get_general_params(self.degree));
+        }
+        let verifier_params: ParamsVerifierKZG<Bn256> =
+            general_params.as_ref().unwrap().verifier_params().clone();
 
         let verifying_key = proving_key.get_vk();
         test_verify(
-            &general_params,
+            &general_params.unwrap(),
             &verifier_params,
             verifying_key,
             &proof,
