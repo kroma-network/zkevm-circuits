@@ -29,8 +29,8 @@ keccak256 = { path = "../keccak256"}
 log = "0.4"
 env_logger = "0.9"
 
-halo2_base = { git = "https://github.com/kroma-network/halo2-lib", rev = "31e0c62", default-features = false }
-halo2_ecc = { git = "https://github.com/kroma-network/halo2-lib", rev = "31e0c62", default-features = false }
+halo2_base = { git = "https://github.com/kroma-network/halo2-lib", rev = "bf99e3e", default-features = false }
+halo2_ecc = { git = "https://github.com/kroma-network/halo2-lib", rev = "bf99e3e", default-features = false }
 
 maingate = { git = "https://github.com/kroma-network/halo2wrong", rev = "467c015" }
 
@@ -57,7 +57,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.78"
 
 [features]
-default = ["test", "test-circuits", "onephase", "enable-sign-verify","kroma"]
+default = ["test", "test-circuits", "onephase", "enable-sign-verify", "kroma"]
 test = ["ethers-signers", "mock"]
 test-circuits = []
 warn-unimplemented = ["eth-types/warn-unimplemented"]
