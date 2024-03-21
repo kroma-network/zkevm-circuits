@@ -24,7 +24,7 @@ num = "0.4"
 num-bigint = { version = "0.4" }
 strum_macros = "0.24"
 strum = "0.24"
-poseidon-circuit = { git = "https://github.com/kroma-network/poseidon-circuit.git", rev = "b83e3db" }
+poseidon-circuit = { git = "https://github.com/kroma-network/poseidon-circuit.git", rev = "c93a542" }
 [features]
 default = ["warn-unimplemented","kroma"]
 warn-unimplemented = []

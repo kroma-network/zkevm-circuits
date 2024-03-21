@@ -29,16 +29,16 @@ keccak256 = { path = "../keccak256"}
 log = "0.4"
 env_logger = "0.9"
 
-halo2_base = { git = "https://github.com/kroma-network/halo2-lib", rev = "bf99e3e", default-features = false }
-halo2_ecc = { git = "https://github.com/kroma-network/halo2-lib", rev = "bf99e3e", default-features = false }
+halo2_base = { git = "https://github.com/kroma-network/halo2-lib", rev = "66040ab", default-features = false }
+halo2_ecc = { git = "https://github.com/kroma-network/halo2-lib", rev = "66040ab", default-features = false }
 
-maingate = { git = "https://github.com/kroma-network/halo2wrong", rev = "467c015" }
+maingate = { git = "https://github.com/kroma-network/halo2wrong", rev = "e54da32" }
 
 libsecp256k1 = "0.7"
 num-bigint = { version = "0.4" }
 subtle = "2.4"
 rand_chacha = "0.3"
-snark-verifier = { git = "https://github.com/kroma-network/snark-verifier", rev = "1e41320", default-features = false, features = ["loader_halo2", "system_halo2"] }
+snark-verifier = { git = "https://github.com/kroma-network/snark-verifier", rev = "e97e7e6", default-features = false, features = ["loader_halo2", "system_halo2"] }
 hex = "0.4.3"
 rayon = "1.5"
 once_cell = "1.17.0"
