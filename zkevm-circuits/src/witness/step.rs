@@ -115,7 +115,8 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                 if op.is_dup() {
                     return ExecutionState::DUP;
                 }
-                if op.is_push() {
+                // TODO(chokobole): should be changed to `op.is_push()`.
+                if op.is_push_with_data() {
                     return ExecutionState::PUSH;
                 }
                 if op.is_swap() {
@@ -196,7 +197,9 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::CREATE | OpcodeId::CREATE2 => ExecutionState::CREATE,
                     OpcodeId::EXTCODECOPY => ExecutionState::EXTCODECOPY,
                     // dummy ops
-                    OpcodeId::SELFDESTRUCT => dummy!(ExecutionState::SELFDESTRUCT),
+                    OpcodeId::PUSH0 | OpcodeId::SELFDESTRUCT => {
+                        dummy!(ExecutionState::SELFDESTRUCT)
+                    }
                     OpcodeId::INVALID(_) => ExecutionState::ErrorInvalidOpcode,
                     _ => unimplemented!("unimplemented opcode {:?}", op),
                 }

@@ -124,6 +124,7 @@ impl<F: Field> ExecutionGadget<F> for PushGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
 
         let opcode = step.opcode.unwrap();
+        assert_ne!(opcode, OpcodeId::PUSH0);
 
         let value = block.rws[step.rw_indices[0]].stack_value();
         self.value

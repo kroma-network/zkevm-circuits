@@ -272,8 +272,10 @@ impl<'a> Iterator for BytecodeIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(|byte| {
             let op = OpcodeId::from(byte.value);
-            if op.is_push() {
-                let n = op.data_len();
+            let n = op.data_len();
+            if n > 0 {
+                assert!(op.is_push_with_data());
+
                 let mut value = vec![0u8; n];
                 for value_byte in value.iter_mut() {
                     *value_byte = self.0.next().unwrap().value;
@@ -294,7 +296,7 @@ impl From<Vec<u8>> for Bytecode {
         while let Some(byte) = input_iter.next() {
             let op = OpcodeId::from(*byte);
             code.write_op(op);
-            if op.is_push() {
+            if op.is_push_with_data() {
                 let n = op.postfix().expect("opcode with postfix");
                 for _ in 0..n {
                     match input_iter.next() {
@@ -332,14 +334,14 @@ macro_rules! bytecode_internal {
     ($code:ident, ) => {};
     // PUSHX op codes
     ($code:ident, $x:ident ($v:expr) $($rest:tt)*) => {{
-        debug_assert!($crate::evm_types::OpcodeId::$x.is_push(), "invalid push");
+        debug_assert!($crate::evm_types::OpcodeId::$x.is_push_with_data(), "invalid push");
         let n = $crate::evm_types::OpcodeId::$x.postfix().expect("opcode with postfix");
         $code.push(n, $v.into());
         $crate::bytecode_internal!($code, $($rest)*);
     }};
     // Default opcode without any inputs
     ($code:ident, $x:ident $($rest:tt)*) => {{
-        debug_assert!(!$crate::evm_types::OpcodeId::$x.is_push(), "invalid push");
+        debug_assert!(!$crate::evm_types::OpcodeId::$x.is_push_with_data(), "invalid push");
         $code.write_op($crate::evm_types::OpcodeId::$x);
         $crate::bytecode_internal!($code, $($rest)*);
     }};

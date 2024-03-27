@@ -252,6 +252,8 @@ impl ExecutionState {
             Self::GAS => vec![OpcodeId::GAS],
             Self::JUMPDEST => vec![OpcodeId::JUMPDEST],
             Self::PUSH => vec![
+                // NOTE(chokobole): PUSH0 is not included on purpose, since it is handled by a
+                // `DummyGadget`.
                 OpcodeId::PUSH1,
                 OpcodeId::PUSH2,
                 OpcodeId::PUSH3,

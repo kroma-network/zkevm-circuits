@@ -921,7 +921,7 @@ mod tests {
             dev::test_bytecode_circuit_unrolled,
         },
         table::BytecodeFieldTag,
-        util::is_push,
+        util::is_push_with_data,
     };
     use bus_mapping::{evm::OpcodeId, state_db::CodeDB};
     use eth_types::{Bytecode, ToWord, Word};
@@ -935,7 +935,7 @@ mod tests {
         let mut bytecode = Bytecode::default();
         // First add all non-push bytes, which should all be seen as code
         for byte in 0u8..=255u8 {
-            if !is_push(byte) {
+            if !is_push_with_data(byte) {
                 bytecode.write(byte, true);
                 rows.push(BytecodeRow {
                     code_hash: Word::zero(),

@@ -139,7 +139,8 @@ impl ExecState {
     /// Returns `true` if `ExecState` is an opcode and the opcode is a `PUSHn`.
     pub fn is_push(&self) -> bool {
         if let ExecState::Op(op) = self {
-            op.is_push()
+            // TODO(chokobole): This should be changed to `op.is_push()`.
+            op.is_push_with_data()
         } else {
             false
         }
