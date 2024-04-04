@@ -6,8 +6,8 @@ authors = ["The appliedzkp team"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-ethers-core = { version = "2.0.7", features = ["scroll"] }
-ethers-signers = "2.0.7"
+ethers-core = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.9.9", features = ["scroll"] }
+ethers-signers = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.9.9" }
 hex = "0.4"
 lazy_static = "1.4"
 once_cell = "1.17.0"
@@ -25,7 +25,7 @@ num = "0.4"
 num-bigint = { version = "0.4" }
 strum_macros = "0.24"
 strum = "0.24"
-poseidon-circuit = { git = "https://github.com/scroll-tech/poseidon-circuit.git", branch = "scroll-dev-0901"}
+poseidon-circuit = { git = "https://github.com/kroma-network/poseidon-circuit.git", branch = "feat/upstream-scroll-v0.9.9" }
 [features]
 default = ["warn-unimplemented"]
 warn-unimplemented = []

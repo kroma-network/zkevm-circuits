@@ -1492,19 +1492,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
@@ -1742,7 +1729,7 @@ dependencies = [
 [[package]]
 name = "ethers-core"
 version = "2.0.7"
-source = "git+https://github.com/scroll-tech/ethers-rs.git?branch=v2.0.7#e32dfd62e7cdec31160b91c5a646883594a586ba"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.9.9#e32dfd62e7cdec31160b91c5a646883594a586ba"
 dependencies = [
  "arrayvec",
  "bytes",
@@ -1771,10 +1758,10 @@ dependencies = [
 [[package]]
 name = "ethers-etherscan"
 version = "2.0.7"
-source = "git+https://github.com/scroll-tech/ethers-rs.git?branch=v2.0.7#e32dfd62e7cdec31160b91c5a646883594a586ba"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.9.9#e32dfd62e7cdec31160b91c5a646883594a586ba"
 dependencies = [
  "ethers-core",
- "ethers-solc 2.0.7 (git+https://github.com/scroll-tech/ethers-rs.git?branch=v2.0.7)",
+ "ethers-solc 2.0.7 (git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.9.9)",
  "reqwest",
  "semver 1.0.18",
  "serde",
@@ -1850,8 +1837,7 @@ dependencies = [
 [[package]]
 name = "ethers-signers"
 version = "2.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02c4b7e15f212fa7cc2e1251868320221d4ff77a3d48068e69f47ce1c491df2d"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.9.9#e32dfd62e7cdec31160b91c5a646883594a586ba"
 dependencies = [
  "async-trait",
  "coins-bip32",
@@ -1900,7 +1886,7 @@ dependencies = [
 [[package]]
 name = "ethers-solc"
 version = "2.0.7"
-source = "git+https://github.com/scroll-tech/ethers-rs.git?branch=v2.0.7#e32dfd62e7cdec31160b91c5a646883594a586ba"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.9.9#e32dfd62e7cdec31160b91c5a646883594a586ba"
 dependencies = [
  "cfg-if 1.0.0",
  "dunce",
@@ -2276,7 +2262,7 @@ name = "geth-utils"
 version = "0.1.0"
 dependencies = [
  "env_logger 0.9.3",
- "gobuild 0.1.0-alpha.2 (git+https://github.com/scroll-tech/gobuild.git)",
+ "gobuild 0.1.0-alpha.2 (git+https://github.com/scroll-tech/gobuild.git?rev=24935c2b8f677841f22acd6710957621bb294e0e)",
  "log",
 ]
 
@@ -2359,7 +2345,7 @@ dependencies = [
 [[package]]
 name = "gobuild"
 version = "0.1.0-alpha.2"
-source = "git+https://github.com/scroll-tech/gobuild.git#8b84111fc3b58e2134e4794a06d1f199412cf2b0"
+source = "git+https://github.com/scroll-tech/gobuild.git?rev=24935c2b8f677841f22acd6710957621bb294e0e#24935c2b8f677841f22acd6710957621bb294e0e"
 dependencies = [
  "cc",
 ]
@@ -2414,7 +2400,7 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 [[package]]
 name = "halo2-base"
 version = "0.2.2"
-source = "git+https://github.com/scroll-tech/halo2-lib?tag=v0.1.5#70588177930400361c731659b15b2ab3f29f7784"
+source = "git+https://github.com/kroma-network/halo2-lib?branch=feat/upstream-scroll-v0.9.9#739793c8daaf3764d43b20f4b06d56caa22ff554"
 dependencies = [
  "ff 0.12.1",
  "halo2_proofs",
@@ -2429,7 +2415,7 @@ dependencies = [
 [[package]]
 name = "halo2-ecc"
 version = "0.2.2"
-source = "git+https://github.com/scroll-tech/halo2-lib?tag=v0.1.5#70588177930400361c731659b15b2ab3f29f7784"
+source = "git+https://github.com/kroma-network/halo2-lib?branch=feat/upstream-scroll-v0.9.9#739793c8daaf3764d43b20f4b06d56caa22ff554"
 dependencies = [
  "ff 0.12.1",
  "group 0.12.1",
@@ -2448,7 +2434,7 @@ dependencies = [
 [[package]]
 name = "halo2-gate-generator"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2gategen.git#35b137de2f71c37dfbd236842b868013c46739d1"
+source = "git+https://github.com/kroma-network/halo2gategen.git?branch=feat/upstream-scroll-v0.9.9#f55c56eebd01ccc20375629c077afb5839f9cc81"
 dependencies = [
  "halo2_proofs",
  "lazy_static",
@@ -2464,7 +2450,7 @@ dependencies = [
 [[package]]
 name = "halo2-mpt-circuits"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/mpt-circuit.git?tag=v0.7.0#578c210ceb88d3c143ee2a013ad836d19285d9c1"
+source = "git+https://github.com/kroma-network/mpt-circuit.git?branch=feat/upstream-scroll-v0.9.9#76dcd4ba2430fe0e48679257c0dd3ff2ba429a63"
 dependencies = [
  "ethers-core",
  "halo2_proofs",
@@ -2486,13 +2472,12 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/scroll-tech/halo2.git?branch=develop#e3fe25eadd714fd991f35190d17ff0b8fb031188"
+source = "git+https://github.com/kroma-network/halo2.git?branch=feat/upstream-scroll-v0.9.9#017467057ea464fb7eb3713f2196170ff04d9d81"
 dependencies = [
  "ark-std 0.3.0",
  "blake2b_simd",
  "cfg-if 0.1.10",
  "crossbeam",
- "env_logger 0.8.4",
  "ff 0.12.1",
  "group 0.12.1",
  "halo2curves",
@@ -2512,7 +2497,7 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.3.1"
-source = "git+https://github.com/scroll-tech/halo2curves.git?branch=0.3.1-derive-serde#969f1e44d9713ee4cd552563bd0c762c5d53b56e"
+source = "git+https://github.com/kroma-network/halo2curves.git?branch=feat/upstream-scroll-v0.9.9#969f1e44d9713ee4cd552563bd0c762c5d53b56e"
 dependencies = [
  "ff 0.12.1",
  "group 0.12.1",
@@ -2531,7 +2516,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=halo2-ecc-snark-verifier-0323#939d679cb16abf0e820bd606248661e400328afa"
+source = "git+https://github.com/kroma-network/halo2wrong?branch=feat/upstream-scroll-v0.9.9#fc0d42856c73623e62e53b1b40b940c140fbac88"
 dependencies = [
  "group 0.12.1",
  "halo2_proofs",
@@ -3169,7 +3154,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/halo2wrong?branch=halo2-ecc-snark-verifier-0323#939d679cb16abf0e820bd606248661e400328afa"
+source = "git+https://github.com/kroma-network/halo2wrong?branch=feat/upstream-scroll-v0.9.9#fc0d42856c73623e62e53b1b40b940c140fbac88"
 dependencies = [
  "group 0.12.1",
  "halo2wrong",
@@ -3234,7 +3219,7 @@ dependencies = [
 [[package]]
 name = "misc-precompiled-circuit"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/misc-precompiled-circuit.git?tag=v0.1.0#f647341f9951f5c2399035728d4f6765564e2e02"
+source = "git+https://github.com/kroma-network/misc-precompiled-circuit.git?branch=feat/upstream-scroll-v0.9.9#9e3a448db8ced4a9c4fe6d3603e55d7d22ba8bc8"
 dependencies = [
  "halo2-gate-generator",
  "halo2_proofs",
@@ -3835,7 +3820,7 @@ dependencies = [
 [[package]]
 name = "poseidon"
 version = "0.2.0"
-source = "git+https://github.com/scroll-tech/poseidon.git?branch=scroll-dev-0220#2fb4a2385bada39b50dce12fe50cb80d2fd33476"
+source = "git+https://github.com/kroma-network/poseidon.git?branch=feat/upstream-scroll-v0.9.9#a92397035ff0104a5ea843d6d90608c70245c724"
 dependencies = [
  "group 0.12.1",
  "halo2curves",
@@ -3845,7 +3830,7 @@ dependencies = [
 [[package]]
 name = "poseidon-circuit"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/poseidon-circuit.git?branch=scroll-dev-0901#69524f42bdc55c581088c2fe64c2ab9a2921146b"
+source = "git+https://github.com/kroma-network/poseidon-circuit.git?branch=feat/upstream-scroll-v0.9.9#549566b1ee6e9cf25886f5564dfbe6a6023851bf"
 dependencies = [
  "bitvec",
  "halo2_proofs",
@@ -4224,7 +4209,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "2.0.0"
-source = "git+https://github.com/scroll-tech/revm?branch=scroll-fix#aebf2e591e622e6bcce2c5d4bf3336935a68cf11"
+source = "git+https://github.com/kroma-network/revm?branch=feat/upstream-scroll-v0.9.9#aebf2e591e622e6bcce2c5d4bf3336935a68cf11"
 dependencies = [
  "k256 0.11.6",
  "num",
@@ -4240,7 +4225,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "1.0.0"
-source = "git+https://github.com/scroll-tech/revm?branch=scroll-fix#aebf2e591e622e6bcce2c5d4bf3336935a68cf11"
+source = "git+https://github.com/kroma-network/revm?branch=feat/upstream-scroll-v0.9.9#aebf2e591e622e6bcce2c5d4bf3336935a68cf11"
 dependencies = [
  "auto_impl",
  "bytes",
@@ -4865,7 +4850,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/scroll-tech/snark-verifier?tag=v0.1.5#bc1d39ae31f3fe520c51dd150f0fefaf9653c465"
+source = "git+https://github.com/kroma-network/snark-verifier?branch=feat/upstream-scroll-v0.9.9#765bab77af0b454dafdef804f901a091df9a381a"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -4889,7 +4874,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier-sdk"
 version = "0.0.1"
-source = "git+https://github.com/scroll-tech/snark-verifier?tag=v0.1.5#bc1d39ae31f3fe520c51dd150f0fefaf9653c465"
+source = "git+https://github.com/kroma-network/snark-verifier?branch=feat/upstream-scroll-v0.9.9#765bab77af0b454dafdef804f901a091df9a381a"
 dependencies = [
  "bincode",
  "env_logger 0.10.0",
@@ -5989,7 +5974,7 @@ dependencies = [
 [[package]]
 name = "zktrie"
 version = "0.2.0"
-source = "git+https://github.com/scroll-tech/zktrie.git?branch=v0.6#83318659773604fa565e2ebeb810a6d3746f0af4"
+source = "git+https://github.com/kroma-network/zktrie.git?branch=feat/upstream-scroll-v0.9.9#83318659773604fa565e2ebeb810a6d3746f0af4"
 dependencies = [
  "gobuild 0.1.0-alpha.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

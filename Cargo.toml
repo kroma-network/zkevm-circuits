@@ -17,16 +17,17 @@ members = [
 ]
 
 [patch.crates-io]
-ethers-core = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
-ethers-etherscan = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
+ethers-core = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.9.9" }
+ethers-signers = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.9.9" }
+ethers-etherscan = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.9.9" }
 [patch."https://github.com/privacy-scaling-explorations/halo2.git"]
-halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "develop" }
+halo2_proofs = { git = "https://github.com/kroma-network/halo2.git", branch = "feat/upstream-scroll-v0.9.9" }
 [patch."https://github.com/privacy-scaling-explorations/poseidon.git"]
-poseidon = { git = "https://github.com/scroll-tech/poseidon.git", branch = "scroll-dev-0220" }
+poseidon = { git = "https://github.com/kroma-network/poseidon.git", branch = "feat/upstream-scroll-v0.9.9" }
 [patch."https://github.com/privacy-scaling-explorations/halo2curves.git"]
-halo2curves = { git = "https://github.com/scroll-tech/halo2curves.git", branch = "0.3.1-derive-serde" }
+halo2curves = { git = "https://github.com/kroma-network/halo2curves.git", branch = "feat/upstream-scroll-v0.9.9" }
 [patch."https://github.com/privacy-scaling-explorations/halo2wrong.git"]
-maingate = { git = "https://github.com/scroll-tech/halo2wrong", branch = "halo2-ecc-snark-verifier-0323" }
+maingate = { git = "https://github.com/kroma-network/halo2wrong", branch = "feat/upstream-scroll-v0.9.9" }
 
 # Definition of benchmarks profile to use.
 [profile.bench]
