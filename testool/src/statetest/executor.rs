@@ -174,6 +174,7 @@ fn into_traceconfig(st: StateTest) -> (String, TraceConfig, StateTestResult) {
                 base_fee: st.env.current_base_fee,
             },
 
+            #[cfg(not(feature = "kroma"))]
             transactions: vec![geth_types::Transaction {
                 tx_type,
                 from: st.from,
@@ -192,6 +193,28 @@ fn into_traceconfig(st: StateTest) -> (String, TraceConfig, StateTestResult) {
                 rlp_bytes: rlp_signed,
                 rlp_unsigned_bytes: rlp_unsigned,
                 hash: tx_hash.into(),
+            }],
+            #[cfg(feature = "kroma")]
+            transactions: vec![geth_types::Transaction {
+                tx_type,
+                from: st.from,
+                to: st.to,
+                nonce: st.nonce,
+                value: st.value,
+                gas_limit: U256::from(st.gas_limit),
+                gas_price: Some(st.gas_price),
+                gas_fee_cap: st.max_fee_per_gas,
+                gas_tip_cap: st.max_priority_fee_per_gas,
+                call_data: st.data,
+                access_list: st.access_list,
+                v,
+                r: sig.r,
+                s: sig.s,
+                rlp_bytes: rlp_signed,
+                rlp_unsigned_bytes: rlp_unsigned,
+                hash: tx_hash.into(),
+                mint: U256::zero(),
+                source_hash: H256::zero(),
             }],
             accounts,
             logger_config: LoggerConfig {

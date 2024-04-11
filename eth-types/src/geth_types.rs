@@ -292,6 +292,14 @@ pub struct Transaction {
 
     /// Transaction hash
     pub hash: H256,
+
+    /// Kroma deposit tx
+    #[cfg(feature = "kroma")]
+    /// Mint
+    pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// Source hash
+    pub source_hash: H256,
 }
 
 impl From<&Transaction> for crate::Transaction {
@@ -311,6 +319,10 @@ impl From<&Transaction> for crate::Transaction {
             r: tx.r,
             s: tx.s,
             hash: tx.hash,
+            #[cfg(feature = "kroma")]
+            mint: Some(tx.mint),
+            #[cfg(feature = "kroma")]
+            source_hash: Some(tx.source_hash),
             ..Default::default()
         }
     }
@@ -336,6 +348,10 @@ impl From<&crate::Transaction> for Transaction {
             rlp_bytes: tx.rlp().to_vec(),
             rlp_unsigned_bytes: get_rlp_unsigned(tx),
             hash: tx.hash,
+            #[cfg(feature = "kroma")]
+            mint: tx.mint.unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            source_hash: tx.source_hash.unwrap_or_default(),
         }
     }
 }

@@ -16,14 +16,16 @@ use crate::{
     },
 };
 use bus_mapping::circuit_input_builder::{self, get_dummy_tx_hash, TxL1Fee};
+#[cfg(feature = "kroma")]
+use eth_types::Hash;
 use eth_types::{
     evm_types::gas_utils::{tx_access_list_gas_cost, tx_data_gas_cost},
     geth_types::{access_list_size, TxType, TxType::PreEip155},
     sign_types::{
         biguint_to_32bytes_le, ct_option_ok_or, get_dummy_tx, recover_pk2, SignData, SECP256K1_Q,
     },
-    AccessList, Address, Error, Field, Signature, ToBigEndian, ToLittleEndian, ToScalar, ToWord,
-    Word, H256,
+    AccessList, Address, Error, Field, Hash, Signature, ToBigEndian, ToLittleEndian, ToScalar,
+    ToWord, Word, H256,
 };
 use ethers_core::{
     types::TransactionRequest,
@@ -101,6 +103,14 @@ pub struct Transaction {
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
     pub steps: Vec<ExecStep>,
+
+    /// Kroma deposit tx
+    #[cfg(feature = "kroma")]
+    /// The mint
+    pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// The source hash
+    pub source_hash: Hash,
 }
 
 impl Transaction {
@@ -1202,6 +1212,10 @@ impl From<MockTransaction> for Transaction {
             access_list,
             calls: vec![],
             steps: vec![],
+            #[cfg(feature = "kroma")]
+            mint: mock_tx.mint,
+            #[cfg(feature = "kroma")]
+            source_hash: mock_tx.source_hash,
         }
     }
 }
@@ -1312,6 +1326,10 @@ pub(super) fn tx_convert(
                     .collect::<Vec<ExecStep>>()
             })
             .collect(),
+        #[cfg(feature = "kroma")]
+        mint: tx.mint,
+        #[cfg(feature = "kroma")]
+        source_hash: tx.source_hash,
     }
 }
 

@@ -217,6 +217,14 @@ pub struct Transaction {
     pub(crate) calls: Vec<Call>,
     /// Execution steps
     steps: Vec<ExecStep>,
+
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
+    /// Mint
+    pub mint: Word,
+    #[cfg(feature = "kroma")]
+    /// Source hash
+    pub source_hash: H256,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
@@ -238,6 +246,11 @@ impl From<&Transaction> for geth_types::Transaction {
             rlp_unsigned_bytes: tx.rlp_unsigned_bytes.clone(),
             rlp_bytes: tx.rlp_bytes.clone(),
             tx_type: tx.tx_type,
+
+            #[cfg(feature = "kroma")]
+            mint: tx.mint,
+            #[cfg(feature = "kroma")]
+            source_hash: tx.source_hash,
             ..Default::default()
         }
     }
@@ -272,6 +285,11 @@ impl Transaction {
             l1_fee: Default::default(),
             l1_fee_committed: Default::default(),
             access_list: None,
+
+            #[cfg(feature = "kroma")]
+            mint: Word::zero(),
+            #[cfg(feature = "kroma")]
+            source_hash: Default::default(),
         }
     }
 
@@ -385,6 +403,11 @@ impl Transaction {
             l1_fee,
             l1_fee_committed,
             access_list: eth_tx.access_list.clone(),
+
+            #[cfg(feature = "kroma")]
+            mint: eth_tx.mint.unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            source_hash: eth_tx.source_hash.unwrap_or_default(),
         })
     }
 

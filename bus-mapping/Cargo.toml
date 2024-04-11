@@ -42,6 +42,7 @@ rayon.workspace = true
 [features]
 default = ["test", "enable-storage"]
 test = ["mock", "rand"]
+kroma = ["eth-types/kroma", "mock?/kroma"]
 scroll = ["eth-types/scroll", "mock?/scroll"]
 # Enable shanghai feature of mock only if mock is enabled (by test).
 shanghai = ["eth-types/shanghai", "mock?/shanghai"]

@@ -117,6 +117,9 @@ pub struct TransactionTrace {
     /// chain id
     #[serde(rename = "chainId")]
     pub chain_id: U256,
+    /// mint amount
+    #[cfg(feature = "kroma")]
+    pub mint: U256,
     /// value amount
     pub value: U256,
     /// call data
@@ -127,6 +130,9 @@ pub struct TransactionTrace {
     /// access list
     #[serde(rename = "accessList")]
     pub access_list: Option<Vec<AccessListItem>>,
+    /// source hash
+    #[cfg(feature = "kroma")]
+    pub source_hash: H256,
     /// signature v
     pub v: U64,
     /// signature r
@@ -169,6 +175,10 @@ impl TransactionTrace {
             v: self.v,
             r: self.r,
             s: self.s,
+            #[cfg(feature = "kroma")]
+            source_hash: Some(self.source_hash),
+            #[cfg(feature = "kroma")]
+            mint: Some(self.mint),
             transaction_type: Some(U64::from(self.type_ as u64)),
             access_list: self.access_list.as_ref().map(|al| AccessList(al.clone())),
             max_priority_fee_per_gas: self.gas_tip_cap,
