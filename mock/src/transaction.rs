@@ -160,6 +160,11 @@ pub struct MockTransaction {
     pub max_priority_fee_per_gas: Word,
     pub max_fee_per_gas: Word,
     pub chain_id: u64,
+    /// Kroma deposit tx.
+    #[cfg(feature = "kroma")]
+    pub mint: Word,
+    #[cfg(feature = "kroma")]
+    pub source_hash: Hash,
 }
 
 impl Default for MockTransaction {
@@ -185,6 +190,10 @@ impl Default for MockTransaction {
             max_priority_fee_per_gas: Word::zero(),
             max_fee_per_gas: Word::zero(),
             chain_id: MOCK_CHAIN_ID,
+            #[cfg(feature = "kroma")]
+            mint: Word::zero(),
+            #[cfg(feature = "kroma")]
+            source_hash: Hash::zero(),
         }
     }
 }
@@ -206,6 +215,10 @@ impl From<MockTransaction> for Transaction {
             v: mock.v.unwrap_or_default(),
             r: mock.r.unwrap_or_default(),
             s: mock.s.unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            source_hash: Some(mock.source_hash),
+            #[cfg(feature = "kroma")]
+            mint: Some(mock.mint),
             transaction_type: Some(mock.transaction_type),
             access_list: Some(mock.access_list),
             max_priority_fee_per_gas: Some(mock.max_priority_fee_per_gas),
@@ -325,6 +338,20 @@ impl MockTransaction {
     /// Set chain_id field for the MockTransaction.
     pub fn chain_id(&mut self, chain_id: u64) -> &mut Self {
         self.chain_id = chain_id;
+        self
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Set mint field for the MockTransaction.
+    pub fn mint(&mut self, mint: Word) -> &mut Self {
+        self.mint = mint;
+        self
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Set source hash field for the MockTransaction.
+    pub fn source_hash(&mut self, source_hash: Hash) -> &mut Self {
+        self.source_hash = source_hash;
         self
     }
 

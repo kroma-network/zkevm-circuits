@@ -17,6 +17,7 @@ log.workspace = true
 [features]
 default = []
 shanghai = ["eth-types/shanghai"]
+kroma = ["eth-types/kroma"]
 scroll = ["eth-types/scroll", "external-tracer/scroll"]
 enable-stack = ["eth-types/enable-stack", "external-tracer/enable-stack"]
 enable-memory = ["eth-types/enable-memory", "external-tracer/enable-memory"]

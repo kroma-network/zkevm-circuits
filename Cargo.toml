@@ -28,10 +28,10 @@ ark-std = "0.3"
 base64 = "0.13.0"
 ctor = "0.1"
 env_logger = "0.10"
-ethers = { version = "=2.0.7", features = ["ethers-solc"] }
-ethers-core = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.10.0rc3", features = ["scroll"] }
-ethers-providers = "=2.0.7"
-ethers-signers = "=2.0.7"
+ethers = { version = "=2.0.7", features = ["ethers-solc", "kroma"] }
+ethers-core = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.10.0rc3", features = ["kroma"] }
+ethers-providers = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.10.0rc3", features = ["kroma"] }
+ethers-signers = { git = "https://github.com/kroma-network/ethers-rs.git", branch = "feat/upstream-scroll-v0.10.0rc3"}
 ff = "0.13"
 halo2_proofs = { git = "https://github.com/kroma-network/halo2.git", branch = "feat/upstream-scroll-v0.10.0rc3" }
 hash-circuit = { package = "poseidon-circuit", git = "https://github.com/kroma-network/poseidon-circuit.git", branch = "feat/upstream-scroll-v0.10.0rc3" }

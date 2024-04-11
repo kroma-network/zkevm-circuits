@@ -1720,7 +1720,7 @@ dependencies = [
 [[package]]
 name = "ethers"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "ethers-addressbook",
  "ethers-contract",
@@ -1735,7 +1735,7 @@ dependencies = [
 [[package]]
 name = "ethers-addressbook"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "ethers-core",
  "once_cell",
@@ -1746,7 +1746,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "ethers-contract-abigen",
  "ethers-contract-derive",
@@ -1764,7 +1764,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract-abigen"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "Inflector",
  "dunce",
@@ -1787,7 +1787,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract-derive"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "Inflector",
  "ethers-contract-abigen",
@@ -1802,7 +1802,7 @@ dependencies = [
 [[package]]
 name = "ethers-core"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "arrayvec",
  "bytes",
@@ -1831,7 +1831,7 @@ dependencies = [
 [[package]]
 name = "ethers-etherscan"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "ethers-core",
  "ethers-solc",
@@ -1846,7 +1846,7 @@ dependencies = [
 [[package]]
 name = "ethers-middleware"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -1872,7 +1872,7 @@ dependencies = [
 [[package]]
 name = "ethers-providers"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -1908,7 +1908,7 @@ dependencies = [
 [[package]]
 name = "ethers-signers"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "async-trait",
  "coins-bip32",
@@ -1926,7 +1926,7 @@ dependencies = [
 [[package]]
 name = "ethers-solc"
 version = "2.0.7"
-source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#ce0a5a7e5cc0876578babbe35a45b8606720a9cf"
+source = "git+https://github.com/kroma-network/ethers-rs.git?branch=feat/upstream-scroll-v0.10.0rc3#0bc9b3f888285fa775547a057c8b4f14731021ff"
 dependencies = [
  "cfg-if 1.0.0",
  "dunce",
