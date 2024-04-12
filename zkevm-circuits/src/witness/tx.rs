@@ -111,6 +111,11 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// The source hash
     pub source_hash: Hash,
+
+    /// Kroma non-deposit tx
+    #[cfg(feature = "kroma")]
+    /// The gas cost that needs to be rolled up to L1.
+    pub rollup_data_gas_cost: u64,
 }
 
 impl Transaction {
@@ -1216,6 +1221,8 @@ impl From<MockTransaction> for Transaction {
             mint: mock_tx.mint,
             #[cfg(feature = "kroma")]
             source_hash: mock_tx.source_hash,
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: 1000,
         }
     }
 }
@@ -1330,6 +1337,8 @@ pub(super) fn tx_convert(
         mint: tx.mint,
         #[cfg(feature = "kroma")]
         source_hash: tx.source_hash,
+        #[cfg(feature = "kroma")]
+        rollup_data_gas_cost: tx.rollup_data_gas_cost,
     }
 }
 

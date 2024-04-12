@@ -1,5 +1,7 @@
 //! Types needed for generating Ethereum traces
 
+#[cfg(feature = "kroma")]
+use crate::evm_types::gas_utils::tx_data_gas_cost;
 #[cfg(feature = "scroll")]
 use crate::l2_types::BlockTrace;
 use crate::{
@@ -300,6 +302,11 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// Source hash
     pub source_hash: H256,
+
+    /// Kroma non-deposit tx
+    #[cfg(feature = "kroma")]
+    /// Rollup data gas cost
+    pub rollup_data_gas_cost: u64,
 }
 
 impl From<&Transaction> for crate::Transaction {
@@ -352,6 +359,8 @@ impl From<&crate::Transaction> for Transaction {
             mint: tx.mint.unwrap_or_default(),
             #[cfg(feature = "kroma")]
             source_hash: tx.source_hash.unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: tx_data_gas_cost(&tx.rlp()),
         }
     }
 }

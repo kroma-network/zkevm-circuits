@@ -215,6 +215,7 @@ fn into_traceconfig(st: StateTest) -> (String, TraceConfig, StateTestResult) {
                 hash: tx_hash.into(),
                 mint: U256::zero(),
                 source_hash: H256::zero(),
+                rollup_data_gas_cost: 0u64,
             }],
             accounts,
             logger_config: LoggerConfig {

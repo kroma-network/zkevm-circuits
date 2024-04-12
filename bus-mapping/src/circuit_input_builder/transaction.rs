@@ -225,6 +225,11 @@ pub struct Transaction {
     #[cfg(feature = "kroma")]
     /// Source hash
     pub source_hash: H256,
+
+    /// Kroma non-deposit tx.
+    #[cfg(feature = "kroma")]
+    /// Rollup data gas cost
+    pub rollup_data_gas_cost: u64,
 }
 
 impl From<&Transaction> for geth_types::Transaction {
@@ -251,6 +256,8 @@ impl From<&Transaction> for geth_types::Transaction {
             mint: tx.mint,
             #[cfg(feature = "kroma")]
             source_hash: tx.source_hash,
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: tx.rollup_data_gas_cost,
             ..Default::default()
         }
     }
@@ -290,6 +297,8 @@ impl Transaction {
             mint: Word::zero(),
             #[cfg(feature = "kroma")]
             source_hash: Default::default(),
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: Default::default(),
         }
     }
 
@@ -408,6 +417,8 @@ impl Transaction {
             mint: eth_tx.mint.unwrap_or_default(),
             #[cfg(feature = "kroma")]
             source_hash: eth_tx.source_hash.unwrap_or_default(),
+            #[cfg(feature = "kroma")]
+            rollup_data_gas_cost: tx_data_gas_cost(&eth_tx.rlp()),
         })
     }
 
