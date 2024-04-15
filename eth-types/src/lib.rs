@@ -27,6 +27,10 @@ pub mod bytecode;
 pub mod evm_types;
 pub mod geth_types;
 pub mod l2_types;
+#[cfg(feature = "kroma")]
+pub mod kroma_l1_block;
+#[cfg(feature = "kroma")]
+pub mod kroma_params;
 pub mod sign_types;
 
 use crate::evm_types::{Gas, GasCost, OpcodeId, ProgramCounter};
