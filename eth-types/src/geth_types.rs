@@ -16,14 +16,14 @@ use ethers_core::types::{
 use halo2_proofs::halo2curves::{group::ff::PrimeField, secp256k1::Fq};
 use num::Integer;
 use num_bigint::BigUint;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_with::serde_as;
 use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 use strum_macros::EnumIter;
 
 /// Tx type
-#[derive(Default, Debug, Copy, Clone, EnumIter, Serialize, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, EnumIter, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TxType {
     /// EIP 155 tx
     #[default]
@@ -253,7 +253,7 @@ impl BlockConstants {
 }
 
 /// Definition of all of the constants related to an Ethereum transaction.
-#[derive(Debug, Default, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     /// Tx type
     pub tx_type: TxType,
@@ -462,4 +462,65 @@ pub fn access_list_size(access_list: &Option<AccessList>) -> (u64, u64) {
             )
         },
     )
+}
+
+#[cfg(feature = "kroma")]
+#[cfg(test)]
+mod tests {
+    use crate::geth_types::Transaction;
+    use ethers_core::types::Transaction as EthTransaction;
+
+    #[test]
+    fn kroma_deposit_tx_serde_test() {
+        let kroma_eth_deposit_tx_raw = r#"{
+            "blockHash": "0x85a7660992e79203e3896ac8d80352bdc05fcbb29ea99be481b6fd33d1b7147c",
+            "blockNumber": "0x13",
+            "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+            "gas": "0xf4240",
+            "gasPrice": "0x0",
+            "hash": "0x88fadf7173bfde177e03873165c4e77f60f5293a5a130294937ea47d1618f426",
+            "input": "0xefc674eb00000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000064c31d8f00000000000000000000000000000000000000000000000000000000120535f8ef16bfe6d35d4216950df5634cb24cde7b3a183b16108d63e66d25a75f42eeaa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000007d0",
+            "nonce": "0x13",
+            "to": "0x4200000000000000000000000000000000000002",
+            "transactionIndex": "0x0",
+            "value": "0x0",
+            "type": "0x7e",
+            "v": "0x0",
+            "r": "0x0",
+            "s": "0x0",
+            "sourceHash": "0x03978998c47aeb48300ca2d447c39b66705f5442cf7f7b255f6fbbed8a7ff985",
+            "mint": "0x0"
+        }"#;
+        let eth_deposit_tx: EthTransaction =
+            serde_json::from_str(kroma_eth_deposit_tx_raw).unwrap();
+
+        let kroma_deposit_tx: Transaction = (&eth_deposit_tx).into();
+        let kroma_deposit_tx_raw = concat!(
+            r#"{"tx_type":"L1Msg","#,
+            r#""from":"0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001","#,
+            r#""to":"0x4200000000000000000000000000000000000002","#,
+            r#""nonce":"0x13","#,
+            r#""gas_limit":"0xf4240","#,
+            r#""value":"0x0","#,
+            r#""gas_price":"0x0","#,
+            r#""gas_fee_cap":null,"#,
+            r#""gas_tip_cap":null,"#,
+            r#""call_data":"0xefc674eb00000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000064c31d8f00000000000000000000000000000000000000000000000000000000120535f8ef16bfe6d35d4216950df5634cb24cde7b3a183b16108d63e66d25a75f42eeaa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000007d0","#,
+            r#""access_list":null,"#,
+            r#""v":0,"#,
+            r#""r":"0x0","#,
+            r#""s":"0x0","#,
+            r#""rlp_bytes":[126,249,1,120,160,3,151,137,152,196,122,235,72,48,12,162,212,71,195,155,102,112,95,84,66,207,127,123,37,95,111,187,237,138,127,249,133,148,222,173,222,173,222,173,222,173,222,173,222,173,222,173,222,173,222,173,0,1,148,66,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,128,128,131,15,66,64,185,1,36,239,198,116,235,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100,195,29,143,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18,5,53,248,239,22,191,230,211,93,66,22,149,13,245,99,76,178,76,222,123,58,24,59,22,16,141,99,230,109,37,167,95,66,238,170,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,60,68,205,221,182,169,0,250,43,88,93,210,153,224,61,18,250,66,147,188,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,52,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,15,66,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,208],"#,
+            r#""rlp_unsigned_bytes":[],"#,
+            r#""hash":"0x88fadf7173bfde177e03873165c4e77f60f5293a5a130294937ea47d1618f426","#,
+            r#""mint":"0x0","#,
+            r#""source_hash":"0x03978998c47aeb48300ca2d447c39b66705f5442cf7f7b255f6fbbed8a7ff985","#,
+            r#""rollup_data_gas_cost":3200"#,
+            r#"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&kroma_deposit_tx).unwrap(),
+            kroma_deposit_tx_raw
+        );
+    }
 }
