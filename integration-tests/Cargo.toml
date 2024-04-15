@@ -28,9 +28,10 @@ rand_core = "0.6.4"
 mock = { path = "../mock" }
 
 [features]
-default = ["circuits"]
+default = ["circuits", "kroma"]
 rpc = []
 circuit_input_builder = []
 circuits = []
 mock_prover = []
+kroma = ["bus-mapping/kroma", "eth-types/kroma", "mock/kroma", "zkevm-circuits/kroma"]
 scroll= ["bus-mapping/scroll", "eth-types/scroll", "mock/scroll", "zkevm-circuits/scroll"]
