@@ -4,7 +4,7 @@ use bus_mapping::{
     circuit_input_builder::{CircuitInputBuilder, CircuitsParams, PrecompileEcParams},
     state_db::CodeDB,
 };
-use eth_types::{geth_types, Address, Bytes, GethExecTrace, ToBigEndian, ToWord, H256, U256, U64};
+use eth_types::{geth_types, Address, Bytes, GethExecTrace, ToBigEndian, U256, U64};
 use ethers_core::utils::keccak256;
 use ethers_signers::LocalWallet;
 use external_tracer::{LoggerConfig, TraceConfig};
@@ -714,15 +714,12 @@ pub fn run_test(
                 let (exist, acc_in_local_sdb) = builder.sdb.get_account_mut(&account.address);
                 if !exist {
                     // modified from bus-mapping/src/mock.rs
-                    let keccak_code_hash = H256(keccak256(&account.code));
                     let code_hash = CodeDB::hash(&account.code);
                     *acc_in_local_sdb = bus_mapping::state_db::Account {
                         nonce: account.nonce,
                         balance: account.balance,
                         storage: account.storage.clone(),
                         code_hash,
-                        keccak_code_hash,
-                        code_size: account.code.len().to_word(),
                     };
                 } else {
                     for (k, v) in &account.storage {

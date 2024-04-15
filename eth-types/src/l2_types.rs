@@ -321,7 +321,7 @@ impl ExtraData {
     }
 
     pub fn get_code_hash_at(&self, i: usize) -> Option<H256> {
-        self.get_proof_at(i).and_then(|a| a.poseidon_code_hash)
+        self.get_proof_at(i).and_then(|a| a.code_hash)
     }
 
     pub fn get_proof_at(&self, i: usize) -> Option<AccountProofWrapper> {
@@ -336,10 +336,8 @@ pub struct AccountProofWrapper {
     pub address: Option<Address>,
     pub nonce: Option<u64>,
     pub balance: Option<U256>,
-    #[serde(rename = "keccakCodeHash")]
-    pub keccak_code_hash: Option<H256>,
-    #[serde(rename = "poseidonCodeHash")]
-    pub poseidon_code_hash: Option<H256>,
+    #[serde(rename = "CodeHash")]
+    pub code_hash: Option<H256>,
     pub storage: Option<StorageProofWrapper>,
 }
 

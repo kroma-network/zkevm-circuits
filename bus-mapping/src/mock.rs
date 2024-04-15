@@ -4,7 +4,7 @@ use crate::{
     circuit_input_builder::{AccessSet, Block, BlockHead, CircuitInputBuilder, CircuitsParams},
     state_db::{self, CodeDB, StateDB},
 };
-use eth_types::{geth_types::GethData, ToWord, Word, H256};
+use eth_types::{geth_types::GethData, Word, H256};
 use ethers_core::utils::keccak256;
 
 const MOCK_OLD_STATE_ROOT: u64 = 0xcafeu64;
@@ -62,10 +62,10 @@ impl BlockData {
         }
 
         for account in geth_data.accounts {
-            let keccak_code_hash = H256(keccak256(&account.code));
+            let code_hash = H256(keccak256(&account.code));
             log::trace!(
                 "trace code {:?} {:?}",
-                keccak_code_hash,
+                code_hash,
                 hex::encode(&account.code)
             );
             let code_hash = code_db.insert(account.code.to_vec());
@@ -76,8 +76,6 @@ impl BlockData {
                     balance: account.balance,
                     storage: account.storage,
                     code_hash,
-                    keccak_code_hash,
-                    code_size: account.code.len().to_word(),
                 },
             );
         }

@@ -25,7 +25,6 @@ use eth_types::{
     evm_types::{GasCost, OpcodeId},
     Field, ToScalar, U256,
 };
-use ethers_core::utils::keccak256;
 use halo2_proofs::{circuit::Value, plonk::Error};
 
 #[derive(Clone, Debug)]
@@ -50,9 +49,6 @@ pub(crate) struct ReturnRevertGadget<F> {
     memory_expansion: MemoryExpansionGadget<F, 1, N_BYTES_MEMORY_WORD_SIZE>,
     code_hash: Cell<F>,
     prev_code_hash: Cell<F>,
-    keccak_code_hash: Cell<F>,
-    prev_keccak_code_hash: Cell<F>,
-    code_size: Cell<F>,
 
     caller_id: Cell<F>,
     address: Cell<F>,
@@ -121,9 +117,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
             reversion_info,
             code_hash,
             prev_code_hash,
-            keccak_code_hash,
-            prev_keccak_code_hash,
-            code_size,
             deployed_bytecode_rlc,
         ) = cb.condition(is_contract_deployment.clone(), |cb| {
             // poseidon hash of code.
@@ -171,47 +164,12 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 Some(&mut reversion_info),
             );
 
-            // keccak hash of code.
-            let keccak_code_hash = cb.query_cell_phase2();
-            let prev_keccak_code_hash = cb.query_cell_phase2();
-            #[cfg(feature = "scroll")]
-            {
-                cb.account_read(
-                    address.expr(),
-                    AccountFieldTag::KeccakCodeHash,
-                    prev_keccak_code_hash.expr(),
-                );
-
-                cb.account_write(
-                    address.expr(),
-                    AccountFieldTag::KeccakCodeHash,
-                    keccak_code_hash.expr(),
-                    prev_keccak_code_hash.expr(),
-                    Some(&mut reversion_info),
-                );
-            }
-
-            // code size.
-            let code_size = cb.query_cell_phase2();
-            cb.require_equal("range == code size", range.length(), code_size.expr());
-            #[cfg(feature = "scroll")]
-            cb.account_write(
-                address.expr(),
-                AccountFieldTag::CodeSize,
-                code_size.expr(),
-                0.expr(),
-                Some(&mut reversion_info),
-            );
-
             (
                 caller_id,
                 address,
                 reversion_info,
                 code_hash,
                 prev_code_hash,
-                keccak_code_hash,
-                prev_keccak_code_hash,
-                code_size,
                 deployed_bytecode_rlc,
             )
         });
@@ -242,10 +200,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
         });
 
         // Case C in the specs.
-        #[cfg(feature = "scroll")]
-        let contract_deployment_reversible_write_num = 3; // dual code hash + code size
-        #[cfg(not(feature = "scroll"))]
-        let contract_deployment_reversible_write_num = 1;
         let restore_context = cb.condition(not::expr(is_root.expr()), |cb| {
             RestoreContextGadget::construct(
                 cb,
@@ -254,7 +208,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 range.offset(),
                 range.length(),
                 memory_expansion.gas_cost(),
-                contract_deployment_reversible_write_num.expr() * is_contract_deployment,
+                is_contract_deployment,
             )
         });
 
@@ -337,9 +291,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
             memory_expansion,
             code_hash,
             prev_code_hash,
-            keccak_code_hash,
-            prev_keccak_code_hash,
-            code_size,
             caller_id,
             address,
             reversion_info,
@@ -409,15 +360,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 region.keccak_rlc(&deployed_bytecode.iter().rev().cloned().collect::<Vec<u8>>()),
             )?;
 
-            // keccak hash of code.
-            let keccak_code_hash = keccak256(&deployed_bytecode);
-            self.keccak_code_hash.assign(
-                region,
-                offset,
-                region.word_rlc(U256::from_big_endian(&keccak_code_hash)),
-            )?;
-
-            // poseidon hash of code.
+            // hash of code.
             let mut code_hash = CodeDB::hash(&deployed_bytecode).to_fixed_bytes();
             code_hash.reverse();
             self.code_hash.assign(
@@ -426,28 +369,11 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
                 region.code_hash(U256::from_little_endian(&code_hash)),
             )?;
 
-            // code size.
-            self.code_size.assign(
-                region,
-                offset,
-                Value::known(F::from(deployed_bytecode.len() as u64)),
-            )?;
-
             if !deployed_bytecode.is_empty() {
                 rws.offset_add(5);
                 let prev_code_hash = rws.next().account_codehash_pair().1;
                 self.prev_code_hash
                     .assign(region, offset, region.code_hash(prev_code_hash))?;
-                #[cfg(feature = "scroll")]
-                {
-                    rws.next();
-                    let prev_keccak_code_hash = rws.next().account_keccak_codehash_pair().1;
-                    self.prev_keccak_code_hash.assign(
-                        region,
-                        offset,
-                        region.word_rlc(prev_keccak_code_hash),
-                    )?;
-                }
             }
         }
 
@@ -458,14 +384,11 @@ impl<F: Field> ExecutionGadget<F> for ReturnRevertGadget<F> {
 
         let is_contract_deployment = call.is_create && call.is_success && !length.is_zero();
         if !call.is_root {
-            let mut rw_counter_offset = 3; // stack read, stack read, call_context_read is_success
-            if is_contract_deployment {
-                rw_counter_offset += 6 + copy_rwc_inc; // 4 call_context_read + 2 codehash rw
-                #[cfg(feature = "scroll")]
-                {
-                    rw_counter_offset += 3; // keccak code hash rw, code size
-                }
-            }
+            let rw_counter_offset = 3 + if is_contract_deployment {
+                5 + length.as_u64()
+            } else {
+                0
+            };
             self.restore_context.assign(
                 region,
                 offset,

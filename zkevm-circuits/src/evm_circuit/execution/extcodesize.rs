@@ -62,13 +62,6 @@ impl<F: Field> ExecutionGadget<F> for ExtcodesizeGadget<F> {
 
         let code_size = cb.query_word_rlc();
         cb.condition(exists.expr(), |cb| {
-            #[cfg(feature = "scroll")]
-            cb.account_read(
-                address.expr(),
-                AccountFieldTag::CodeSize,
-                from_bytes::expr(&code_size.cells),
-            );
-            #[cfg(not(feature = "scroll"))]
             cb.bytecode_length(code_hash.expr(), from_bytes::expr(&code_size.cells));
         });
 
@@ -85,8 +78,6 @@ impl<F: Field> ExecutionGadget<F> for ExtcodesizeGadget<F> {
         );
 
         let rw_counter_delta = 7.expr();
-        #[cfg(feature = "scroll")]
-        let rw_counter_delta = rw_counter_delta + exists;
         let step_state_transition = StepStateTransition {
             rw_counter: Delta(rw_counter_delta),
             program_counter: Delta(1.expr()),
@@ -147,12 +138,6 @@ impl<F: Field> ExecutionGadget<F> for ExtcodesizeGadget<F> {
             .assign_value(region, offset, region.code_hash(code_hash))?;
 
         let rw_offset = 6;
-        #[cfg(feature = "scroll")]
-        let rw_offset = if code_hash.is_zero() {
-            rw_offset
-        } else {
-            rw_offset + 1
-        };
         let code_size = block.rws[step.rw_indices[rw_offset]].stack_value().as_u64();
         self.code_size
             .assign(region, offset, Some(code_size.to_le_bytes()))?;

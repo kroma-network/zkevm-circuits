@@ -4,7 +4,7 @@ use crate::{
     operation::{AccountField, CallContextField, TxAccessListAccountOp},
     Error,
 };
-use eth_types::{GethExecStep, ToAddress, ToWord, Word, H256};
+use eth_types::{GethExecStep, ToAddress, ToWord, H256};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Extcodesize;
@@ -54,13 +54,10 @@ impl Opcode for Extcodesize {
         // Read account code hash and get code length.
         let account = state.sdb.get_account(&address).1;
         let exists = !account.is_empty();
-        let (code_hash, code_size) = if exists {
-            (
-                account.code_hash,
-                state.code(account.code_hash)?.len().into(),
-            )
+        let code_hash = if exists {
+            account.code_hash
         } else {
-            (H256::zero(), Word::zero())
+            H256::zero()
         };
         state.account_read(
             &mut exec_step,
@@ -76,11 +73,6 @@ impl Opcode for Extcodesize {
         if exists {
             state.account_read(&mut exec_step, address, AccountField::CodeSize, code_size)?;
         }
-
-        // Write the EXTCODESIZE result to stack.
-        #[cfg(feature = "enable-stack")]
-        assert_eq!(code_size, geth_steps[1].stack.last()?);
-        state.stack_push(&mut exec_step, code_size)?;
 
         Ok(vec![exec_step])
     }
@@ -99,7 +91,7 @@ mod extcodesize_tests {
         bytecode,
         evm_types::{OpcodeId, StackAddress},
         geth_types::{Account, GethData},
-        Bytecode, U256,
+        Bytecode, Word, U256,
     };
     use mock::{
         test_ctx::{
@@ -259,24 +251,7 @@ mod extcodesize_tests {
                 value_prev: if exists { code_hash } else { Word::zero() },
             }
         );
-        #[cfg(feature = "scroll")]
-        if exists {
-            let code_size = account.code.len().to_word();
-            let operation = &container.account[indices[6].as_usize()];
-            assert_eq!(operation.rw(), RW::READ);
-            assert_eq!(
-                operation.op(),
-                &AccountOp {
-                    address: account.address,
-                    field: AccountField::CodeSize,
-                    value: code_size,
-                    value_prev: code_size,
-                },
-            );
-        }
         let rw_offset = 6;
-        #[cfg(feature = "scroll")]
-        let rw_offset = if exists { rw_offset + 1 } else { rw_offset };
         let operation = &container.stack[indices[rw_offset].as_usize()];
         assert_eq!(operation.rw(), RW::WRITE);
         assert_eq!(

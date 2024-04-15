@@ -1,11 +1,9 @@
 //! Implementation of an in-memory key-value database to represent the
 //! Ethereum State Trie.
 
-use crate::{
-    precompile::is_precompiled,
-    util::{hash_code, KECCAK_CODE_HASH_EMPTY},
-};
+use crate::precompile::is_precompiled;
 use eth_types::{Address, Hash, Word, H256, U256};
+use ethers_core::utils::keccak256;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     sync::LazyLock,
@@ -60,7 +58,7 @@ impl CodeDB {
 
     /// Compute hash of given code.
     pub fn hash(code: &[u8]) -> Hash {
-        H256(hash_code(code).into())
+        H256(keccak256(code))
     }
 }
 
@@ -74,12 +72,8 @@ pub struct Account {
     pub balance: Word,
     /// Storage key-value map
     pub storage: HashMap<Word, Word>,
-    /// Poseidon hash of code
+    /// Hash of code
     pub code_hash: Hash,
-    /// Keccak hash of code
-    pub keccak_code_hash: Hash,
-    /// Size of code, i.e. code length
-    pub code_size: Word,
 }
 
 impl Account {
@@ -90,22 +84,17 @@ impl Account {
             balance: Word::zero(),
             storage: HashMap::new(),
             code_hash: CodeDB::empty_code_hash(),
-            keccak_code_hash: *KECCAK_CODE_HASH_EMPTY,
-            code_size: Word::zero(),
         }
     }
 
     /// Return if account is empty or not.
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {        
         debug_assert_ne!(
             self.code_hash,
             Hash::zero(),
             "codehash inside statedb should never be 0, {self:?}"
         );
         let is_code_hash_empty = self.code_hash.eq(&CodeDB::empty_code_hash());
-        if is_code_hash_empty {
-            debug_assert_eq!(Word::zero(), self.code_size);
-        }
         self.nonce.is_zero() && self.balance.is_zero() && is_code_hash_empty
     }
 

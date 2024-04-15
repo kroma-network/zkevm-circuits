@@ -168,11 +168,6 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
         });
         cb.condition(not::expr(init_code.has_length()), |cb| {
             cb.require_equal(
-                "keccak hash of empty bytes",
-                keccak_code_hash.expr(),
-                cb.empty_keccak_hash_rlc(),
-            );
-            cb.require_equal(
                 "code hash of empty bytes",
                 create.code_hash_word_rlc(),
                 cb.empty_code_hash_rlc(),

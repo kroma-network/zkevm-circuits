@@ -14,7 +14,6 @@ use eth_types::{
     evm_types::{memory::MemoryWordRange, OpcodeId},
     Bytecode, GethExecStep, ToWord, Word, H256,
 };
-use ethers_core::utils::keccak256;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct ReturnRevert;
@@ -58,7 +57,7 @@ impl Opcode for ReturnRevert {
         if call.is_create() && call.is_success && length > 0 {
             // Note: handle_return updates state.code_db. All we need to do here is push the
             // copy event.
-            let code_info = handle_create(
+            let code_hash = handle_create(
                 state,
                 &mut exec_step,
                 Source {
@@ -100,44 +99,10 @@ impl Opcode for ReturnRevert {
                 AccountOp {
                     address: call.address,
                     field: AccountField::CodeHash,
-                    value: code_info.hash.to_word(),
+                    value: code_hash.to_word(),
                     value_prev: prev_code_hash,
                 },
             )?;
-
-            #[cfg(feature = "scroll")]
-            {
-                let prev_keccak_code_hash = if account.is_empty() {
-                    Word::zero()
-                } else {
-                    crate::util::KECCAK_CODE_HASH_EMPTY.to_word()
-                };
-                state.account_read(
-                    &mut exec_step,
-                    call.address,
-                    AccountField::KeccakCodeHash,
-                    prev_keccak_code_hash,
-                )?;
-                state.push_op_reversible(
-                    &mut exec_step,
-                    AccountOp {
-                        address: call.address,
-                        field: AccountField::KeccakCodeHash,
-                        value: code_info.keccak_hash.to_word(),
-                        value_prev: prev_keccak_code_hash,
-                    },
-                )?;
-
-                state.push_op_reversible(
-                    &mut exec_step,
-                    AccountOp {
-                        address: call.address,
-                        field: AccountField::CodeSize,
-                        value: code_info.size.to_word(),
-                        value_prev: eth_types::Word::zero(),
-                    },
-                )?;
-            }
         }
 
         // Case B in the specs.
@@ -301,22 +266,14 @@ fn handle_copy(
     Ok(())
 }
 
-struct AccountCodeInfo {
-    keccak_hash: H256,
-    hash: H256,
-    size: usize,
-}
-
 // handle return in create.
 fn handle_create(
     state: &mut CircuitInputStateRef,
     step: &mut ExecStep,
     source: Source,
-) -> Result<AccountCodeInfo, Error> {
+) -> Result<H256, Error> {
     let values = state.call_ctx()?.memory.0[source.offset..source.offset + source.length].to_vec();
-    let keccak_hash = H256(keccak256(&values));
     let code_hash = CodeDB::hash(&values);
-    let size = values.len();
     let dst_id = NumberOrHash::Hash(code_hash);
     let bytes = Bytecode::from(values).code;
 
@@ -365,11 +322,7 @@ fn handle_create(
         },
     );
 
-    Ok(AccountCodeInfo {
-        keccak_hash,
-        hash: code_hash,
-        size,
-    })
+    Ok(code_hash)
 }
 
 #[cfg(test)]

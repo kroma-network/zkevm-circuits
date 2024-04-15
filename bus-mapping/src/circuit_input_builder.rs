@@ -19,7 +19,6 @@ use crate::{
     operation::{self, CallContextField, Operation, RWCounter, StartOp, StorageOp, RW},
     rpc::GethClient,
     state_db::{self, CodeDB, StateDB},
-    util::{hash_code_keccak, KECCAK_CODE_HASH_EMPTY},
 };
 pub use access::{Access, AccessSet, AccessValue, CodeSource};
 pub use block::{Block, BlockContext};
@@ -357,24 +356,14 @@ impl<'a> CircuitInputBuilder {
                     if local_acc.nonce != account_post_state.nonce.unwrap().into() {
                         log::error!("incorrect nonce")
                     }
-                    let p_hash = account_post_state.poseidon_code_hash.unwrap();
-                    if p_hash.is_zero() {
-                        if !local_acc.is_empty() {
-                            log::error!("incorrect poseidon_code_hash")
-                        }
-                    } else {
-                        if local_acc.code_hash != p_hash {
-                            log::error!("incorrect poseidon_code_hash")
-                        }
-                    }
-                    let k_hash = account_post_state.keccak_code_hash.unwrap();
+                    let k_hash = account_post_state.code_hash.unwrap();
                     if k_hash.is_zero() {
                         if !local_acc.is_empty() {
-                            log::error!("incorrect keccak_code_hash")
+                            log::error!("incorrect code_hash")
                         }
                     } else {
-                        if local_acc.keccak_code_hash != k_hash {
-                            log::error!("incorrect keccak_code_hash")
+                        if local_acc.code_hash != k_hash {
+                            log::error!("incorrect code_hash")
                         }
                     }
                     if let Some(storage) = account_post_state.storage {
@@ -1003,8 +992,6 @@ pub fn build_state_code_db(
                 balance: proof.balance,
                 storage,
                 code_hash: proof.code_hash,
-                keccak_code_hash: proof.keccak_code_hash,
-                code_size: proof.code_size,
             },
         )
     }
@@ -1168,20 +1155,11 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         for trace in traces.into_iter() {
             for (addr, prestate) in trace.into_iter() {
                 let (_, storages) = account_set.entry(addr).or_insert_with(|| {
-                    let code_size =
-                        Word::from(prestate.code.as_ref().map(|bt| bt.len()).unwrap_or(0));
-                    let (code_hash, keccak_code_hash) = if let Some(bt) = prestate.code {
-                        let h = CodeDB::hash(&bt);
-                        // only require for L2
-                        let keccak_h = if cfg!(feature = "scroll") {
-                            hash_code_keccak(&bt)
-                        } else {
-                            h
-                        };
+                    let code_hash = if let Some(bt) = prestate.code {
                         code_set.insert(addr, Vec::from(bt.as_ref()));
-                        (h, keccak_h)
+                        CodeDB::hash(&bt)
                     } else {
-                        (CodeDB::empty_code_hash(), *KECCAK_CODE_HASH_EMPTY)
+                        CodeDB::empty_code_hash()
                     };
 
                     (
@@ -1190,8 +1168,6 @@ impl<P: JsonRpcClient> BuilderClient<P> {
                             balance: prestate.balance.unwrap_or_default(),
                             nonce: prestate.nonce.unwrap_or_default().into(),
                             code_hash,
-                            keccak_code_hash,
-                            code_size,
                             ..Default::default()
                         },
                         HashMap::new(),

@@ -2476,7 +2476,6 @@ dependencies = [
 [[package]]
 name = "halo2-mpt-circuits"
 version = "0.1.0"
-source = "git+https://github.com/kroma-network/mpt-circuit.git?branch=feat/upstream-scroll-v0.10.0rc3#ff42483680af55a5c1e017b8dd7ee8715e37b90d"
 dependencies = [
  "env_logger",
  "ethers-core",

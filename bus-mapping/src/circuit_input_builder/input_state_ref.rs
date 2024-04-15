@@ -5,8 +5,6 @@ use super::{
     CallKind, CodeSource, CopyEvent, ExecState, ExecStep, ExpEvent, PrecompileEvent, Transaction,
     TransactionContext,
 };
-#[cfg(feature = "scroll")]
-use crate::util::KECCAK_CODE_HASH_EMPTY;
 use crate::{
     circuit_input_builder::execution::{CopyEventPrevBytes, CopyEventSteps, CopyEventStepsBuilder},
     error::{
@@ -440,19 +438,6 @@ impl<'a> CircuitInputStateRef<'a> {
         let account_value_prev = match op.field {
             AccountField::Nonce => account.nonce,
             AccountField::Balance => account.balance,
-            AccountField::KeccakCodeHash => {
-                if account.is_empty() {
-                    if op.value.is_zero() {
-                        // Writing code_hash=0 to empty account is a noop to the StateDB.
-                        return;
-                    }
-                    // Reading a code_hash=EMPTY_HASH of an empty account in the StateDB is encoded
-                    // as code_hash=0 (non-existing account encoding) in the State Circuit.
-                    Word::zero()
-                } else {
-                    account.keccak_code_hash.to_word()
-                }
-            }
             AccountField::CodeHash => {
                 if account.is_empty() {
                     if op.value.is_zero() {
@@ -466,7 +451,6 @@ impl<'a> CircuitInputStateRef<'a> {
                     account.code_hash.to_word()
                 }
             }
-            AccountField::CodeSize => account.code_size,
         };
 
         // Verify that the previous value matches the account field value in the StateDB
@@ -498,17 +482,11 @@ impl<'a> CircuitInputStateRef<'a> {
                     log::trace!("update balance of {:?} to {:?}", &op.address, op.value);
                     account.balance = op.value;
                 }
-                AccountField::KeccakCodeHash => {
-                    let value = H256::from(op.value.to_be_bytes());
-                    account.keccak_code_hash = value;
-                }
                 AccountField::CodeHash => {
+                    // TODO(ethan): check if it is necessary to call the `set_touched` function.
                     self.sdb.set_touched(&op.address);
                     let value = H256::from(op.value.to_be_bytes());
                     account.code_hash = value;
-                }
-                AccountField::CodeSize => {
-                    account.code_size = op.value;
                 }
             }
         }
@@ -1337,8 +1315,6 @@ impl<'a> CircuitInputStateRef<'a> {
                 length.low_u64(),
             ));
 
-            #[cfg(feature = "scroll")]
-            let keccak_code_hash = H256(ethers_core::utils::keccak256(&code));
             let code_hash = self.code_db.insert(code);
 
             let (found, callee_account) = self.sdb.get_account_mut(&call.address);
@@ -1348,11 +1324,6 @@ impl<'a> CircuitInputStateRef<'a> {
 
             // already updated in return_revert.rs with check_update_sdb_account
             debug_assert_eq!(callee_account.code_hash, code_hash);
-            #[cfg(feature = "scroll")]
-            {
-                debug_assert_eq!(callee_account.code_size, length);
-                debug_assert_eq!(callee_account.keccak_code_hash, keccak_code_hash);
-            }
         }
 
         // Handle reversion if this call doesn't end successfully

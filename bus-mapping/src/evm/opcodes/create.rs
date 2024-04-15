@@ -225,10 +225,10 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             state.call_context_write(&mut exec_step, caller.call_id, field, value)?;
         }
 
-        let (initialization_code, keccak_code_hash, code_hash) = if is_precheck_ok && length > 0 {
+        let (initialization_code, code_hash) = if is_precheck_ok && length > 0 {
             handle_copy(state, &mut exec_step, state.call()?.call_id, offset, length)?
         } else {
-            (vec![], H256(keccak256([])), CodeDB::empty_code_hash())
+            (vec![], CodeDB::empty_code_hash())
         };
 
         state.push_call(callee.clone());
@@ -250,7 +250,7 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
                 std::iter::once(0xffu8)
                     .chain(caller.address.to_fixed_bytes())
                     .chain(salt.to_be_bytes())
-                    .chain(keccak_code_hash.to_fixed_bytes())
+                    .chain(code_hash.to_fixed_bytes())
                     .collect::<Vec<_>>()
             } else {
                 let mut stream = rlp::RlpStream::new();
@@ -349,13 +349,12 @@ fn handle_copy(
     call_id: usize,
     offset: usize,
     length: usize,
-) -> Result<(Vec<u8>, H256, H256), Error> {
+) -> Result<(Vec<u8>, H256), Error> {
     let rw_counter_start = state.block_ctx.rwc;
     let call_ctx = state.call_ctx_mut()?;
     let memory: &Memory = &mut call_ctx.memory;
 
     let initialization_bytes = memory.0[offset..offset + length].to_vec();
-    let keccak_code_hash = H256(keccak256(&initialization_bytes));
     let code_hash = CodeDB::hash(&initialization_bytes);
     let bytes = Bytecode::from(initialization_bytes.clone()).code;
 
@@ -400,7 +399,7 @@ fn handle_copy(
         },
     );
 
-    Ok((initialization_bytes, keccak_code_hash, code_hash))
+    Ok((initialization_bytes, code_hash))
 }
 
 #[cfg(test)]

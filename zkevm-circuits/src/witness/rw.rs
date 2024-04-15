@@ -407,9 +407,6 @@ impl Rw {
     pub fn account_codehash_pair(&self) -> (Word, Word) {
         self.account_value_pair_field_tag(AccountFieldTag::CodeHash)
     }
-    pub fn account_keccak_codehash_pair(&self) -> (Word, Word) {
-        self.account_value_pair_field_tag(AccountFieldTag::KeccakCodeHash)
-    }
     pub fn account_nonce_pair(&self) -> (Word, Word) {
         self.account_value_pair_field_tag(AccountFieldTag::Nonce)
     }
@@ -687,13 +684,7 @@ impl Rw {
                 match field_tag {
                     // Only these two tags have values that may not fit into a scalar, so we need to
                     // RLC. (for poseidon hash feature, CodeHash not need rlc)
-                    CallContextFieldTag::CodeHash => {
-                        if cfg!(feature = "poseidon-codehash") {
-                            value.to_scalar().unwrap()
-                        } else {
-                            rlc::value(&value.to_le_bytes(), randomness)
-                        }
-                    }
+                    CallContextFieldTag::CodeHash => rlc::value(&value.to_le_bytes(), randomness),
                     CallContextFieldTag::Value => rlc::value(&value.to_le_bytes(), randomness),
                     _ => value.to_scalar().unwrap(),
                 }
@@ -701,19 +692,10 @@ impl Rw {
             Self::Account {
                 value, field_tag, ..
             } => match field_tag {
-                AccountFieldTag::KeccakCodeHash | AccountFieldTag::Balance => {
+                AccountFieldTag::CodeHash | AccountFieldTag::Balance => {
                     rlc::value(&value.to_le_bytes(), randomness)
                 }
-                AccountFieldTag::CodeHash => {
-                    if cfg!(feature = "poseidon-codehash") {
-                        value.to_scalar().unwrap()
-                    } else {
-                        rlc::value(&value.to_le_bytes(), randomness)
-                    }
-                }
-                AccountFieldTag::Nonce
-                | AccountFieldTag::NonExisting
-                | AccountFieldTag::CodeSize => value.to_scalar().unwrap(),
+                AccountFieldTag::Nonce | AccountFieldTag::NonExisting => value.to_scalar().unwrap(),
             },
             Self::AccountStorage { value, .. } | Self::Stack { value, .. } => {
                 rlc::value(&value.to_le_bytes(), randomness)
@@ -756,19 +738,12 @@ impl Rw {
                 field_tag,
                 ..
             } => Some(match field_tag {
-                AccountFieldTag::KeccakCodeHash | AccountFieldTag::Balance => {
+                AccountFieldTag::CodeHash | AccountFieldTag::Balance => {
                     rlc::value(&value_prev.to_le_bytes(), randomness)
                 }
-                AccountFieldTag::CodeHash => {
-                    if cfg!(feature = "poseidon-codehash") {
-                        value_prev.to_scalar().unwrap()
-                    } else {
-                        rlc::value(&value_prev.to_le_bytes(), randomness)
-                    }
+                AccountFieldTag::Nonce | AccountFieldTag::NonExisting => {
+                    value_prev.to_scalar().unwrap()
                 }
-                AccountFieldTag::Nonce
-                | AccountFieldTag::NonExisting
-                | AccountFieldTag::CodeSize => value_prev.to_scalar().unwrap(),
             }),
             Self::AccountStorage { value_prev, .. } => {
                 Some(rlc::value(&value_prev.to_le_bytes(), randomness))
@@ -882,8 +857,6 @@ impl From<&operation::OperationContainer> for RwMap {
                         AccountField::Nonce => AccountFieldTag::Nonce,
                         AccountField::Balance => AccountFieldTag::Balance,
                         AccountField::CodeHash => AccountFieldTag::CodeHash,
-                        AccountField::KeccakCodeHash => AccountFieldTag::KeccakCodeHash,
-                        AccountField::CodeSize => AccountFieldTag::CodeSize,
                     },
                     value: op.op().value,
                     value_prev: op.op().value_prev,

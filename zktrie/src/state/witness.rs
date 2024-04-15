@@ -24,16 +24,12 @@ impl From<AccountData> for SMTAccount {
         let mut balance: [u8; 32] = [0; 32];
         acc.balance.to_big_endian(balance.as_mut_slice());
         let balance = BigUint::from_bytes_be(balance.as_slice());
-        let code_hash = BigUint::from_bytes_be(acc.keccak_code_hash.as_bytes());
-        let poseidon_code_hash = BigUint::from_bytes_be(acc.poseidon_code_hash.as_bytes());
-        let code_size = acc.code_size;
+        let code_hash = BigUint::from_bytes_be(acc.code_hash.as_bytes());
 
         Self {
             nonce: acc.nonce,
             balance,
             code_hash,
-            poseidon_code_hash,
-            code_size,
         }
     }
 }
@@ -238,28 +234,21 @@ impl WitnessGenerator {
         let account_data_after = update_account_data(account_data_before.as_ref());
 
         if let Some(account_data_after) = account_data_after {
-            let mut nonce_codesize = [0u8; 32];
-            let u64factor = U256::from(0x10000000000000000u128);
-            (U256::from(account_data_after.code_size) * u64factor
-                + U256::from(account_data_after.nonce))
-            .to_big_endian(nonce_codesize.as_mut_slice());
+            let mut nonce = [0u8; 32];
+            (U256::from(account_data_after.nonce)).to_big_endian(nonce.as_mut_slice());
             let mut balance = [0u8; 32];
             account_data_after
                 .balance
                 .to_big_endian(balance.as_mut_slice());
-            let mut poseidon_code_hash = [0u8; 32];
-            U256::from(account_data_after.poseidon_code_hash.0)
-                .to_big_endian(poseidon_code_hash.as_mut_slice());
             let mut code_hash = [0u8; 32];
-            U256::from(account_data_after.keccak_code_hash.0)
+            U256::from(account_data_after.code_hash.0)
                 .to_big_endian(code_hash.as_mut_slice());
 
             let acc_data = [
-                nonce_codesize,
+                nonce,
                 balance,
                 account_data_after.storage_root.0,
                 code_hash,
-                poseidon_code_hash,
             ];
             let rs = self.trie.update_account(address.as_bytes(), &acc_data);
             if rs.is_err() {
@@ -332,27 +321,9 @@ impl WitnessGenerator {
                     MPTProofType::CodeHashExists => {
                         let mut code_hash = [0u8; 32];
                         old_val.to_big_endian(code_hash.as_mut_slice());
-                        debug_assert_eq!(H256::from(code_hash), acc_data.keccak_code_hash);
+                        debug_assert_eq!(H256::from(code_hash), acc_data.code_hash);
                         new_val.to_big_endian(code_hash.as_mut_slice());
-                        acc_data.keccak_code_hash = H256::from(code_hash);
-                    }
-                    MPTProofType::PoseidonCodeHashExists => {
-                        let mut code_hash = [0u8; 32];
-                        old_val.to_big_endian(code_hash.as_mut_slice());
-                        debug_assert_eq!(H256::from(code_hash), acc_data.poseidon_code_hash);
-                        new_val.to_big_endian(code_hash.as_mut_slice());
-                        acc_data.poseidon_code_hash = H256::from(code_hash);
-                    }
-                    MPTProofType::CodeSizeExists => {
-                        assert!(old_val < u64::MAX.into());
-                        assert!(new_val < u64::MAX.into());
-                        // code size can only change from 0
-                        debug_assert_eq!(old_val.as_u64(), acc_data.code_size);
-                        debug_assert!(
-                            old_val.as_u64() == 0u64 || old_val.as_u64() == new_val.as_u64(),
-                            "old {old_val:?} new {new_val:?}",
-                        );
-                        acc_data.code_size = new_val.as_u64();
+                        acc_data.code_hash = H256::from(code_hash);
                     }
                     MPTProofType::AccountDoesNotExist => {
                         // for proof NotExist, the account_before must be empty

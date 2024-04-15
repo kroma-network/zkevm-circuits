@@ -56,11 +56,7 @@ impl Opcode for Extcodehash {
         let account = state.sdb.get_account(&external_address).1;
         let exists = !account.is_empty();
         let code_hash = if exists {
-            if cfg!(feature = "scroll") {
-                account.keccak_code_hash
-            } else {
-                account.code_hash
-            }
+            account.code_hash
         } else {
             H256::zero()
         };
@@ -69,11 +65,7 @@ impl Opcode for Extcodehash {
         state.account_read(
             &mut exec_step,
             external_address,
-            if cfg!(feature = "scroll") {
-                AccountField::KeccakCodeHash
-            } else {
-                AccountField::CodeHash
-            },
+            AccountField::CodeHash,
             code_hash.to_word(),
         )?;
         #[cfg(feature = "enable-stack")]
@@ -92,6 +84,7 @@ mod extcodehash_tests {
         circuit_input_builder::ExecState,
         mock::BlockData,
         operation::{AccountOp, CallContextOp, StackOp, RW},
+        state_db::CodeDB,
     };
     use eth_types::{
         address, bytecode,
@@ -188,7 +181,7 @@ mod extcodehash_tests {
         .unwrap()
         .into();
 
-        let code_hash = Word::from(keccak256(code_ext));
+        let code_hash = CodeDB::hash(&code_ext).to_word();
 
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
@@ -291,11 +284,7 @@ mod extcodehash_tests {
                 RW::READ,
                 &AccountOp {
                     address: external_address,
-                    field: if cfg!(feature = "scroll") {
-                        AccountField::KeccakCodeHash
-                    } else {
-                        AccountField::CodeHash
-                    },
+                    field: AccountField::CodeHash,
                     value: if exists { code_hash } else { U256::zero() },
                     value_prev: if exists { code_hash } else { U256::zero() },
                 }

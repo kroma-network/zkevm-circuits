@@ -1,7 +1,7 @@
 //! utils for build state trie
 
 use eth_types::{
-    Address, Bytes, Word, H256, KECCAK_CODE_HASH_EMPTY, POSEIDON_CODE_HASH_EMPTY, U256, U64,
+    Address, Bytes, Word, H256, KECCAK_CODE_HASH_EMPTY, U256, U64,
 };
 use std::{
     convert::TryFrom,
@@ -82,12 +82,8 @@ pub struct AccountData {
     pub nonce: u64,
     /// balance
     pub balance: U256,
-    /// keccak code hash
-    pub keccak_code_hash: H256,
-    /// poseidon code hash
-    pub poseidon_code_hash: H256,
-    /// code size
-    pub code_size: u64,
+    /// code hash
+    pub code_hash: H256,
     /// storage root
     pub storage_root: H256,
 }
@@ -97,14 +93,10 @@ impl AccountData {
     pub fn is_empty(&self) -> bool {
         //let is_poseidon_code_hash_zero = self.poseidon_code_hash.is_zero();
         //let is_keccak_code_hash_zero = self.keccak_code_hash.is_zero();
-        let is_poseidon_code_hash_empty = self.poseidon_code_hash == *POSEIDON_CODE_HASH_EMPTY;
-        let is_keccak_code_hash_empty = self.keccak_code_hash == *KECCAK_CODE_HASH_EMPTY;
-        let is_code_size_empty = self.code_size == 0;
-        debug_assert_eq!(is_poseidon_code_hash_empty, is_keccak_code_hash_empty);
-        debug_assert_eq!(is_poseidon_code_hash_empty, is_code_size_empty, "{self:?}");
+        let is_code_hash_empty = self.code_hash == *KECCAK_CODE_HASH_EMPTY;
         let is_nonce_empty = self.nonce == 0;
         let is_balance_empty = self.balance.is_zero();
-        is_poseidon_code_hash_empty && is_nonce_empty && is_balance_empty
+        is_code_hash_empty && is_nonce_empty && is_balance_empty
     }
 }
 
@@ -112,19 +104,15 @@ impl From<zktrie::AccountData> for AccountData {
     fn from(acc_fields: zktrie::AccountData) -> Self {
         let field0 = acc_fields[0];
 
-        let code_size = U64::from_big_endian(&field0[16..24]);
         let nonce = U64::from_big_endian(&field0[24..]);
         let balance = U256::from_big_endian(&acc_fields[1]);
         let storage_root = H256::from(&acc_fields[2]);
-        let keccak_code_hash = H256::from(&acc_fields[3]);
-        let poseidon_code_hash = H256::from(&acc_fields[4]);
+        let code_hash = H256::from(&acc_fields[3]);
 
         Self {
             nonce: nonce.as_u64(),
             balance,
-            keccak_code_hash,
-            poseidon_code_hash,
-            code_size: code_size.as_u64(),
+            code_hash,
             storage_root,
         }
     }
@@ -148,8 +136,8 @@ impl CanRead for AccountData {
     fn try_parse(mut rd: impl Read) -> Result<Self, Error> {
         let mut uint_buf = [0; 4];
         rd.read_exact(&mut uint_buf)?;
-        // check it is 0x05080000
-        if uint_buf != [5, 8, 0, 0] {
+        // check it is 0x04040000
+        if uint_buf != [4, 4, 0, 0] {
             log::error!("invalid AccountData flag {:?}", uint_buf);
             return Err(Error::new(ErrorKind::Other, "unexpected flags"));
         }

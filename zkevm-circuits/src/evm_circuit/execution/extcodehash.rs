@@ -54,11 +54,7 @@ impl<F: Field> ExecutionGadget<F> for ExtcodehashGadget<F> {
         // For non-existing accounts the code_hash must be 0 in the rw_table.
         cb.account_read(
             address,
-            if cfg!(feature = "scroll") {
-                AccountFieldTag::KeccakCodeHash
-            } else {
-                AccountFieldTag::CodeHash
-            },
+            AccountFieldTag::CodeHash,
             code_hash.expr(),
         );
         cb.stack_push(code_hash.expr());
