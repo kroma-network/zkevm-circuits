@@ -44,6 +44,10 @@ use crate::{
         Transaction,
     },
 };
+#[cfg(feature = "kroma")]
+use crate::{
+    table::TxFieldTag::{Mint, SourceHash, RollupDataGasCost},
+};
 use bus_mapping::circuit_input_builder::keccak_inputs_sign_verify;
 use eth_types::{
     geth_types::{
@@ -84,8 +88,17 @@ use halo2_proofs::plonk::Fixed;
 use halo2_proofs::plonk::SecondPhase;
 use itertools::Itertools;
 
+// This contains followings:
+// - mint
+// - source hash
+// - rollup data gas cost
+#[cfg(feature = "kroma")]
+const ADDITIONAL_KROMA_TX_LEN: usize = 3;
+#[cfg(not(feature = "kroma"))]
+const ADDITIONAL_KROMA_TX_LEN: usize = 0;
+
 /// Number of rows of one tx occupies in the fixed part of tx table
-pub const TX_LEN: usize = 28;
+pub const TX_LEN: usize = 28 + ADDITIONAL_KROMA_TX_LEN;
 /// Offset of TxHash tag in the tx table
 pub const TX_HASH_OFFSET: usize = 21;
 /// Offset of CallerAddress in the tx table
@@ -114,6 +127,8 @@ enum LookupCondition {
     L1MsgHash,
     RlpSignTag,
     RlpHashTag,
+    #[cfg(feature = "kroma")]
+    RlpHashTagDeposit,
     // lookup into keccak table
     Keccak,
     // lookup into dynamic access list section of tx table
@@ -345,6 +360,9 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             LookupCondition::L1MsgHash,
             LookupCondition::RlpSignTag,
             LookupCondition::RlpHashTag,
+            #[cfg(feature = "kroma")]
+            // True when it is the RLP encoding members of the TxHash for the deposit tx.
+            LookupCondition::RlpHashTagDeposit,
             LookupCondition::Keccak,
             LookupCondition::TxAccessList,
         ]
@@ -433,6 +451,12 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
         is_tx_tag!(is_tag_access_list_storage_key, AccessListStorageKey);
         is_tx_tag!(is_max_fee_per_gas, MaxFeePerGas);
         is_tx_tag!(is_max_priority_fee_per_gas, MaxPriorityFeePerGas);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_mint, Mint);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_source_hash, SourceHash);
+        #[cfg(feature = "kroma")]
+        is_tx_tag!(is_rollup_data_gas_cost, RollupDataGasCost);
 
         let tx_id_unchanged = IsEqualChip::configure(
             meta,
@@ -742,9 +766,100 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             let mut cb = BaseConstraintBuilder::default();
 
             cb.require_equal(
+<<<<<<< HEAD
                 "is_chain_id",
                 is_chain_id_expr(meta),
                 meta.query_advice(is_chain_id, Rotation::cur()),
+            );
+
+            cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
+        });
+=======
+                "condition",
+                is_tag_in_tx_sign,
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpSignTag],
+                    Rotation::cur(),
+                ),
+            );
+
+
+        meta.create_gate(
+            "hash tag lookup into rlp table condition for legacy tx",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::default();
+
+                let is_tag_in_tx_hash = sum::expr([
+                    is_nonce(meta),
+                    is_gas_price(meta),
+                    is_gas(meta),
+                    is_to(meta),
+                    is_value(meta),
+                    is_data_length(meta),
+                    is_sig_v(meta),
+                    is_sig_r(meta),
+                    is_sig_s(meta),
+                    is_hash_length(meta),
+                    is_hash_rlc(meta),
+                ]);
+
+                cb.require_equal(
+                    "condition",
+                    is_tag_in_tx_hash,
+                    meta.query_advice(
+                        lookup_conditions[&LookupCondition::RlpHashTag],
+                        Rotation::cur(),
+                    ),
+                );
+
+                cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
+            },
+        );
+
+        #[cfg(feature = "kroma")]
+        meta.create_gate(
+            "hash tag lookup into rlp table condition for deposit tx",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::default();
+
+                let is_tag_in_tx_sign = sum::expr([
+                    is_type(meta),
+                    is_source_hash(meta),
+                    is_caller_addr(meta),
+                    is_to(meta),
+                    is_mint(meta),
+                    is_value(meta),
+                    is_gas(meta),
+                    is_data_length(meta),
+                    is_hash_length(meta),
+                    is_hash_rlc(meta),
+                ]);
+
+                cb.require_equal(
+                    "condition",
+                    is_tag_in_tx_sign,
+                    meta.query_advice(
+                        lookup_conditions[&LookupCondition::RlpHashTagDeposit],
+                        Rotation::cur(),
+                    ),
+                );
+
+                cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
+            },
+        );
+
+        meta.create_gate("calldata length lookup condition", |meta| {
+            let mut cb = BaseConstraintBuilder::default();
+
+            let is_tag_sign_or_hash = and::expr([
+                sum::expr([is_sign_length(meta), is_hash_length(meta)]),
+                not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
+            ]);
+            cb.require_equal(
+                "condition",
+                is_tag_sign_or_hash,
+                meta.query_advice(lookup_conditions[&LookupCondition::Keccak], Rotation::cur()),
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
             );
 
             cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
@@ -1389,7 +1504,29 @@ impl<F: Field> SubCircuitConfig<F> for TxCircuitConfig<F> {
             cb.gate(meta.query_fixed(tx_table.q_enable, Rotation::cur()))
         });
 
+<<<<<<< HEAD
         meta.create_gate("tx call data init", |meta| {
+=======
+        Self::configure_lookups(
+            meta,
+            q_enable,
+            rlp_tag,
+            &lookup_conditions,
+            is_final,
+            calldata_length,
+            calldata_gas_cost_acc,
+            // chain_id,
+            tx_table.clone(),
+            keccak_table.clone(),
+            rlp_table,
+            #[cfg(feature = "kroma")]
+            is_deposit_tx,
+        );
+
+        let sign_verify = SignVerifyConfig::new(meta, keccak_table.clone());
+
+        meta.create_gate("is_calldata", |meta| {
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
             let mut cb = BaseConstraintBuilder::default();
 
             let value_is_zero = value_is_zero.expr(Rotation::cur())(meta);
@@ -3409,6 +3546,7 @@ impl<F: Field> TxCircuitConfig<F> {
             region.assign_fixed(|| col_anno, col, offset, || Value::known(col_val))?;
         }
 
+<<<<<<< HEAD
         // 1st phase columns
         for (col_anno, col, col_val) in [
             // note that tx_table.index is not assigned in this function
@@ -3437,6 +3575,139 @@ impl<F: Field> TxCircuitConfig<F> {
             ),
         ] {
             region.assign_advice(|| col_anno, col, offset, || Value::known(col_val))?;
+=======
+        region.assign_advice(
+            || "chain_id",
+            self.chain_id,
+            *offset,
+            || Value::known(F::zero()),
+        )?;
+
+        let mut conditions = HashMap::<LookupCondition, Value<F>>::new();
+        conditions.insert(LookupCondition::TxCalldata, {
+            let is_data_length = tag == CallDataLength;
+            if is_data_length {
+                value.map(|value| F::from(!value.is_zero_vartime() as u64))
+            } else {
+                Value::known(F::zero())
+            }
+        });
+        conditions.insert(LookupCondition::Tag, {
+            let set = [
+                Nonce,
+                GasPrice,
+                Gas,
+                CalleeAddress,
+                TxFieldTag::Value,
+                CallDataLength,
+                SigV,
+                SigR,
+                SigS,
+                TxSignLength,
+                TxSignRLC,
+                TxHashLength,
+                TxHashRLC,
+            ];
+            let is_tag_in_set = set.into_iter().filter(|_tag| tag == *_tag).count();
+            Value::known(F::from(is_tag_in_set as u64))
+        });
+        conditions.insert(LookupCondition::RlpCalldata, {
+            let is_data = tag == CallData;
+            Value::known(F::from((is_data && tx_id != 0) as u64))
+        });
+        conditions.insert(LookupCondition::RlpSignTag, {
+            let sign_set = [
+                Nonce,
+                GasPrice,
+                Gas,
+                CalleeAddress,
+                TxFieldTag::Value,
+                CallDataLength,
+                TxSignLength,
+                TxSignRLC,
+            ];
+            let is_tag_in_set = sign_set.into_iter().filter(|_tag| tag == *_tag).count();
+            Value::known(F::from(is_tag_in_set as u64))
+        });
+        conditions.insert(LookupCondition::RlpHashTag, {
+            let hash_set = [
+                Nonce,
+                GasPrice,
+                Gas,
+                CalleeAddress,
+                TxFieldTag::Value,
+                CallDataLength,
+                SigV,
+                SigR,
+                SigS,
+                TxHashLength,
+                TxHashRLC,
+            ];
+            let is_tag_in_set = hash_set.into_iter().filter(|_tag| tag == *_tag).count();
+            Value::known(F::from(is_tag_in_set as u64))
+        });
+
+        // NOTE(dongchangYoo): The rlp hash tag differs depending on the transaction type.
+        // So `RlpHashTagDeposit` is additionally defined. However, type 126 transactions do not
+        // include sig data, so `RlpSignTagDeposit` is not necessary.
+        #[cfg(feature = "kroma")]
+        conditions.insert(LookupCondition::RlpHashTagDeposit, {
+            let hash_set = [
+                Type,
+                SourceHash,
+                CallerAddress,
+                CalleeAddress,
+                Mint,
+                TxFieldTag::Value,
+                Gas,
+                CallDataLength,
+                TxHashLength,
+                TxHashRLC,
+            ];
+            let is_tag_in_set = hash_set.into_iter().filter(|_tag| tag == *_tag).count();
+            Value::known(F::from(is_tag_in_set as u64))
+        });
+
+        conditions.insert(LookupCondition::Keccak, {
+            let set = [TxSignLength, TxHashLength];
+            let is_tag_in_set = set.into_iter().filter(|_tag| tag == *_tag).count();
+            Value::known(F::from((is_tag_in_set > 0 && !is_deposit_tx) as u64))
+        });
+
+        let tx_id_cmp_cum_num_txs = ComparatorChip::construct(self.tx_id_cmp_cum_num_txs.clone());
+        tx_id_cmp_cum_num_txs.assign(
+            region,
+            *offset,
+            F::from(tx_id as u64),
+            F::from(cum_num_txs as u64),
+        )?;
+        region.assign_advice(
+            || "cum_num_txs",
+            self.cum_num_txs,
+            *offset,
+            || Value::known(F::from(cum_num_txs as u64)),
+        )?;
+        region.assign_advice(
+            || "is_padding_tx",
+            self.is_padding_tx,
+            *offset,
+            || Value::known(F::from(is_padding_tx as u64)),
+        )?;
+        region.assign_advice(
+            || "is_deposit_tx",
+            self.is_deposit_tx,
+            *offset,
+            || Value::known(F::from(is_deposit_tx as u64)),
+        )?;
+
+        for (condition, value) in conditions {
+            region.assign_advice(
+                || format!("lookup condition {condition:?}"),
+                self.lookup_conditions[&condition],
+                *offset,
+                || value,
+            )?;
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
         }
 
         region.assign_advice(
@@ -3533,6 +3804,274 @@ impl<F: Field> TxCircuitConfig<F> {
 
         Ok(())
     }
+<<<<<<< HEAD
+=======
+
+    /// Get number of rows required.
+    pub fn get_num_rows_required(num_tx: usize) -> usize {
+        let num_rows_range_table = 1 << 18;
+        // Number of rows required to verify a transaction.
+        let num_rows_per_tx = 140436;
+        (num_tx * num_rows_per_tx).max(num_rows_range_table)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn configure_lookups(
+        meta: &mut ConstraintSystem<F>,
+        q_enable: Column<Fixed>,
+        rlp_tag: Column<Fixed>,
+        lookup_conditions: &HashMap<LookupCondition, Column<Advice>>,
+        is_final: Column<Advice>,
+        calldata_length: Column<Advice>,
+        calldata_gas_cost_acc: Column<Advice>,
+        // chain_id: Column<Advice>,
+        tx_table: TxTable,
+        keccak_table: KeccakTable,
+        rlp_table: RlpTable,
+        #[cfg(feature = "kroma")] is_deposit_tx: Column<Advice>,
+    ) {
+        /////////////////////////////////////////////////////////////////
+        /////////////////    block table lookups     ////////////////////
+        ///////////////// ////////////////////////////////////////////////
+
+        /////////////////////////////////////////////////////////////////
+        /////////////////    tx table lookups     ///////////////////////
+        ///////////////// ////////////////////////////////////////////////
+        // lookup to check CallDataGasCost of the tx's call data.
+        meta.lookup_any("tx call data gas cost in TxTable", |meta| {
+            // if call data length != 0, then we can lookup the calldata gas cost on the
+            // last row of the tx's call data bytes.
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::TxCalldata],
+                    Rotation::cur(),
+                ),
+            ]);
+
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                CallData.expr(),
+                meta.query_advice(tx_table.value, Rotation::next()), // calldata_gas_cost
+                1.expr(),                                            // is_final = 1
+            ]
+            .into_iter()
+            .zip(
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    meta.query_fixed(tx_table.tag, Rotation::cur()),
+                    meta.query_advice(calldata_gas_cost_acc, Rotation::cur()),
+                    meta.query_advice(is_final, Rotation::cur()),
+                ]
+                .into_iter(),
+            )
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+        // We need to handle the case in which some of the call data bytes is skipped in
+        // the tx table. If the call data length is larger than 0, then we will
+        // do lookup in the tx table to make sure the last call data byte in tx
+        // has index = call_data_length-1.
+        meta.lookup_any("is_final call data byte should be present", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::TxCalldata],
+                    Rotation::cur(),
+                ),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                CallData.expr(),
+                meta.query_advice(tx_table.value, Rotation::cur()) - 1.expr(), // index
+                1.expr(),                                                      // is_final
+            ]
+            .into_iter()
+            .zip(
+                vec![
+                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                    meta.query_fixed(tx_table.tag, Rotation::cur()),
+                    meta.query_advice(tx_table.index, Rotation::cur()),
+                    meta.query_advice(is_final, Rotation::cur()),
+                ]
+                .into_iter(),
+            )
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        /////////////////////////////////////////////////////////////////
+        /////////////////    RLP table lookups     //////////////////////
+        ///////////////// ////////////////////////////////////////////////
+
+        // lookup tx tag in rlp table for TxSign.
+        meta.lookup_any("tx tag in RLP Table::TxSign", |meta| {
+            let enable = and::expr([
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpSignTag],
+                    Rotation::cur(),
+                ),
+                #[cfg(feature = "kroma")]
+                // NOTE(dongchangYoo): does not check RlpSignTag in case of deposit tx
+                not::expr(meta.query_advice(is_deposit_tx, Rotation::cur())),
+            ]);
+            let rlp_tag = meta.query_fixed(rlp_tag, Rotation::cur());
+
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                rlp_tag,
+                1.expr(), // tag_rindex == 1
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter()) // tag_length_eq_one is the 6th column in rlp table
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup tx tag in rlp table for TxHash
+        meta.lookup_any("tx tag in RLP Table::TxHash", |meta| {
+            let rlp_tag = meta.query_fixed(rlp_tag, Rotation::cur());
+
+            #[cfg(feature = "kroma")]
+            let is_deposit_expr = meta.query_advice(is_deposit_tx, Rotation::cur());
+
+            let legacy_enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpHashTag],
+                    Rotation::cur(),
+                ),
+                // NOTE(dongchangYoo): For example, since `GasPrice` is an rlp member of Legacy
+                // tx, so `RlpHashTag` is True. Thus, this lookup is also executed during
+                // the inspection of GasPrice in Deposit tx. As a result,
+                // is_deposit_exp=False is required.
+                #[cfg(feature = "kroma")]
+                not::expr(is_deposit_expr.clone()),
+            ]);
+
+            #[cfg(feature = "kroma")]
+            let deposit_enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpHashTagDeposit],
+                    Rotation::cur(),
+                ),
+                is_deposit_expr.clone(),
+            ]);
+
+            #[cfg(not(feature = "kroma"))]
+            let enable = legacy_enable;
+            #[cfg(feature = "kroma")]
+            let enable = select::expr(is_deposit_expr, deposit_enable, legacy_enable);
+
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                rlp_tag,
+                1.expr(), // tag_rindex == 1
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // TODO(dongchangYoo): impl or remove constraint after finding out comment below.
+        // lookup RLP table to check Chain ID.
+        // meta.lookup_any("rlp table Chain ID", |meta| {
+        // let enable = and::expr(vec![
+        // meta.query_fixed(q_enable, Rotation::cur()),
+        // meta.query_advice(is_usable, Rotation::cur()),
+        // tag.value_equals(TxFieldTag::SigV, Rotation::cur())(meta),
+        // ]);
+        // vec![
+        // meta.query_advice(tx_table.tx_id, Rotation::cur()),
+        // RlpTxTag::ChainId.expr(), // tag
+        // 1.expr(),                 // tag_index == 1
+        // meta.query_advice(chain_id, Rotation::cur()),
+        // RlpDataType::TxSign.expr(),
+        // ]
+        // .into_iter()
+        // .zip(rlp_table.table_exprs(meta).into_iter())
+        // .map(|(arg, table)| (enable.clone() * arg, table))
+        // .collect()
+        // });
+
+        // lookup tx calldata bytes in RLP table for TxSign.
+        meta.lookup_any("tx calldata::index in RLP Table::TxSign", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpCalldata],
+                    Rotation::cur(),
+                ),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::Data.expr(),
+                meta.query_advice(calldata_length, Rotation::cur())
+                    - meta.query_advice(tx_table.index, Rotation::cur()),
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxSign.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        // lookup tx calldata bytes in RLP table for TxSign.
+        meta.lookup_any("tx calldata::index in RLP Table::TxHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(
+                    lookup_conditions[&LookupCondition::RlpCalldata],
+                    Rotation::cur(),
+                ),
+            ]);
+            vec![
+                meta.query_advice(tx_table.tx_id, Rotation::cur()),
+                RlpTxTag::Data.expr(),
+                meta.query_advice(calldata_length, Rotation::cur())
+                    - meta.query_advice(tx_table.index, Rotation::cur()),
+                meta.query_advice(tx_table.value, Rotation::cur()),
+                RlpDataType::TxHash.expr(),
+            ]
+            .into_iter()
+            .zip(rlp_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+
+        /////////////////////////////////////////////////////////////////
+        /////////////////    Keccak table lookups     //////////////////////
+        ///////////////// ////////////////////////////////////////////////
+        // lookup Keccak table for tx sign data hash, i.e. the sighash that has to be
+        // signed.
+        // lookup Keccak table for tx hash too.
+        meta.lookup_any("Keccak table lookup for TxSignHash", |meta| {
+            let enable = and::expr(vec![
+                meta.query_fixed(q_enable, Rotation::cur()),
+                meta.query_advice(lookup_conditions[&LookupCondition::Keccak], Rotation::cur()),
+            ]);
+
+            vec![
+                1.expr(),                                            // is_enabled
+                meta.query_advice(tx_table.value, Rotation::next()), // input_rlc
+                meta.query_advice(tx_table.value, Rotation::cur()),  // input_len
+                meta.query_advice(tx_table.value, Rotation(2)),      // output_rlc
+            ]
+            .into_iter()
+            .zip(keccak_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (enable.clone() * arg, table))
+            .collect()
+        });
+    }
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
 }
 
 /// Tx Circuit for verifying transaction signatures and tx table.
@@ -3792,6 +4331,7 @@ impl<F: Field> TxCircuit<F> {
                         cum_num_txs = self
                             .txs
                             .iter()
+<<<<<<< HEAD
                             .filter(|tx| tx.block_number <= block_num)
                             .count() as u64;
                         num_txs = self
@@ -3804,6 +4344,297 @@ impl<F: Field> TxCircuit<F> {
                                 let queue_index = tx.nonce;
                                 num_all_txs_acc = queue_index - total_l1_popped_before + 1;
                                 total_l1_popped_after = queue_index + 1;
+=======
+                            .filter(|tx| tx.block_number <= self.txs[i].block_number)
+                            .count();
+                        is_padding_tx = false;
+                    } else {
+                        cum_num_txs = 0;
+                        is_padding_tx = true;
+                    }
+
+                    #[cfg(feature = "enable-sign-verify")]
+                    let tx_sign_hash = assigned_sig_verif.msg_hash_rlc.value().copied();
+                    #[cfg(not(feature = "enable-sign-verify"))]
+                    let tx_sign_hash = {
+                        challenges.evm_word().map(|rand| {
+                            assigned_sig_verif
+                                .msg
+                                .to_vec()
+                                .into_iter()
+                                .fold(F::zero(), |acc, byte| acc * rand + F::from(byte as u64))
+                        })
+                    };
+                    for (tag, rlp_tag, value) in [
+                        // need to be in same order as that tx table load function uses
+                        #[cfg(feature = "kroma")]
+                        (
+                            Type,
+                            RlpTxTag::TransactionType,
+                            Value::known(F::from(tx.transaction_type)),
+                        ),
+                        (Nonce, RlpTxTag::Nonce, Value::known(F::from(tx.nonce))),
+                        (
+                            GasPrice,
+                            RlpTxTag::GasPrice,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.gas_price.to_le_bytes(), challenge)),
+                        ),
+                        (Gas, RlpTxTag::Gas, Value::known(F::from(tx.gas))),
+                        (
+                            CallerAddress,
+                            #[cfg(not(feature = "kroma"))]
+                            RlpTxTag::Padding,
+                            #[cfg(feature = "kroma")]
+                            RlpTxTag::From,
+                            Value::known(tx.caller_address.to_scalar().expect("tx.from too big")),
+                        ),
+                        (
+                            CalleeAddress,
+                            RlpTxTag::To,
+                            Value::known(
+                                tx.callee_address
+                                    .unwrap_or(Address::zero())
+                                    .to_scalar()
+                                    .expect("tx.to too big"),
+                            ),
+                        ),
+                        (
+                            IsCreate,
+                            RlpTxTag::Padding, // no corresponding rlp tag
+                            Value::known(F::from(tx.is_create as u64)),
+                        ),
+                        (
+                            TxFieldTag::Value,
+                            RlpTxTag::Value,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.value.to_le_bytes(), challenge)),
+                        ),
+                        (
+                            CallDataLength,
+                            RlpTxTag::DataPrefix,
+                            Value::known(F::from(tx.call_data.len() as u64)),
+                        ),
+                        (
+                            CallDataGasCost,
+                            RlpTxTag::Padding, // no corresponding rlp tag
+                            Value::known(F::from(tx.call_data_gas_cost)),
+                        ),
+                        (SigV, RlpTxTag::SigV, Value::known(F::from(tx.v))),
+                        (
+                            SigR,
+                            RlpTxTag::SigR,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.r.to_le_bytes(), challenge)),
+                        ),
+                        (
+                            SigS,
+                            RlpTxTag::SigS,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.s.to_le_bytes(), challenge)),
+                        ),
+                        (
+                            TxSignLength,
+                            RlpTxTag::RlpLength,
+                            Value::known(F::from(rlp_unsigned_tx_be_bytes.len() as u64)),
+                        ),
+                        (
+                            TxSignRLC,
+                            RlpTxTag::Rlp,
+                            challenges.keccak_input().map(|rand| {
+                                rlp_unsigned_tx_be_bytes
+                                    .iter()
+                                    .fold(F::zero(), |acc, byte| acc * rand + F::from(*byte as u64))
+                            }),
+                        ),
+                        (
+                            TxSignHash,
+                            RlpTxTag::Padding, // no corresponding rlp tag
+                            tx_sign_hash,
+                        ),
+                        (
+                            TxHashLength,
+                            RlpTxTag::RlpLength,
+                            Value::known(F::from(rlp_signed_tx_be_bytes.len() as u64)),
+                        ),
+                        (
+                            TxHashRLC,
+                            RlpTxTag::Rlp,
+                            challenges.keccak_input().map(|rand| {
+                                rlp_signed_tx_be_bytes
+                                    .iter()
+                                    .fold(F::zero(), |acc, byte| acc * rand + F::from(*byte as u64))
+                            }),
+                        ),
+                        (
+                            TxFieldTag::TxHash,
+                            RlpTxTag::Padding, // no corresponding rlp tag
+                            challenges.evm_word().map(|challenge| {
+                                tx.hash
+                                    .to_fixed_bytes()
+                                    .into_iter()
+                                    .fold(F::zero(), |acc, byte| {
+                                        acc * challenge + F::from(byte as u64)
+                                    })
+                            }),
+                        ),
+                        (
+                            TxFieldTag::BlockNumber,
+                            RlpTxTag::Padding, // no corresponding rlp tag
+                            Value::known(F::from(tx.block_number)),
+                        ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            TxFieldTag::Mint,
+                            RlpTxTag::Mint,
+                            challenges
+                                .evm_word()
+                                .map(|challenge| rlc(tx.mint.to_le_bytes(), challenge)),
+                        ),
+                        #[cfg(feature = "kroma")]
+                        (
+                            TxFieldTag::SourceHash,
+                            RlpTxTag::SourceHash,
+                            challenges.evm_word().map(|challenge| {
+                                tx.source_hash
+                                    .to_fixed_bytes()
+                                    .into_iter()
+                                    .fold(F::zero(), |acc, byte| {
+                                        acc * challenge + F::from(byte as u64)
+                                    })
+                            }),
+                        ),
+                        #[cfg(feature = "kroma")]
+                        // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+                        // because it is used to add with another rlc value in RollupFeeHook
+                        // gadget.
+                        (
+                            TxFieldTag::RollupDataGasCost,
+                            RlpTxTag::RollupDataGasCost,
+                            challenges.evm_word().map(|challenge| {
+                                rlc(Word::from(tx.rollup_data_gas_cost).to_le_bytes(), challenge)
+                            }),
+                        ),
+                    ] {
+                        let tx_id_next = match tag {
+                            #[cfg(not(feature = "kroma"))]
+                            TxFieldTag::BlockNumber => {
+                                if i == sigs.len() - 1 {
+                                    self.txs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_i, tx)| !tx.call_data.is_empty())
+                                        .map(|(i, _tx)| i + 1)
+                                        .unwrap_or_else(|| 0)
+                                } else {
+                                    i + 2
+                                }
+                            }
+                            #[cfg(feature = "kroma")]
+                            TxFieldTag::RollupDataGasCost => {
+                                if i == sigs.len() - 1 {
+                                    self.txs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_i, tx)| !tx.call_data.is_empty())
+                                        .map(|(i, _tx)| i + 1)
+                                        .unwrap_or_else(|| 0)
+                                } else {
+                                    i + 2
+                                }
+                            }
+                            _ => i + 1,
+                        };
+                        config.assign_row(
+                            &mut region,
+                            &mut offset,
+                            i + 1,      // tx_id
+                            tx_id_next, // tx_id_next
+                            tag,
+                            rlp_tag,
+                            value,
+                            false,
+                            None,
+                            None,
+                            is_padding_tx,
+                            tx.is_deposit(),
+                            cum_num_txs,
+                        )?;
+                        // Ref. spec 0. Copy constraints using fixed offsets
+                        // between the tx rows and the SignVerifyChip
+                        match tag {
+                            CallerAddress => {
+                                #[cfg(feature = "enable-sign-verify")]
+                                {
+                                    assigned_sig_verif.address.copy_advice(
+                                        || "sv_address == SignVerify.address",
+                                        &mut region,
+                                        config.sv_address,
+                                        offset - 1,
+                                    )?;
+                                }
+                                #[cfg(not(feature = "enable-sign-verify"))]
+                                {
+                                    let pk_le = pk_bytes_le(&assigned_sig_verif.pk);
+                                    let pk_be = pk_bytes_swap_endianness(&pk_le);
+                                    let pk_hash = keccak256(pk_be);
+                                    let address =
+                                        Value::known(pub_key_hash_to_address::<F>(&pk_hash));
+                                    region.assign_advice(
+                                        || "sv_address",
+                                        config.sv_address,
+                                        offset - 1,
+                                        || address,
+                                    )?;
+                                }
+                            }
+                            TxSignHash => {
+                                #[cfg(feature = "enable-sign-verify")]
+                                {
+                                    region.constrain_equal(
+                                        assigned_sig_verif.msg_hash_rlc.cell(),
+                                        Cell {
+                                            // FIXME
+                                            region_index: RegionIndex(1),
+                                            row_offset: offset - 1, /* offset is increased by 1
+                                                                     * inside assign_row */
+                                            column: config.tx_table.value.into(),
+                                        },
+                                    )?;
+                                }
+                            }
+                            SigV => {
+                                region.assign_advice(
+                                    || "chain id",
+                                    config.chain_id,
+                                    offset,
+                                    || Value::known(F::from(self.chain_id)),
+                                )?;
+                            }
+                            // TODO: connect r, s to SignVerifyChip
+                            _ => (),
+                        }
+                    }
+                }
+
+                log::debug!("assigning calldata, offset {}", offset);
+
+                // Assign call data
+                let mut calldata_count = 0;
+                for (i, tx) in self.txs.iter().enumerate() {
+                    let mut calldata_gas_cost = 0;
+                    let calldata_length = tx.call_data.len();
+                    calldata_count += calldata_length;
+                    for (index, byte) in tx.call_data.iter().enumerate() {
+                        assert!(calldata_count < self.max_calldata);
+                        let (tx_id_next, is_final) = if index == calldata_length - 1 {
+                            if i == self.txs.len() - 1 {
+                                (0, true)
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
                             } else {
                                 // next tx's total_l1_popped_before do not change
                                 total_l1_popped_after = total_l1_popped_before;
@@ -4116,6 +4947,7 @@ pub(crate) fn get_sign_data(
     Ok(signatures)
 }
 
+<<<<<<< HEAD
 /// Returns the RLC of the access list including addresses and storage keys
 /// This function provides an alternative routine to calculate access_list_rlc
 /// to ascertain the correctness of assignment in witness generation.
@@ -4127,6 +4959,72 @@ pub fn access_list_rlc<F: Field>(
         let mut section_rlc = challenges.keccak_input().map(|_| F::zero());
         let r20 = challenges.keccak_input().map(|f| f.pow([20, 0, 0, 0]));
         let r32 = challenges.keccak_input().map(|f| f.pow([32, 0, 0, 0]));
+=======
+    #[test]
+    #[cfg(feature = "kroma")]
+    /// test with 1 deposit tx and 1 legacy tx.
+    fn tx_circuit_1d_1l_2max_tx() {
+        const NUM_TXS: usize = 2;
+        const MAX_TXS: usize = 2;
+        const MAX_CALLDATA: usize = 300;
+
+        assert_eq!(
+            run::<Fr>(
+                [
+                    mock::CORRECT_MOCK_TXS[6].clone(),
+                    mock::CORRECT_MOCK_TXS[7].clone()
+                ]
+                .iter()
+                .enumerate()
+                .map(|(i, tx)| {
+                    let mut mock_tx = tx.clone();
+                    mock_tx.transaction_idx((i + 1) as u64);
+                    mock_tx.into()
+                })
+                .collect(),
+                mock::MOCK_CHAIN_ID.as_u64(),
+                MAX_TXS,
+                MAX_CALLDATA
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "kroma")]
+    /// test with 1 deposit tx and 1 deploy tx.
+    fn tx_circuit_1d_1d_2max_tx() {
+        const NUM_TXS: usize = 2;
+        const MAX_TXS: usize = 2;
+        const MAX_CALLDATA: usize = 400;
+
+        assert_eq!(
+            run::<Fr>(
+                [
+                    mock::CORRECT_MOCK_TXS[6].clone(),
+                    mock::CORRECT_MOCK_TXS[8].clone()
+                ]
+                .iter()
+                .enumerate()
+                .map(|(i, tx)| {
+                    let mut mock_tx = tx.clone();
+                    mock_tx.transaction_idx((i + 1) as u64);
+                    mock_tx.into()
+                })
+                .collect(),
+                mock::MOCK_CHAIN_ID.as_u64(),
+                MAX_TXS,
+                MAX_CALLDATA
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn tx_circuit_0tx_1max_tx() {
+        const MAX_TXS: usize = 1;
+        const MAX_CALLDATA: usize = 32;
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
 
         for al in access_list.as_ref().unwrap().0.iter() {
             let field_rlc = rlc_be_bytes(&al.address.to_fixed_bytes(), challenges.keccak_input());

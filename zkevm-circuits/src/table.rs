@@ -189,6 +189,16 @@ pub enum TxFieldTag {
     MaxPriorityFeePerGas,
     /// Max Fee Per Gas (EIP1559)
     MaxFeePerGas,
+    #[cfg(feature = "kroma")]
+    /// Mint
+    Mint,
+    #[cfg(feature = "kroma")]
+    /// Source hash
+    SourceHash,
+    /// Kroma non-deposit tx
+    #[cfg(feature = "kroma")]
+    /// The gas cost that needs to be rolled up to L1.
+    RollupDataGasCost,
 }
 impl_expr!(TxFieldTag);
 

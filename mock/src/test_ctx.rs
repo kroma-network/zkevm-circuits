@@ -299,9 +299,26 @@ pub fn gen_trace_config(
 /// Collection of helper functions which contribute to specific rutines on the
 /// builder pattern used to construct [`TestContext`]s.
 pub mod helpers {
+<<<<<<< HEAD
     use super::*;
     use crate::{MOCK_ACCOUNTS, MOCK_WALLETS};
     use ethers_signers::Signer;
+=======
+    use super::{eth, Bytecode, MockAccount, MockTransaction};
+    use crate::{test_ctx::SYSTEM_DEPOSIT_TX_GAS, MOCK_ACCOUNTS};
+    use eth_types::H256;
+    #[cfg(feature = "kroma")]
+    use eth_types::{
+        geth_types::DEPOSIT_TX_TYPE,
+        kroma_l1_block::BYTECODE,
+        kroma_params::{
+            L1_BLOCK, PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, SYSTEM_TX_CALLER,
+            VALIDATOR_REWARD_VAULT,
+        },
+        Bytes, Word,
+    };
+    use std::str::FromStr;
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
 
     /// Generate a simple setup which adds balance to two default accounts from
     /// [`static@MOCK_ACCOUNTS`]:
@@ -339,5 +356,67 @@ pub mod helpers {
     /// first one.
     pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 2]) {
         txs[0].from(accs[1].address).to(accs[0].address);
+    }
+<<<<<<< HEAD
+=======
+
+    #[cfg(feature = "kroma")]
+    /// Generate a system deposit transaction.
+    pub fn system_deposit_tx(tx: &mut MockTransaction) {
+        macro_rules! padding {
+            ($vec:expr) => {{
+                let mut v = $vec;
+                let len = v.len();
+                for _ in 0..(32 - len) {
+                    v.insert(0, 0);
+                }
+                v
+            }};
+        }
+
+        let mut calldata = Vec::with_capacity(4 + 32 * 9);
+
+        // setL1BlockValues
+        calldata.extend(vec![0xef, 0xc6, 0x74, 0xeb]);
+        // l1 blocknumber: 2295
+        calldata.extend(padding!(vec![0x08, 0xf7]));
+        // l1 timestamp: 1685085294
+        calldata.extend(padding!(vec![0x64, 0x70, 0x5c, 0x6e]));
+        // l1 basefee: 7
+        calldata.extend(padding!(vec![0x07]));
+        // l1 hash
+        calldata.extend(vec![
+            0x36, 0xe0, 0x8a, 0x25, 0xfc, 0x21, 0x49, 0x1f, 0xc3, 0x48, 0xe2, 0xd6, 0x3e, 0x42,
+            0xce, 0xda, 0xa3, 0xc6, 0x33, 0x17, 0x80, 0xf2, 0x2b, 0xaa, 0x5e, 0xb4, 0x23, 0x98,
+            0x1e, 0xfc, 0x12, 0xa0,
+        ]);
+        // sequenceNumber: 0
+        calldata.extend(vec![0; 32]);
+        // batcherHash
+        calldata.extend(padding!(vec![
+            0x3c, 0x44, 0xcd, 0xdd, 0xb6, 0xa9, 0x00, 0xfa, 0x2b, 0x58, 0x5d, 0xd2, 0x99, 0xe0,
+            0x3d, 0x12, 0xfa, 0x42, 0x93, 0xbc
+        ]));
+        // l1 fee overhead: 2100
+        calldata.extend(padding!(vec![0x08, 0x34]));
+        // l1 fee scalar: 1000000
+        calldata.extend(padding!(vec![0x0f, 0x42, 0x40]));
+        // validator reward scalar: 2000
+        calldata.extend(padding!(vec![0x07, 0xd0]));
+
+        tx.transaction_type(DEPOSIT_TX_TYPE)
+            .from(*SYSTEM_TX_CALLER)
+            .to(*L1_BLOCK)
+            .gas(Word::from(SYSTEM_DEPOSIT_TX_GAS))
+            .gas_price(Word::zero())
+            .source_hash(
+                H256::from_str(
+                    "0x7f9da519dd53cd0705760f80addc46233ba6c3124f4566798ad1ae1fb7189307",
+                )
+                .unwrap(),
+            )
+            .mint(Word::from("0x0"))
+            .input(Bytes::from(calldata));
+>>>>>>> 82348bdd (feat(zkevm-circuits): support type 126 transaction)
     }
 }

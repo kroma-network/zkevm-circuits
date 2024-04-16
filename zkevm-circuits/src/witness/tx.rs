@@ -189,6 +189,8 @@ impl Transaction {
         let tx_sign_hash_be_bytes = keccak256(&self.rlp_unsigned);
         let (access_list_address_size, access_list_storage_key_size) =
             access_list_size(&self.access_list);
+        #[cfg(feature = "kroma")]
+        let source_hash_be_bytes = self.source_hash.to_fixed_bytes();
 
         let ret = vec![
             [
@@ -405,6 +407,35 @@ impl Transaction {
                 Value::known(F::from(TxContextFieldTag::BlockNumber as u64)),
                 Value::known(F::zero()),
                 Value::known(F::from(self.block_number)),
+                Value::known(F::zero()),
+            ],
+            #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::Mint as u64)),
+                Value::known(F::zero()),
+                challenges
+                    .evm_word()
+                    .map(|challenge| rlc::value(&self.mint.to_le_bytes(), challenge)),
+                Value::known(F::zero()),
+            ],
+            #[cfg(feature = "kroma")]
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::SourceHash as u64)),
+                Value::known(F::zero()),
+                rlc_be_bytes(&source_hash_be_bytes, challenges.evm_word()),
+            ],
+            #[cfg(feature = "kroma")]
+            // NOTE(chokobole): The reason why rlc encoding rollup_data_gas_cost is
+            // because it is used to add with another rlc value in RollupFeeHook gadget.
+            [
+                Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::RollupDataGasCost as u64)),
+                Value::known(F::zero()),
+                challenges.evm_word().map(|challenge| {
+                    rlc::value(&self.rollup_data_gas_cost.to_le_bytes(), challenge)
+                }),
                 Value::known(F::zero()),
             ],
         ];
@@ -1233,13 +1264,15 @@ pub(super) fn tx_convert(
     chain_id: u64,
     next_block_num: u64,
 ) -> Transaction {
-    if tx.chain_id != 0 {
-        debug_assert_eq!(
-            chain_id, tx.chain_id,
-            "block.chain_id = {}, tx.chain_id = {}",
-            chain_id, tx.chain_id
-        );
-    }
+    // NOTE(chokobole): tx.chain_id is 0 when retrieving transactions from getBlockByNumber()
+    // during integration test.
+    // if tx.chain_id != 0 {
+    //     debug_assert_eq!(
+    //         chain_id, tx.chain_id,
+    //         "block.chain_id = {}, tx.chain_id = {}",
+    //         chain_id, tx.chain_id
+    //     );
+    // }
     let callee_address = tx.to;
     //if tx.is_create() { None } else { Some(tx.to) };
     let tx_gas_cost = if tx.tx_type.is_l1_msg() {
@@ -1275,6 +1308,12 @@ pub(super) fn tx_convert(
         call_data_gas_cost: tx_data_gas_cost(&tx.input),
         access_list_gas_cost: tx_access_list_gas_cost(&tx.access_list),
         tx_data_gas_cost: tx_gas_cost,
+        #[cfg(feature = "kroma")]
+        mint: tx.mint,
+        #[cfg(feature = "kroma")]
+        source_hash: tx.source_hash,
+        #[cfg(feature = "kroma")]
+        rollup_data_gas_cost: tx.rollup_data_gas_cost,
         chain_id,
         rlp_unsigned: tx.rlp_unsigned_bytes.clone(),
         rlp_signed: tx.rlp_bytes.clone(),

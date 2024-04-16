@@ -23,4 +23,4 @@ require (
 )
 
 // Uncomment for debugging
-// replace github.com/ethereum/go-ethereum => ../../go-ethereum
+replace github.com/ethereum/go-ethereum => ../../go-ethereum

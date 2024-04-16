@@ -5,10 +5,18 @@ use eth_types::{
     geth_types::Transaction as GethTransaction, word, AccessList, Address, Bytes, Hash,
     Transaction, Word, U64,
 };
+#[cfg(feature = "kroma")]
+use eth_types::{
+    address,
+    geth_types::DEPOSIT_TX_TYPE,
+    kroma_params::{L1_BLOCK, SYSTEM_DEPOSIT_TX_GAS, SYSTEM_TX_CALLER},
+}
 use ethers_core::{
     rand::{CryptoRng, RngCore},
     types::{Eip1559TransactionRequest, OtherFields, TransactionRequest},
 };
+#[cfg(feature = "kroma")]
+use ethers_core::utils::hex;
 use ethers_signers::{LocalWallet, Signer};
 use rand::SeedableRng;
 use rand_chacha::{rand_core::OsRng, ChaCha20Rng};
@@ -74,6 +82,107 @@ pub static CORRECT_MOCK_TXS: LazyLock<Vec<MockTransaction>> = LazyLock::new(|| {
             .value(word!("0x0"))
             .gas_price(word!("0x4d2"))
             .input(Bytes::from(b"hello"))
+            .build(),
+        #[cfg(feature = "kroma")]
+        // Kroma deposit tx
+        MockTransaction::default()
+            .transaction_type(0x7eu64)
+            .hash(
+                Hash::from_str(
+                    "0xba940eddf4c601ec510443b19f31ca3f354f18b844cebda8ce4c43fe5d53fa70",
+                )
+                .unwrap(),
+            )
+            .transaction_idx(1u64)
+            .from(AddrOrWallet::Addr(*SYSTEM_TX_CALLER))
+            .to(AddrOrWallet::Addr(*L1_BLOCK))
+            .nonce(word!("0x48"))
+            .value(word!("0x0"))
+            .gas(Word::from(SYSTEM_DEPOSIT_TX_GAS))
+            .input(
+                hex::decode(
+                    "efc674eb\
+                000000000000000000000000000000000000000000000000000000000000001a\
+                0000000000000000000000000000000000000000000000000000000064a50e70\
+                0000000000000000000000000000000000000000000000000000000001e18791\
+                3d0f4db630aef9e4d7a5f94be45dc18820b7cae5602d6f056cd60bc52eb74245\
+                0000000000000000000000000000000000000000000000000000000000000000\
+                0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc\
+                0000000000000000000000000000000000000000000000000000000000000834\
+                00000000000000000000000000000000000000000000000000000000000f4240\
+                00000000000000000000000000000000000000000000000000000000000007d0",
+                )
+                .unwrap()
+                .into(),
+            )
+            .mint(word!("0x0"))
+            .source_hash(
+                Hash::from_str(
+                    "0x20bae9fe252823414190884e97a5219704d96df8451ac61e52f8ebe11df4161d",
+                )
+                .unwrap(),
+            )
+            .build_kroma(),
+        #[cfg(feature = "kroma")]
+        // Kroma legacy tx
+        MockTransaction::default()
+            .transaction_type(0u64)
+            .hash(
+                Hash::from_str(
+                    "0x6e9d05e31c45653dc8c188ce67a0038ce7f8707a44c2add4fe5ba6ce0caec1fa",
+                )
+                .unwrap(),
+            )
+            .transaction_idx(2u64)
+            .from(AddrOrWallet::Addr(address!(
+                "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+            )))
+            .to(AddrOrWallet::Addr(address!(
+                "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+            )))
+            .nonce(word!("0x0"))
+            .value(word!("0xde0b6b3a7640000"))
+            .gas(word!("0x5208"))
+            .gas_price(word!("0x3b9c2b4a"))
+            .input(Bytes::from(b""))
+            .sig_data((
+                1837u64,
+                Word::from("0x70e69cab41c0933ab4bbdb43232c23271209770c561681f4118636777232bb3c"),
+                Word::from("0x2d102204d2e8e80177cc9f02b88552e6a6a400b13e8d7b8585603c29b49e4fa8"),
+            ))
+            .build(),
+        #[cfg(feature = "kroma")]
+        // Kroma deploy tx
+        MockTransaction::default()
+            .hash(
+                Hash::from_str(
+                    "0x1b384a5effb97623025407c4dcc0e947e7ea4f52f0ed4bf1548db337a6501356",
+                )
+                .unwrap(),
+            )
+            .nonce(word!("0x0"))
+            .from(AddrOrWallet::Addr(address!(
+                "0xeefca179f40d3b8b3d941e6a13e48835a3af8241"
+            )))
+            .value(word!("0x0"))
+            .gas(word!("0xf4240"))
+            .gas_price(word!("0x1"))
+            .input(
+                hex::decode("6960606060606060606060600052610014610142f3")
+                    .unwrap()
+                    .into(),
+            )
+            .sig_data((
+                2711,
+                Word::from_str(
+                    "0xabfa2ed41f429e227e7cf9f2e64b3935c1514f39011c43618bc1005d29a41f1d",
+                )
+                .unwrap(),
+                Word::from_str(
+                    "0x6d9c6ba0f8c435d79c2016488b52756cc5553b1140a1a11f8b2b4cc4b97cb406",
+                )
+                .unwrap(),
+            ))
             .build(),
     ]
 });
@@ -473,5 +582,23 @@ impl MockTransaction {
         } else {
             v
         }
+    }
+
+    #[cfg(feature = "kroma")]
+    pub fn build_kroma(&mut self) -> Self {
+        match (self.v, self.r, self.s) {
+            (None, None, None) => {
+                self.v = Some(U64::zero());
+                self.r = Some(Word::zero());
+                self.s = Some(Word::zero());
+            }
+            (Some(_), Some(_), Some(_)) => (),
+            _ => panic!("either all or none of the SigData params have to be set"),
+        }
+
+        if self.hash.is_none() {
+            panic!("mock_transaction without tx_hash not allowed")
+        }
+        self.to_owned()
     }
 }
