@@ -239,7 +239,7 @@ mod test {
         word, ToWord,
     };
     use itertools::Itertools;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use std::sync::LazyLock;
 
     static TEST_VECTOR: LazyLock<Vec<PrecompileCallArgs>> = LazyLock::new(|| {
@@ -318,7 +318,7 @@ mod test {
             let bytecode = test_vector.with_call_op(call_kind);
 
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
             )
             .run();
         }

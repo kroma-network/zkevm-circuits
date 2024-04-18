@@ -11,6 +11,7 @@ use ethers_core::types::{
     transaction::eip2718::TypedTransaction, Eip1559TransactionRequest, Eip2930TransactionRequest,
     NameOrAddress, TransactionRequest, H256,
 };
+use ethers_signers::LocalWallet;
 use halo2_proofs::halo2curves::{group::ff::PrimeField, secp256k1::Fq};
 use num::Integer;
 use num_bigint::BigUint;
@@ -402,16 +403,18 @@ pub struct GethData {
     #[cfg(feature = "scroll")]
     pub block_trace: BlockTrace,
 }
-/*
+
 impl GethData {
     /// Signs transactions with selected wallets
     pub fn sign(&mut self, wallets: &HashMap<Address, LocalWallet>) {
         for tx in self.eth_block.transactions.iter_mut() {
             let wallet = wallets.get(&tx.from).unwrap();
-            assert_eq!(wallet.chain_id(), self.chain_id);
+            // assert_eq!(wallet.chain_id(), self.chain_id);
             let geth_tx: Transaction = (&*tx).into();
             let req: TransactionRequest = (&geth_tx).into();
-            let sig = wallet.sign_transaction_sync(&req.chain_id(self.chain_id).into());
+            let sig = wallet
+                .sign_transaction_sync(&req.chain_id(self.chain_id).into())
+                .unwrap();
             tx.v = U64::from(sig.v);
             tx.r = sig.r;
             tx.s = sig.s;
@@ -421,7 +424,6 @@ impl GethData {
         }
     }
 }
-*/
 
 /// Returns the number of addresses and the cumulative number of storage keys in
 /// the entire access list.

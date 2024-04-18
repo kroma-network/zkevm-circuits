@@ -193,7 +193,13 @@ mod test {
         ToWord, Word,
     };
 
-    use mock::TestContext;
+    use mock::{
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            TestContext3_1,
+        },
+        tx_idx, SimpleTestContext,
+    };
 
     fn test_invalid_jump(destination: usize, out_of_range: bool) {
         let mut bytecode = bytecode! {
@@ -211,7 +217,7 @@ mod test {
         });
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -242,7 +248,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -381,7 +387,7 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account) {
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
             |accs| {
                 accs[0]
@@ -397,9 +403,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into());
@@ -428,7 +438,7 @@ mod test {
         });
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

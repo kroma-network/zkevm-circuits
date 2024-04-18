@@ -1038,7 +1038,7 @@ mod test {
     use eth_types::{bytecode, word, ToWord};
     use ethers_core::k256::elliptic_curve::PrimeField;
     use itertools::Itertools;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use std::sync::LazyLock;
 
     use crate::test_util::CircuitTestBuilder;
@@ -1564,7 +1564,7 @@ mod test {
         let bytecode = TEST_VECTOR[4].with_call_op(OpcodeId::STATICCALL);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -1582,7 +1582,7 @@ mod test {
             let bytecode = test_vector.with_call_op(call_kind);
 
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
             )
             .run();
         }
@@ -1601,7 +1601,7 @@ mod test {
             let bytecode = test_vector.with_call_op(call_kind);
 
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
             )
             .run();
         }
@@ -1619,7 +1619,7 @@ mod test {
             let bytecode = test_vector.with_call_op(OpcodeId::STATICCALL);
 
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
             )
             .run();
         }

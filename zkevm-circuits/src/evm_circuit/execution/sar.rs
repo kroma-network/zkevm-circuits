@@ -368,7 +368,7 @@ mod test {
     use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, U256};
     use ethers_core::types::I256;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use rand::Rng;
     use std::sync::LazyLock;
 
@@ -462,7 +462,7 @@ mod test {
             STOP
         };
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

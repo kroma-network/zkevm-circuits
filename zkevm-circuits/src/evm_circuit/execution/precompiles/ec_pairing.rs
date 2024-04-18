@@ -464,7 +464,9 @@ mod test {
     use eth_types::{bytecode, evm_types::GasCost, word, ToWord, Word};
     use halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
     use itertools::Itertools;
-    use mock::{test_ctx::helpers::account_0_code_wallet_0_no_code, TestContext, MOCK_WALLETS};
+    use mock::{
+        test_ctx::helpers::account_0_code_wallet_0_no_code, SimpleTestContext, MOCK_WALLETS,
+    };
     use rayon::iter::{ParallelBridge, ParallelIterator};
     use std::sync::LazyLock;
 
@@ -1113,7 +1115,7 @@ mod test {
                 let bytecode = test_vector.with_call_op(call_kind);
 
                 CircuitTestBuilder::new_from_test_ctx(
-                    TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                    SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 )
                 .run();
             })
@@ -1136,7 +1138,7 @@ mod test {
                 let bytecode = test_vector.with_call_op(call_kind);
 
                 CircuitTestBuilder::new_from_test_ctx(
-                    TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                    SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 )
                 .run();
             })
@@ -1158,7 +1160,7 @@ mod test {
             .for_each(|(test_vector, &call_kind)| {
                 let bytecode = test_vector.with_call_op(call_kind);
 
-                let test_ctx: TestContext<2, 1> = TestContext::new(
+                let test_ctx: SimpleTestContext = SimpleTestContext::new(
                     None,
                     account_0_code_wallet_0_no_code(bytecode),
                     |mut txs, accs| {

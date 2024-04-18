@@ -87,7 +87,10 @@ mod mstore_tests {
         Word,
     };
     use itertools::Itertools;
-    use mock::test_ctx::{helpers::*, LoggerConfig, TestContext};
+    use mock::{
+        test_ctx::{helpers::*, LoggerConfig, SimpleTestContext},
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -101,7 +104,7 @@ mod mstore_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+        let block: GethData = SimpleTestContext::new_with_logger_config(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -116,13 +119,14 @@ mod mstore_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .filter(|step| step.exec_state == ExecState::Op(OpcodeId::MSTORE))
             .nth(1)
             .unwrap();
 
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
         assert_eq!(
             [0, 1]
                 .map(|idx| &builder.block.container.stack[step.bus_mapping_instance[idx].as_usize()])
@@ -130,11 +134,11 @@ mod mstore_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022u32), Word::from(0x100u64))
+                    &StackOp::new(expected_call_id, StackAddress::from(1022u32), Word::from(0x100u64))
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023u32), Word::from(0x1234u64))
+                    &StackOp::new(expected_call_id, StackAddress::from(1023u32), Word::from(0x1234u64))
                 )
             ]
         );
@@ -151,7 +155,7 @@ mod mstore_tests {
                 (
                     RW::WRITE,
                     MemoryOp::new_write(
-                        1,
+                        expected_call_id,
                         MemoryAddress(slot),
                         Word::from(0x1234u64),
                         Word::zero()
@@ -160,7 +164,7 @@ mod mstore_tests {
                 (
                     RW::WRITE,
                     MemoryOp::new_write(
-                        1,
+                        expected_call_id,
                         MemoryAddress(slot + 32),
                         Word::from(0x00),
                         Word::zero()
@@ -181,7 +185,7 @@ mod mstore_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -195,12 +199,13 @@ mod mstore_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::MSTORE8))
             .unwrap();
 
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
         assert_eq!(
             [0, 1]
                 .map(|idx| &builder.block.container.stack[step.bus_mapping_instance[idx].as_usize()])
@@ -208,11 +213,11 @@ mod mstore_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022u32), Word::from(0x100u64))
+                    &StackOp::new(expected_call_id, StackAddress::from(1022u32), Word::from(0x100u64))
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023u32), Word::from(0x1234))
+                    &StackOp::new(expected_call_id, StackAddress::from(1023u32), Word::from(0x1234))
                 )
             ]
         );
@@ -229,7 +234,12 @@ mod mstore_tests {
             (memory_word_op.rw(), memory_word_op.op()),
             (
                 RW::WRITE,
-                &MemoryOp::new_write(1, MemoryAddress(slot), left_word, Word::zero())
+                &MemoryOp::new_write(
+                    expected_call_id,
+                    MemoryAddress(slot),
+                    left_word,
+                    Word::zero()
+                )
             )
         )
     }

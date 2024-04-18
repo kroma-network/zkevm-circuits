@@ -127,7 +127,7 @@ mod tests {
             STOP
         };
 
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,

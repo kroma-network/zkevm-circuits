@@ -97,7 +97,7 @@ impl<F: Field> ExecutionGadget<F> for CodesizeGadget<F> {
 mod tests {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     fn test_ok(large: bool) {
         let mut code = bytecode! {};
@@ -113,7 +113,7 @@ mod tests {
         code.append(&tail);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(code).unwrap(),
         )
         .run();
     }

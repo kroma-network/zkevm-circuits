@@ -155,7 +155,13 @@ mod extcodecopy_tests {
         geth_types::GethData,
         Bytecode, Bytes, ToWord, Word, U256,
     };
-    use mock::{test_ctx::LoggerConfig, TestContext};
+    use mock::{
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            LoggerConfig, TestContext3_1,
+        },
+        tx_idx,
+    };
 
     fn test_ok(
         code_ext: Bytes,
@@ -192,9 +198,9 @@ mod extcodecopy_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new_with_logger_config(
+        let block: GethData = TestContext3_1::new_with_logger_config(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x0000000000000000000000000000000000000010"))
                     .code(code.clone());
@@ -204,9 +210,13 @@ mod extcodecopy_tests {
                 accs[2]
                     .address(address!("0x0000000000000000000000000000000000cafe01"))
                     .balance(Word::from(1u64 << 20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.number(0xcafeu64),
             LoggerConfig::default(),
@@ -221,7 +231,7 @@ mod extcodecopy_tests {
 
         assert!(builder.sdb.add_account_to_access_list(external_address));
 
-        let tx_id = 1;
+        let tx_id = tx_idx!(1);
         let transaction = &builder.block.txs()[tx_id - 1];
         let call_id = transaction.calls()[0].call_id;
 
@@ -370,6 +380,16 @@ mod extcodecopy_tests {
             .unwrap();
 
         let expected_call_id = transaction.calls()[step.call_index].call_id;
+        #[cfg(feature = "kroma")]
+        let system_deposit_memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == expected_call_id)
+            .unwrap();
+        #[cfg(not(feature = "kroma"))]
+        let system_deposit_memory_offset = 0;
 
         let length = memory_offset + copy_size;
         let copy_start = memory_offset - memory_offset % 32;
@@ -387,10 +407,13 @@ mod extcodecopy_tests {
             .clone()
             .unwrap();
 
-        assert_eq!(builder.block.container.memory.len(), word_ops);
+        assert_eq!(
+            builder.block.container.memory.len(),
+            word_ops + system_deposit_memory_offset
+        );
         assert_eq!(
             (0..word_ops)
-                .map(|idx| &builder.block.container.memory[idx])
+                .map(|idx| &builder.block.container.memory[system_deposit_memory_offset + idx])
                 .map(|op| (op.rw(), op.op().clone()))
                 .collect::<Vec<(RW, MemoryOp)>>(),
             (0..word_ops)

@@ -84,7 +84,10 @@ mod test {
         self, address, bytecode, bytecode::Bytecode, geth_types::Account, Address, ToWord, Word,
     };
 
-    use mock::TestContext;
+    use mock::{
+        test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx},
+        tx_idx, SimpleTestContext, TestContext,
+    };
 
     fn test_stack_underflow(value: Word) {
         let bytecode = bytecode! {
@@ -95,7 +98,7 @@ mod test {
         };
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -141,7 +144,7 @@ mod test {
         bytecode.op_stop();
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .params(CircuitsParams {
             max_rws: 2048,
@@ -202,7 +205,7 @@ mod test {
     fn stack_error_internal_call(caller: Account, callee: Account) {
         let ctx = TestContext::<3, 1>::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -216,9 +219,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(23800.into());

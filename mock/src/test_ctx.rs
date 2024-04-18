@@ -7,6 +7,14 @@ use eth_types::{
     geth_types::{Account, BlockConstants, GethData},
     BigEndianHash, Block, Bytecode, Error, Transaction, Word, H256,
 };
+#[cfg(feature = "kroma")]
+use eth_types::{
+    kroma_l1_block::BYTECODE,
+    kroma_params::{
+        L1_BLOCK, PROPOSER_REWARD_VAULT, PROTOCOL_VAULT, SYSTEM_DEPOSIT_TX_GAS, SYSTEM_TX_CALLER,
+        VALIDATOR_REWARD_VAULT,
+    },
+};
 #[cfg(feature = "scroll")]
 use external_tracer::l2trace;
 #[cfg(not(feature = "scroll"))]
@@ -14,6 +22,8 @@ use external_tracer::trace;
 use external_tracer::TraceConfig;
 use helpers::*;
 use itertools::Itertools;
+#[cfg(feature = "kroma")]
+use std::str::FromStr;
 
 pub use external_tracer::LoggerConfig;
 
@@ -81,6 +91,36 @@ pub use external_tracer::LoggerConfig;
 /// // Now we can start generating the traces and items we need to inspect
 /// // the behaviour of the generated env.
 /// ```
+
+#[cfg(feature = "kroma")]
+#[macro_export]
+macro_rules! tx_idx {
+    ($n: expr) => {
+        $n + 1
+    };
+}
+#[cfg(not(feature = "kroma"))]
+#[macro_export]
+macro_rules! tx_idx {
+    ($n: expr) => {
+        $n
+    };
+}
+
+#[cfg(feature = "kroma")]
+macro_rules! nonce {
+    ($n: expr) => {
+        $n - 1
+    };
+}
+
+#[cfg(not(feature = "kroma"))]
+macro_rules! nonce {
+    ($n: expr) => {
+        $n
+    };
+}
+
 #[derive(Debug)]
 pub struct TestContext<const NACC: usize, const NTX: usize> {
     /// chain id
@@ -97,6 +137,58 @@ pub struct TestContext<const NACC: usize, const NTX: usize> {
     #[cfg(feature = "scroll")]
     block_trace: BlockTrace,
 }
+
+#[macro_export]
+// Following accounts are added.
+// - $NACC - 5: L1Block.sol
+// - $NACC - 4: SystemTxDepositor
+// - $NACC - 3: ProtocolRewardVault
+// - $NACC - 2: ProposerRewardVault
+// - $NACC - 1: ValidatorRewardVault
+// Following txs are added at the beginning.
+// - 0: SystemDepositTx.
+macro_rules! declare_test_context {
+    ($ty: ident, $NACC: expr, $NTX: expr) => {
+        type $ty = TestContext<{ $NACC + 5 }, { $NTX + 1 }>;
+    };
+}
+
+declare_test_context!(TestContext0_0_, 0, 0);
+pub type TestContext0_0 = TestContext0_0_;
+
+declare_test_context!(TestContext1_1_, 1, 1);
+pub type TestContext1_1 = TestContext1_1_;
+
+declare_test_context!(TestContext2_1_, 2, 1);
+pub type TestContext2_1 = TestContext2_1_;
+pub type SimpleTestContext = TestContext2_1;
+#[cfg(feature = "kroma")]
+/// Number of accounts for simple test
+pub const SIMPLE_NACC_NUM: usize = 7;
+#[cfg(feature = "kroma")]
+/// Number of txs for simple test
+pub const SIMPLE_NTX_NUM: usize = 2;
+#[cfg(not(feature = "kroma"))]
+/// Number of accounts for simple test
+pub const SIMPLE_NACC_NUM: usize = 2;
+#[cfg(not(feature = "kroma"))]
+/// Number of txs for simple test
+pub const SIMPLE_NTX_NUM: usize = 1;
+
+declare_test_context!(TestContext2_2_, 2, 2);
+pub type TestContext2_2 = TestContext2_2_;
+
+declare_test_context!(TestContext2_3_, 2, 3);
+pub type TestContext2_3 = TestContext2_3_;
+
+declare_test_context!(TestContext3_1_, 3, 1);
+pub type TestContext3_1 = TestContext3_1_;
+
+declare_test_context!(TestContext3_2_, 3, 2);
+pub type TestContext3_2 = TestContext3_2_;
+
+declare_test_context!(TestContext4_1_, 4, 1);
+pub type TestContext4_1 = TestContext4_1_;
 
 impl<const NACC: usize, const NTX: usize> From<TestContext<NACC, NTX>> for GethData {
     fn from(ctx: TestContext<NACC, NTX>) -> GethData {
@@ -152,7 +244,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             .for_each(|(idx, tx)| {
                 tx.transaction_idx(u64::try_from(idx).expect("Unexpected idx conversion error"));
                 tx.nonce(Word::from(
-                    u64::try_from(idx).expect("Unexpected idx conversion error"),
+                    u64::try_from(nonce!(idx)).expect("Unexpected idx conversion error"),
                 ));
             });
         let tx_refs = transactions.iter_mut().collect();
@@ -252,12 +344,16 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
     /// addresses are the ones used in [`TestContext::
     /// account_0_code_wallet_0_no_code`]. Extra accounts, txs and/or block
     /// configs are set as [`Default`].
-    pub fn simple_ctx_with_bytecode(bytecode: Bytecode) -> Result<TestContext<2, 1>, Error> {
+    pub fn simple_ctx_with_bytecode(bytecode: Bytecode) -> Result<SimpleTestContext, Error> {
         TestContext::new(
             None,
             account_0_code_wallet_0_no_code(bytecode),
             |mut txs, accs| {
-                txs[0].from(MOCK_WALLETS[0].clone()).to(accs[0].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
+                    .from(MOCK_WALLETS[0].clone())
+                    .to(accs[0].address);
             },
             |block, _txs| block.number(0xcafeu64),
         )
@@ -301,6 +397,8 @@ pub fn gen_trace_config(
 pub mod helpers {
     use super::*;
     use crate::{MOCK_ACCOUNTS, MOCK_WALLETS};
+    #[cfg(feature = "kroma")]
+    use eth_types::{kroma_params::DEPOSIT_TX_TYPE, Bytes};
     use ethers_signers::Signer;
 
     /// Generate a simple setup which adds balance to two default accounts from
@@ -308,13 +406,17 @@ pub mod helpers {
     /// - 0x000000000000000000000000000000000cafe111
     /// - 0x000000000000000000000000000000000cafe222
     /// And injects the provided bytecode into the first one.
-    pub fn account_0_code_account_1_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 2]) {
-        |accs| {
+    pub fn account_0_code_account_1_no_code(
+        code: Bytecode,
+    ) -> impl FnOnce([&mut MockAccount; SIMPLE_NACC_NUM]) {
+        |mut accs| {
             accs[0]
                 .address(MOCK_ACCOUNTS[0])
                 .balance(eth(10))
                 .code(code);
             accs[1].address(MOCK_ACCOUNTS[1]).balance(eth(10));
+            #[cfg(feature = "kroma")]
+            setup_kroma_required_accounts(accs.as_mut_slice(), 2);
         }
     }
 
@@ -325,7 +427,9 @@ pub mod helpers {
     /// and sender is a random wallet account from the first of
     /// [`static@MOCK_WALLETS`];
     /// And injects the provided bytecode into the first one.
-    pub fn account_0_code_wallet_0_no_code(code: Bytecode) -> impl FnOnce([&mut MockAccount; 2]) {
+    pub fn account_0_code_wallet_0_no_code(
+        code: Bytecode,
+    ) -> impl FnOnce([&mut MockAccount; SIMPLE_NACC_NUM]) {
         |accs| {
             accs[0]
                 .address(MOCK_ACCOUNTS[0])
@@ -335,9 +439,92 @@ pub mod helpers {
         }
     }
 
+    #[cfg(feature = "kroma")]
+    /// Generate existing accounts in Kroma.
+    /// - L1_BLOCK
+    /// - SYSTEM_TX_CALLER
+    /// - PROTOCOL_VAULT
+    /// - PROPOSER_REWARD_VAULT
+    /// - VALIDATOR_REWARD_VAULT
+    pub fn setup_kroma_required_accounts(accs: &mut [&mut MockAccount], n: usize) {
+        accs[n].address(*L1_BLOCK).code(BYTECODE.clone());
+
+        // luke: temporarily add balance to avoid panic on check_update_sdb_account
+        accs[n + 1].address(*SYSTEM_TX_CALLER).balance(eth(10));
+        accs[n + 2].address(*PROTOCOL_VAULT).balance(eth(10));
+        accs[n + 3].address(*PROPOSER_REWARD_VAULT).balance(eth(10));
+        accs[n + 4]
+            .address(*VALIDATOR_REWARD_VAULT)
+            .balance(eth(10));
+    }
+
     /// Generate a single transaction from the second account of the list to the
     /// first one.
-    pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 2]) {
-        txs[0].from(accs[1].address).to(accs[0].address);
+    pub fn tx_from_1_to_0(
+        mut txs: Vec<&mut MockTransaction>,
+        accs: [MockAccount; SIMPLE_NACC_NUM],
+    ) {
+        #[cfg(feature = "kroma")]
+        system_deposit_tx(txs[0]);
+        txs[tx_idx!(0)].from(accs[1].address).to(accs[0].address);
+    }
+
+    #[cfg(feature = "kroma")]
+    /// Generate a system deposit transaction.
+    pub fn system_deposit_tx(tx: &mut MockTransaction) {
+        macro_rules! padding {
+            ($vec:expr) => {{
+                let mut v = $vec;
+                let len = v.len();
+                for _ in 0..(32 - len) {
+                    v.insert(0, 0);
+                }
+                v
+            }};
+        }
+
+        let mut calldata = Vec::with_capacity(4 + 32 * 9);
+
+        // setL1BlockValues
+        calldata.extend(vec![0xef, 0xc6, 0x74, 0xeb]);
+        // l1 blocknumber: 2295
+        calldata.extend(padding!(vec![0x08, 0xf7]));
+        // l1 timestamp: 1685085294
+        calldata.extend(padding!(vec![0x64, 0x70, 0x5c, 0x6e]));
+        // l1 basefee: 7
+        calldata.extend(padding!(vec![0x07]));
+        // l1 hash
+        calldata.extend(vec![
+            0x36, 0xe0, 0x8a, 0x25, 0xfc, 0x21, 0x49, 0x1f, 0xc3, 0x48, 0xe2, 0xd6, 0x3e, 0x42,
+            0xce, 0xda, 0xa3, 0xc6, 0x33, 0x17, 0x80, 0xf2, 0x2b, 0xaa, 0x5e, 0xb4, 0x23, 0x98,
+            0x1e, 0xfc, 0x12, 0xa0,
+        ]);
+        // sequenceNumber: 0
+        calldata.extend(vec![0; 32]);
+        // batcherHash
+        calldata.extend(padding!(vec![
+            0x3c, 0x44, 0xcd, 0xdd, 0xb6, 0xa9, 0x00, 0xfa, 0x2b, 0x58, 0x5d, 0xd2, 0x99, 0xe0,
+            0x3d, 0x12, 0xfa, 0x42, 0x93, 0xbc
+        ]));
+        // l1 fee overhead: 2100
+        calldata.extend(padding!(vec![0x08, 0x34]));
+        // l1 fee scalar: 1000000
+        calldata.extend(padding!(vec![0x0f, 0x42, 0x40]));
+        // validator reward scalar: 2000
+        calldata.extend(padding!(vec![0x07, 0xd0]));
+
+        tx.transaction_type(DEPOSIT_TX_TYPE)
+            .from(*SYSTEM_TX_CALLER)
+            .to(*L1_BLOCK)
+            .gas(Word::from(SYSTEM_DEPOSIT_TX_GAS))
+            .gas_price(Word::zero())
+            .source_hash(
+                H256::from_str(
+                    "0x7f9da519dd53cd0705760f80addc46233ba6c3124f4566798ad1ae1fb7189307",
+                )
+                .unwrap(),
+            )
+            .mint(Word::from("0x0"))
+            .input(Bytes::from(calldata));
     }
 }

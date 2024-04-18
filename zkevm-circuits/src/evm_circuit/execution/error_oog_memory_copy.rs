@@ -250,8 +250,14 @@ mod tests {
     };
     use itertools::Itertools;
     use mock::{
-        eth, test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS,
-        MOCK_BLOCK_GAS_LIMIT,
+        eth,
+        test_ctx::{
+            helpers::{
+                account_0_code_account_1_no_code, setup_kroma_required_accounts, system_deposit_tx,
+            },
+            TestContext3_1,
+        },
+        tx_idx, SimpleTestContext, TestContext, MOCK_ACCOUNTS, MOCK_BLOCK_GAS_LIMIT,
     };
 
     const TESTING_COMMON_OPCODES: &[OpcodeId] = &[
@@ -402,11 +408,13 @@ mod tests {
             gas_cost
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(testing_data.bytecode.clone()),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .gas(gas_cost.into());
@@ -449,15 +457,19 @@ mod tests {
             STOP
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2].address(MOCK_ACCOUNTS[2]).balance(eth(10));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].from(accs[2].address).to(accs[1].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
         )

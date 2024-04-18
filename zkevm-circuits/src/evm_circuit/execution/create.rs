@@ -837,7 +837,11 @@ mod test {
         address, bytecode, evm_types::OpcodeId, geth_types::Account, word, Address, Bytecode, Word,
     };
     use itertools::Itertools;
-    use mock::{eth, TestContext, MOCK_ACCOUNTS};
+    use mock::{
+        eth,
+        test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx},
+        tx_idx, SimpleTestContext, TestContext, MOCK_ACCOUNTS,
+    };
     use std::sync::LazyLock;
 
     const CALLEE_ADDRESS: Address = Address::repeat_byte(0xff);
@@ -955,17 +959,21 @@ mod test {
         code
     }
 
-    fn test_context(caller: Account) -> TestContext<2, 1> {
-        TestContext::new(
+    fn test_context(caller: Account) -> SimpleTestContext {
+        SimpleTestContext::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(eth(10));
                 accs[1].account(&caller);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 2);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(word!("0x2386F26FC10000"));
@@ -1128,7 +1136,7 @@ mod test {
                 CREATE2
             };
 
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
                 |accs| {
                     accs[0].address(MOCK_ACCOUNTS[0]).balance(mock::eth(10));

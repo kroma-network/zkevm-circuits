@@ -1,9 +1,13 @@
 //! Mock Block definition and builder related methods.
 
+#[cfg(feature = "kroma")]
+use crate::KROMA_MOCK_GASLIMIT;
 #[cfg(not(feature = "scroll"))]
 use crate::MOCK_DIFFICULTY;
 #[cfg(feature = "scroll")]
 use crate::MOCK_DIFFICULTY_L2GETH as MOCK_DIFFICULTY;
+#[cfg(not(feature = "kroma"))]
+use crate::MOCK_GASLIMIT;
 use crate::{MockTransaction, MOCK_BASEFEE, MOCK_CHAIN_ID, MOCK_GASLIMIT};
 use eth_types::{Address, Block, Bytes, Hash, Transaction, Word, H64, U64};
 use ethers_core::types::{Bloom, OtherFields};
@@ -53,7 +57,11 @@ impl Default for MockBlock {
             receipts_root: Hash::zero(),
             number: U64([0u64]),
             gas_used: Word::zero(),
-            gas_limit: *MOCK_GASLIMIT,
+            gas_limit: if cfg!(feature = "kroma") {
+                *KROMA_MOCK_GASLIMIT
+            } else {
+                *MOCK_GASLIMIT
+            },
             base_fee_per_gas: *MOCK_BASEFEE,
             extra_data: Bytes::default(),
             logs_bloom: None,

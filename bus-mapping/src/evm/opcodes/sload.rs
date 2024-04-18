@@ -126,8 +126,8 @@ mod sload_tests {
         Word,
     };
     use mock::{
-        test_ctx::{helpers::*, TestContext},
-        MOCK_ACCOUNTS,
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx, MOCK_ACCOUNTS,
     };
     use pretty_assertions::assert_eq;
 
@@ -154,7 +154,7 @@ mod sload_tests {
         let expected_loaded_value = if is_warm { 0x6fu64 } else { 0 };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -168,12 +168,13 @@ mod sload_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::SLOAD))
             .unwrap();
 
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[0].call_id;
         assert_eq!(
             [4, 6]
                 .map(|idx| &builder.block.container.stack[step.bus_mapping_instance[idx].as_usize()])
@@ -181,11 +182,11 @@ mod sload_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(0x0u32))
+                    &StackOp::new(expected_call_id, StackAddress::from(1023), Word::from(0x0u32))
                 ),
                 (
                     RW::WRITE,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(expected_loaded_value))
+                    &StackOp::new(expected_call_id, StackAddress::from(1023), Word::from(expected_loaded_value))
                 )
             ]
         );
@@ -200,7 +201,7 @@ mod sload_tests {
                     Word::from(0x0u32),
                     Word::from(expected_loaded_value),
                     Word::from(expected_loaded_value),
-                    1,
+                    tx_idx!(1),
                     Word::from(0x0u32),
                 )
             )
@@ -217,7 +218,7 @@ mod sload_tests {
                 (
                     RW::READ,
                     &TxAccessListAccountStorageOp {
-                        tx_id: 1,
+                        tx_id: tx_idx!(1),
                         address: MOCK_ACCOUNTS[0],
                         key: Word::from(0x0u32),
                         is_warm,
@@ -227,7 +228,7 @@ mod sload_tests {
                 (
                     RW::WRITE,
                     &TxAccessListAccountStorageOp {
-                        tx_id: 1,
+                        tx_id: tx_idx!(1),
                         address: MOCK_ACCOUNTS[0],
                         key: Word::from(0x0u32),
                         is_warm: true,

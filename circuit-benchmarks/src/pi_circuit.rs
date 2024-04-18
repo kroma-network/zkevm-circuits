@@ -121,7 +121,7 @@ mod tests {
     }
 
     fn generate_block<const MAX_TXS: usize, const MAX_CALLDATA: usize>() -> Block<Fr> {
-        let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode! {
+        let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode! {
             STOP
         })
         .unwrap();

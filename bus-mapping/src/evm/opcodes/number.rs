@@ -8,7 +8,10 @@ mod number_tests {
         Error,
     };
     use eth_types::{bytecode, evm_types::StackAddress, geth_types::GethData};
-    use mock::test_ctx::{helpers::*, TestContext};
+    use mock::{
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -20,7 +23,7 @@ mod number_tests {
         };
         let block_number = 0xcafeu64;
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
@@ -34,7 +37,7 @@ mod number_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::NUMBER))
@@ -46,7 +49,7 @@ mod number_tests {
             (op_number.rw(), op_number.op()),
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress(1023usize), block_number.into())
+                &StackOp::new(tx_idx!(1), StackAddress(1023usize), block_number.into())
             )
         );
 

@@ -53,7 +53,7 @@ mod tests {
         let addr_a = wallet_a.address();
         let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             |accs| {
                 accs[0]

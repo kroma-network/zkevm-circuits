@@ -139,13 +139,16 @@ mod test {
     use eth_types::{address, bytecode, Bytecode, Word};
 
     use itertools::Itertools;
-    use mock::TestContext;
+    use mock::{
+        test_ctx::helpers::{setup_kroma_required_accounts, system_deposit_tx},
+        tx_idx, SimpleTestContext, TestContext,
+    };
 
     fn test_ok(bytecode: Bytecode, is_root: bool) {
         if is_root {
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x0000000000000000000000000000000000000123"))
                         .balance(Word::from(1u64 << 30));
@@ -153,9 +156,13 @@ mod test {
                         .address(address!("0x0000000000000000000000000000000000000010"))
                         .balance(Word::from(1u64 << 20))
                         .code(bytecode);
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 2);
                 },
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .from(accs[0].address)
                         .to(accs[1].address)
                         .gas(Word::from(30000));
@@ -168,7 +175,7 @@ mod test {
         } else {
             let ctx = TestContext::<3, 1>::new(
                 None,
-                |accs| {
+                |mut accs| {
                     accs[0]
                         .address(address!("0x0000000000000000000000000000000000000123"))
                         .balance(Word::from(1u64 << 30));
@@ -190,9 +197,13 @@ mod test {
                         .address(address!("0x0000000000000000000000000000000000000020"))
                         .balance(Word::from(1u64 << 20))
                         .code(bytecode);
+                    #[cfg(feature = "kroma")]
+                    setup_kroma_required_accounts(accs.as_mut_slice(), 3);
                 },
                 |mut txs, accs| {
-                    txs[0]
+                    #[cfg(feature = "kroma")]
+                    system_deposit_tx(txs[0]);
+                    txs[tx_idx!(0)]
                         .from(accs[0].address)
                         .to(accs[1].address)
                         .gas(Word::from(30000));

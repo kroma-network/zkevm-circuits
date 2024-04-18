@@ -207,7 +207,7 @@ mod tests {
     use mock::{
         eth,
         test_ctx::{helpers::account_0_code_account_1_no_code, LoggerConfig},
-        TestContext, MOCK_ACCOUNTS, MOCK_BLOCK_GAS_LIMIT,
+        SimpleTestContext, TestContext, MOCK_ACCOUNTS, MOCK_BLOCK_GAS_LIMIT,
     };
 
     struct TestCase {
@@ -319,7 +319,7 @@ mod tests {
     }
 
     fn test_root(case: &TestCase) {
-        let ctx = TestContext::<2, 1>::new_with_logger_config(
+        let ctx = SimpleTestContext::new_with_logger_config(
             None,
             account_0_code_account_1_no_code(case.bytecode.clone()),
             |mut txs, accs| {

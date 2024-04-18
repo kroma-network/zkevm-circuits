@@ -6,7 +6,9 @@ use bus_mapping::{
 };
 use ethers_core::types::Bytes;
 use ethers_signers::{LocalWallet, Signer};
-use mock::{eth, TestContext, MOCK_CHAIN_ID, MOCK_DIFFICULTY_L2GETH as MOCK_DIFFICULTY};
+use mock::{
+    eth, SimpleTestContext, TestContext, MOCK_CHAIN_ID, MOCK_DIFFICULTY_L2GETH as MOCK_DIFFICULTY,
+};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
@@ -921,7 +923,7 @@ pub(crate) fn block_precompile_invalid_ec_pairing_fq_overflow() -> BlockTrace {
     let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
     // 2 accounts and 1 tx.
-    TestContext::<2, 1>::new(
+    SimpleTestContext::new(
         Some(vec![Word::zero()]),
         |accs| {
             accs[0].address(addr_a).balance(Word::from(1u64 << 24));
@@ -971,7 +973,7 @@ pub(crate) fn block_precompile_sha256() -> BlockTrace {
     let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
     // 2 accounts and 1 tx.
-    TestContext::<2, 1>::new(
+    SimpleTestContext::new(
         Some(vec![Word::zero()]),
         |accs| {
             accs[0].address(addr_a).balance(Word::from(1u64 << 24));

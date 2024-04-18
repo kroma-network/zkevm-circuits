@@ -94,7 +94,7 @@ impl<F: Field> ExecutionGadget<F> for PushGadget<F> {
 mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, evm_types::OpcodeId};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     fn test_ok(opcode: OpcodeId, bytes: &[u8]) {
         let mut bytecode = bytecode! {
@@ -106,7 +106,7 @@ mod test {
         bytecode.op_stop();
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }

@@ -13,7 +13,7 @@ mod transaction;
 
 pub(crate) use account::MockAccount;
 pub(crate) use block::MockBlock;
-pub use test_ctx::TestContext;
+pub use test_ctx::{SimpleTestContext, TestContext};
 pub use transaction::{AddrOrWallet, MockTransaction, CORRECT_MOCK_TXS};
 
 /// Mock block gas limit
@@ -28,8 +28,10 @@ pub static MOCK_COINBASE: LazyLock<Address> =
 pub static MOCK_GASPRICE: LazyLock<Word> = LazyLock::new(|| Word::from(1u8));
 /// Mock BASEFEE value
 pub static MOCK_BASEFEE: LazyLock<Word> = LazyLock::new(Word::zero);
-/// Mock GASLIMIT value
+/// Mock GASLIMIT value (0x2386f26fc10000 = 10000000000000000)
 pub static MOCK_GASLIMIT: LazyLock<Word> = LazyLock::new(|| Word::from(0x2386f26fc10000u64));
+/// Mock GASLIMIT value (0x2386f278b1d180 -> 10000000000000000 + test_ctx::DEPOSIT_TX_GAS)
+pub static KROMA_MOCK_GASLIMIT: LazyLock<Word> = LazyLock::new(|| Word::from(0x2386f278b1d180u64));
 /// Mock chain ID value
 pub static MOCK_CHAIN_ID: u64 = 1338;
 /// Mock DIFFICULTY value

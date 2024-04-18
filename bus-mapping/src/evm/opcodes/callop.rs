@@ -751,7 +751,7 @@ pub mod tests {
                 helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
                 LoggerConfig,
             },
-            TestContext,
+            SimpleTestContext,
         };
 
         let test_vector = [
@@ -1032,7 +1032,7 @@ pub mod tests {
 
         for (test_call, call_op) in itertools::iproduct!(test_vector.iter(), call_ops.iter()) {
             let code = test_call.with_call_op(*call_op);
-            let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+            let block: GethData = SimpleTestContext::new_with_logger_config(
                 None,
                 account_0_code_account_1_no_code(code),
                 tx_from_1_to_0,

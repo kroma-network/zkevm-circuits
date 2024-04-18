@@ -1156,8 +1156,14 @@ mod test {
     };
     use itertools::Itertools;
     use mock::{
-        test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
+        test_ctx::{
+            helpers::{
+                account_0_code_account_1_no_code, setup_kroma_required_accounts, system_deposit_tx,
+                tx_from_1_to_0,
+            },
+            TestContext3_1,
+        },
+        tx_idx, SimpleTestContext, TestContext,
     };
     use rayon::prelude::{ParallelBridge, ParallelIterator};
     use std::default::Default;
@@ -1430,9 +1436,9 @@ mod test {
     }
 
     fn test_ok(caller: Account, callee: Account, max_rws: Option<usize>) {
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .balance(Word::from(10u64.pow(19)));
@@ -1446,9 +1452,13 @@ mod test {
                     .code(callee.code)
                     .nonce(callee.nonce)
                     .balance(callee.balance);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[0].address)
                     .to(accs[1].address)
                     .gas(100000.into())
@@ -1544,7 +1554,7 @@ mod test {
             .op_call(0xc350, 0xff, 0x13, 0x0, 0x0, 0x0, 0x0)
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(callee_code),
             tx_from_1_to_0,
@@ -1568,7 +1578,7 @@ mod test {
             .op_call(0xc350, 0xff, 0x13, 0x0, 0x0, 0x0, 0x0)
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(callee_code),
             tx_from_1_to_0,
@@ -1614,7 +1624,7 @@ mod test {
             .op_sstore(0, 0)
         };
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
             |accs| {
                 accs[0]
@@ -1654,7 +1664,7 @@ mod test {
             SUB
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(callee_code),
             |mut txs, accs| {
@@ -1684,7 +1694,7 @@ mod test_precompiles {
 
     use mock::{
         test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
+        SimpleTestContext,
     };
     use paste::paste;
 
@@ -1694,7 +1704,7 @@ mod test_precompiles {
             .op_call(0xc350, 0x4, 0x13, 0x0, 0x0, 0x0, 0x0)
         };
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(callee_code),
             tx_from_1_to_0,
@@ -1712,7 +1722,7 @@ mod test_precompiles {
 
     fn test_precompile_inner(arg: PrecompileCallArgs, call_op: &OpcodeId) {
         let code = arg.with_call_op(*call_op);
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,

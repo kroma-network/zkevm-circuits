@@ -227,7 +227,7 @@ impl<F: Field> ExecutionGadget<F> for AddModGadget<F> {
 mod test {
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     #[cfg(feature = "enable-stack")]
     use eth_types::evm_types::Stack;
@@ -242,13 +242,13 @@ mod test {
         };
 
         #[allow(unused_mut)]
-        let mut ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap();
+        let mut ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
         #[cfg(feature = "enable-stack")]
         if let Some(r) = _r {
             #[allow(unused_mut)]
             let mut last = ctx
                 .geth_traces
-                .first_mut()
+                .get_mut(tx_idx!(0))
                 .unwrap()
                 .struct_logs
                 .last_mut()

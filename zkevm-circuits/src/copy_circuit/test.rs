@@ -20,8 +20,14 @@ use halo2_proofs::{
     halo2curves::bn256::Fr,
 };
 use mock::{
-    eth, gwei, test_ctx::helpers::account_0_code_account_1_no_code, MockTransaction, TestContext,
-    MOCK_ACCOUNTS,
+    eth, gwei,
+    test_ctx::{
+        helpers::{
+            account_0_code_account_1_no_code, setup_kroma_required_accounts, system_deposit_tx,
+        },
+        TestContext3_1,
+    },
+    tx_idx, MockTransaction, SimpleTestContext, TestContext, MOCK_ACCOUNTS,
 };
 
 const K: u32 = 20;
@@ -73,7 +79,7 @@ fn gen_calldatacopy_data() -> CircuitInputBuilder {
         STOP
     };
     let calldata = rand_bytes(length);
-    let test_ctx = TestContext::<2, 1>::new(
+    let test_ctx = SimpleTestContext::new(
         None,
         account_0_code_account_1_no_code(code),
         |mut txs, accs| {
@@ -110,7 +116,7 @@ fn gen_codecopy_data() -> CircuitInputBuilder {
         CODECOPY
         STOP
     };
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder
@@ -200,9 +206,9 @@ fn gen_extcodecopy_data() -> CircuitInputBuilder {
         STOP
     };
     let code_ext = rand_bytes(0x0fffusize);
-    let test_ctx = TestContext::<3, 1>::new(
+    let test_ctx = TestContext3_1::new(
         None,
-        |accs| {
+        |mut accs| {
             accs[0].address(MOCK_ACCOUNTS[1]).code(code.clone());
 
             accs[1].address(external_address).code(code_ext.clone());
@@ -210,9 +216,13 @@ fn gen_extcodecopy_data() -> CircuitInputBuilder {
             accs[2]
                 .address(MOCK_ACCOUNTS[2])
                 .balance(Word::from(1u64 << 20));
+            #[cfg(feature = "kroma")]
+            setup_kroma_required_accounts(accs.as_mut_slice(), 3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[2].address);
+            #[cfg(feature = "kroma")]
+            system_deposit_tx(txs[0]);
+            txs[tx_idx!(0)].to(accs[0].address).from(accs[2].address);
         },
         |block, _tx| block.number(0xcafeu64),
     )
@@ -227,7 +237,7 @@ fn gen_extcodecopy_data() -> CircuitInputBuilder {
 
 fn gen_sha3_data() -> CircuitInputBuilder {
     let (code, _) = gen_sha3_code(0x20, 512 - 32, MemoryKind::EqualToSize);
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data_with_params(
         block.clone(),
@@ -255,7 +265,7 @@ fn gen_tx_log_data() -> CircuitInputBuilder {
         LOG0
         STOP
     };
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder
@@ -320,7 +330,7 @@ fn gen_create_data() -> CircuitInputBuilder {
         STOP
     };
 
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder
@@ -339,7 +349,7 @@ fn gen_return_data() -> CircuitInputBuilder {
         RETURN
     };
 
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder
@@ -524,7 +534,7 @@ fn copy_circuit_precompile_call() {
         ..Default::default()
     };
     let bytecode = args.with_call_op(OpcodeId::STATICCALL);
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder

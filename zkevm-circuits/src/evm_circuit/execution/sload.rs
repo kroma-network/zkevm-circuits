@@ -148,7 +148,7 @@ mod test {
 
     use crate::{evm_circuit::test::rand_word, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, Word};
-    use mock::{test_ctx::helpers::tx_from_1_to_0, TestContext, MOCK_ACCOUNTS};
+    use mock::{test_ctx::helpers::tx_from_1_to_0, SimpleTestContext, MOCK_ACCOUNTS};
 
     fn test_ok(key: Word, value: Word) {
         // Here we use two bytecodes to test both is_persistent(STOP) or not(REVERT)
@@ -171,7 +171,7 @@ mod test {
             REVERT
         };
         for bytecode in [bytecode_success, bytecode_failure] {
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
                 |accs| {
                     accs[0]

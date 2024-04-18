@@ -13,7 +13,7 @@ use eth_types::{bytecode, geth_types::GethData, Bytecode, Field, Word};
 use halo2_proofs::{
     circuit::SimpleFloorPlanner, dev::MockProver, halo2curves::bn256::Fr, plonk::Circuit,
 };
-use mock::TestContext;
+use mock::{SimpleTestContext, TestContext};
 
 #[test]
 fn exp_circuit_unusable_rows() {
@@ -52,7 +52,7 @@ fn gen_code_multiple(args: Vec<(Word, Word)>) -> Bytecode {
 }
 
 fn gen_data(code: Bytecode) -> CircuitInputBuilder {
-    let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
+    let test_ctx = SimpleTestContext::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
     builder

@@ -121,7 +121,7 @@
 //! };
 //!
 //! // Get the execution steps from the external tracer
-//! let block: GethData = TestContext::<2, 1>::new(
+//! let block: GethData = SimpleTestContext::new(
 //!     None,
 //!     account_0_code_account_1_no_code(code),
 //!     tx_from_1_to_0,

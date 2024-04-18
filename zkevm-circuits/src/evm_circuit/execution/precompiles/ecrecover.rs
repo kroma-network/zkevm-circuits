@@ -519,7 +519,7 @@ mod test {
         precompile::PrecompileCalls,
     };
     use eth_types::{bytecode, word, ToWord};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
     use std::sync::LazyLock;
 
@@ -859,7 +859,7 @@ mod test {
                 let bytecode = test_vector.with_call_op(call_kind);
 
                 CircuitTestBuilder::new_from_test_ctx(
-                    TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                    SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 )
                 .run();
             }
@@ -880,7 +880,7 @@ mod test {
                 let bytecode = test_vector.with_call_op(call_kind);
 
                 CircuitTestBuilder::new_from_test_ctx(
-                    TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                    SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
                 )
                 .run();
             }

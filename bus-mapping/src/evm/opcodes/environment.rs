@@ -136,11 +136,11 @@ impl Opcode for Gas {
 mod tests {
     use crate::mock::BlockData;
     use eth_types::{bytecode, geth_types::GethData, Bytecode};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
 
     fn test_trace(code: Bytecode) {
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::simple_ctx_with_bytecode(code)
+        let block: GethData = SimpleTestContext::simple_ctx_with_bytecode(code)
             .unwrap()
             .into();
 

@@ -368,7 +368,7 @@ mod tests {
     use super::*;
     use crate::mock::BlockData;
     use eth_types::{evm_types::OpcodeId, geth_types::GethData, word, Bytecode, Word};
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use rand::{thread_rng, Rng};
     use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -390,7 +390,7 @@ mod tests {
             code.push(32, input);
         }
         code.write_op(opcode);
-        let block: GethData = TestContext::<2, 1>::simple_ctx_with_bytecode(code)
+        let block: GethData = SimpleTestContext::simple_ctx_with_bytecode(code)
             .unwrap()
             .into();
 

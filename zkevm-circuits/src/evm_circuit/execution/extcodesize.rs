@@ -166,8 +166,12 @@ mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, geth_types::Account, Bytecode, ToWord};
     use mock::{
-        generate_mock_call_bytecode, MockCallBytecodeParams, TestContext, MOCK_1_ETH,
-        MOCK_ACCOUNTS, MOCK_CODES,
+        generate_mock_call_bytecode,
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            TestContext4_1,
+        },
+        tx_idx, MockCallBytecodeParams, TestContext, MOCK_1_ETH, MOCK_ACCOUNTS, MOCK_CODES,
     };
 
     #[test]
@@ -238,9 +242,9 @@ mod test {
             ..MockCallBytecodeParams::default()
         });
 
-        let ctx = TestContext::<4, 1>::new(
+        let ctx = TestContext4_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(bytecode_b);
                 accs[1].address(addr_a).code(code_a);
                 // Set code if account exists.
@@ -250,9 +254,13 @@ mod test {
                     accs[2].address(mock::MOCK_ACCOUNTS[2]).balance(*MOCK_1_ETH);
                 }
                 accs[3].address(mock::MOCK_ACCOUNTS[3]).balance(*MOCK_1_ETH);
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 4);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[3].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[3].address);
             },
             |block, _tx| block,
         )

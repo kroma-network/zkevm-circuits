@@ -127,11 +127,13 @@ mod tests {
             STOP
         };
 
-        let test_ctx = TestContext::<2, 1>::new(
+        let test_ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(accs[1].address)
                     .to(accs[0].address)
                     .input(calldata.into())

@@ -50,8 +50,8 @@ mod gasprice_tests {
     };
     use eth_types::{bytecode, evm_types::StackAddress, geth_types::GethData, Word};
     use mock::{
-        test_ctx::{helpers::*, TestContext},
-        MOCK_WALLETS,
+        test_ctx::{helpers::*, SimpleTestContext},
+        tx_idx, MOCK_WALLETS,
     };
     use pretty_assertions::assert_eq;
 
@@ -66,11 +66,13 @@ mod gasprice_tests {
         let two_gwei = Word::from(2_000_000_000u64);
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new(
+        let block: GethData = SimpleTestContext::new(
             None,
             account_0_code_wallet_0_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_WALLETS[0].clone())
                     .to(accs[0].address)
                     .gas_price(two_gwei);
@@ -85,22 +87,21 @@ mod gasprice_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::GASPRICE))
             .unwrap();
 
+        let call_id = builder.block.txs()[tx_idx!(0)].calls[0].call_id;
         let op_gasprice = &builder.block.container.stack[step.bus_mapping_instance[1].as_usize()];
         assert_eq!(
             (op_gasprice.rw(), op_gasprice.op()),
             (
                 RW::WRITE,
-                &StackOp::new(1, StackAddress(1023usize), two_gwei)
+                &StackOp::new(call_id, StackAddress(1023usize), two_gwei)
             )
         );
-
-        let call_id = builder.block.txs()[0].calls()[0].call_id;
 
         assert_eq!(
             {
@@ -113,7 +114,7 @@ mod gasprice_tests {
                 &CallContextOp {
                     call_id,
                     field: CallContextField::TxId,
-                    value: Word::one(),
+                    value: Word::from(tx_idx!(1)),
                 }
             )
         );

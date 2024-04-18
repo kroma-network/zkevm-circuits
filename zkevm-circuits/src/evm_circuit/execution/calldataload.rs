@@ -379,7 +379,12 @@ mod test {
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
     use eth_types::{bytecode, Bytecode, Word};
     use mock::{
-        eth, generate_mock_call_bytecode, MockCallBytecodeParams, TestContext, MOCK_ACCOUNTS,
+        eth, generate_mock_call_bytecode,
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            TestContext1_1, TestContext3_1,
+        },
+        tx_idx, MockCallBytecodeParams, SimpleTestContext, TestContext, MOCK_ACCOUNTS,
     };
 
     fn test_bytecode(offset: Word) -> eth_types::Bytecode {
@@ -394,7 +399,7 @@ mod test {
         let bytecode = test_bytecode(offset);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .run();
     }
@@ -412,17 +417,21 @@ mod test {
             ..MockCallBytecodeParams::default()
         });
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -476,13 +485,17 @@ mod test {
     fn test_tx_deploy_calldataload() {
         let code = initialization_bytecode();
 
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .gas(58000u64.into())
                     .value(eth(2))

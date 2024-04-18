@@ -253,7 +253,13 @@ mod test {
     use eth_types::{
         address, bytecode, geth_types::Account, Address, Bytecode, Bytes, ToWord, Word,
     };
-    use mock::TestContext;
+    use mock::{
+        test_ctx::{
+            helpers::{setup_kroma_required_accounts, system_deposit_tx},
+            TestContext3_1,
+        },
+        tx_idx, TestContext,
+    };
     use std::sync::LazyLock;
 
     static EXTERNAL_ADDRESS: LazyLock<Address> =
@@ -290,9 +296,9 @@ mod test {
             STOP
         });
 
-        let ctx = TestContext::<3, 1>::new(
+        let ctx = TestContext3_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0]
                     .address(address!("0x000000000000000000000000000000000000cafe"))
                     .code(code);
@@ -306,9 +312,13 @@ mod test {
                         .nonce(external_account.nonce)
                         .code(external_account.code);
                 }
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .gas(1_000_000.into());

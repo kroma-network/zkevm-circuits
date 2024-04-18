@@ -439,7 +439,7 @@ mod test {
 
     use crate::test_util::CircuitTestBuilder;
     use eth_types::{bytecode, Word};
-    use mock::{test_ctx::helpers::tx_from_1_to_0, TestContext, MOCK_ACCOUNTS};
+    use mock::{test_ctx::helpers::tx_from_1_to_0, SimpleTestContext, MOCK_ACCOUNTS};
 
     #[test]
     fn sstore_gadget_no_refund() {
@@ -527,7 +527,7 @@ mod test {
             REVERT
         };
         for bytecode in [bytecode_success, bytecode_failure] {
-            let ctx = TestContext::<2, 1>::new(
+            let ctx = SimpleTestContext::new(
                 None,
                 |accs| {
                     accs[0]

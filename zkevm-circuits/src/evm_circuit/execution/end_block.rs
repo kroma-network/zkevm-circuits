@@ -216,7 +216,10 @@ mod test {
 
     use eth_types::bytecode;
 
-    use mock::TestContext;
+    use mock::{
+        test_ctx::{SIMPLE_NACC_NUM, SIMPLE_NTX_NUM},
+        SimpleTestContext,
+    };
 
     fn test_circuit(evm_circuit_pad_to: usize) {
         let bytecode = bytecode! {
@@ -224,10 +227,10 @@ mod test {
             STOP
         };
 
-        let ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap();
+        let ctx = SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap();
 
         // finish required tests using this witness block
-        CircuitTestBuilder::<2, 1>::new_from_test_ctx(ctx)
+        CircuitTestBuilder::<SIMPLE_NACC_NUM, SIMPLE_NTX_NUM>::new_from_test_ctx(ctx)
             .block_modifier(Box::new(move |block| {
                 block.circuits_params.max_evm_rows = evm_circuit_pad_to
             }))

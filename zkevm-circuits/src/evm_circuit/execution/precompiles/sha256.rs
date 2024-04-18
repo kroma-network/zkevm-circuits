@@ -213,7 +213,7 @@ mod test {
     };
     use eth_types::{bytecode, word, ToWord};
     use itertools::Itertools;
-    use mock::TestContext;
+    use mock::SimpleTestContext;
     use std::sync::LazyLock;
 
     use crate::test_util::CircuitTestBuilder;
@@ -330,7 +330,7 @@ mod test {
             let bytecode = test_vector.with_call_op(call_kind);
 
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
             )
             .run();
         }
@@ -343,7 +343,7 @@ mod test {
         let bytecode = nil_vector.with_call_op(OpcodeId::STATICCALL);
 
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+            SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
         )
         .block_modifier(Box::new(|blk| {
             let evts = blk.get_sha256();
@@ -366,7 +366,7 @@ mod test {
         for (test_vector, &call_kind) in OOG_TEST_VECTOR.iter().cartesian_product(&call_kinds) {
             let bytecode = test_vector.with_call_op(call_kind);
             CircuitTestBuilder::new_from_test_ctx(
-                TestContext::<2, 1>::simple_ctx_with_bytecode(bytecode).unwrap(),
+                SimpleTestContext::simple_ctx_with_bytecode(bytecode).unwrap(),
             )
             .block_modifier(Box::new(|blk| {
                 assert_eq!(blk.get_sha256().len(), 0);

@@ -147,8 +147,8 @@ mod calldatacopy_tests {
 
     use mock::{
         generate_mock_call_bytecode,
-        test_ctx::{helpers::*, LoggerConfig, TestContext},
-        MockCallBytecodeParams,
+        test_ctx::{helpers::*, LoggerConfig, SimpleTestContext, TestContext3_1},
+        tx_idx, MockCallBytecodeParams,
     };
     use pretty_assertions::assert_eq;
 
@@ -183,17 +183,21 @@ mod calldatacopy_tests {
         });
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new_with_logger_config(
+        let block: GethData = TestContext3_1::new_with_logger_config(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
             LoggerConfig::default(),
@@ -206,14 +210,14 @@ mod calldatacopy_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATACOPY))
             .unwrap();
 
-        let caller_id = builder.block.txs()[0].calls()[step.call_index].caller_id;
-        let expected_call_id = builder.block.txs()[0].calls()[step.call_index].call_id;
+        let caller_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].caller_id;
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
 
         // 3 stack reads + 3 call context reads + 1 copy read + 1 copy write.
         assert_eq!(step.bus_mapping_instance.len(), 8);
@@ -251,7 +255,7 @@ mod calldatacopy_tests {
                     &CallContextOp {
                         call_id: expected_call_id,
                         field: CallContextField::CallerId,
-                        value: Word::from(1),
+                        value: Word::from(caller_id),
                     }
                 ),
                 (
@@ -330,17 +334,21 @@ mod calldatacopy_tests {
         });
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<3, 1>::new_with_logger_config(
+        let block: GethData = TestContext3_1::new_with_logger_config(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
             LoggerConfig::default(),
@@ -367,11 +375,13 @@ mod calldatacopy_tests {
         };
 
         // Get the execution steps from the external tracer
-        let block: GethData = TestContext::<2, 1>::new_with_logger_config(
+        let block: GethData = SimpleTestContext::new_with_logger_config(
             None,
             account_0_code_account_1_no_code(code),
             |mut txs, accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .to(accs[0].address)
                     .from(accs[1].address)
                     .input(calldata.clone().into());
@@ -387,13 +397,14 @@ mod calldatacopy_tests {
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
 
-        let step = builder.block.txs()[0]
+        let step = builder.block.txs()[tx_idx!(0)]
             .steps()
             .iter()
             .find(|step| step.exec_state == ExecState::Op(OpcodeId::CALLDATACOPY))
             .unwrap();
 
         // 3 stack reads + 2 call context reads + 2 copy write.
+        let expected_call_id = builder.block.txs()[tx_idx!(0)].calls()[step.call_index].call_id;
         assert_eq!(step.bus_mapping_instance.len(), 7);
 
         assert_eq!(
@@ -403,15 +414,15 @@ mod calldatacopy_tests {
             [
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1021), dst_offset.into())
+                    &StackOp::new(expected_call_id, StackAddress::from(1021), dst_offset.into())
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022), offset.into())
+                    &StackOp::new(expected_call_id, StackAddress::from(1022), offset.into())
                 ),
                 (
                     RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), size.into())
+                    &StackOp::new(expected_call_id, StackAddress::from(1023), size.into())
                 ),
             ]
         );
@@ -425,15 +436,15 @@ mod calldatacopy_tests {
                 (
                     RW::READ,
                     &CallContextOp {
-                        call_id: builder.block.txs()[0].calls()[0].call_id,
+                        call_id: builder.block.txs()[tx_idx!(0)].calls()[0].call_id,
                         field: CallContextField::TxId,
-                        value: Word::from(1),
+                        value: Word::from(tx_idx!(1)),
                     }
                 ),
                 (
                     RW::READ,
                     &CallContextOp {
-                        call_id: builder.block.txs()[0].calls()[0].call_id,
+                        call_id: builder.block.txs()[tx_idx!(0)].calls()[0].call_id,
                         field: CallContextField::CallDataLength,
                         value: calldata_len.into(),
                     },
@@ -447,6 +458,13 @@ mod calldatacopy_tests {
         // current call's memory is written to.
         // no explictl memory op now
         // single copy event with `size` reads and `size` writes.
+        let memory_offset = builder
+            .block
+            .container
+            .memory
+            .iter()
+            .position(|x| x.op().call_id == expected_call_id)
+            .unwrap();
         let copy_events = builder.block.copy_events.clone();
         assert_eq!(copy_events.len(), 1);
         let begin_slot = dst_offset - dst_offset % 32;
@@ -457,7 +475,7 @@ mod calldatacopy_tests {
         );
         assert_eq!(
             builder.block.container.memory.len(),
-            (end_slot - begin_slot) / 32 + 1
+            (end_slot - begin_slot) / 32 + 1 + memory_offset
         );
 
         for (idx, (value, is_code, _)) in copy_events[0].copy_bytes.bytes.iter().enumerate() {

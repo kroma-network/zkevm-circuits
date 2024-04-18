@@ -249,8 +249,8 @@ mod test {
     use eth_types::{bytecode, word, Bytecode, Word};
     use mock::{
         eth, generate_mock_call_bytecode,
-        test_ctx::{helpers::*, TestContext},
-        MockCallBytecodeParams, MOCK_ACCOUNTS,
+        test_ctx::{helpers::*, SimpleTestContext, TestContext, TestContext1_1},
+        tx_idx, MockCallBytecodeParams, MOCK_ACCOUNTS,
     };
 
     fn test_root_ok(
@@ -270,7 +270,7 @@ mod test {
         let call_data = rand_bytes(call_data_length);
 
         // Get the execution steps from the external tracer
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = SimpleTestContext::new(
             None,
             account_0_code_account_1_no_code(bytecode),
             |mut txs, accs| {
@@ -316,15 +316,19 @@ mod test {
 
         let ctx = TestContext::<3, 1>::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(addr_b).code(code_b);
                 accs[1].address(addr_a).code(code_a);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 3);
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
@@ -414,13 +418,17 @@ mod test {
     fn test_tx_deploy_calldatacopy() {
         let code = initialization_bytecode(10, Word::from(10), Word::from(0x30));
 
-        let ctx = TestContext::<1, 1>::new(
+        let ctx = TestContext1_1::new(
             None,
-            |accs| {
+            |mut accs| {
                 accs[0].address(MOCK_ACCOUNTS[0]).balance(eth(20));
+                #[cfg(feature = "kroma")]
+                setup_kroma_required_accounts(accs.as_mut_slice(), 1);
             },
             |mut txs, _accs| {
-                txs[0]
+                #[cfg(feature = "kroma")]
+                system_deposit_tx(txs[0]);
+                txs[tx_idx!(0)]
                     .from(MOCK_ACCOUNTS[0])
                     .gas(58000u64.into())
                     .value(eth(2))
