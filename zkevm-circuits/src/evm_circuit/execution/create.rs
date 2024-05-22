@@ -513,7 +513,6 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
         )?;
 
         let mut rw_offset = 0;
-
         if !is_insufficient_balance {
             let [caller_balance_pair, callee_balance_pair] = if !value.is_zero() {
                 rw_offset += 2;
@@ -559,13 +558,15 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
         self.callee_is_success.assign(
             region,
             offset,
-            Value::known(
+            Value::known(if is_insufficient_balance {
+                F::zero()
+            } else {
                 block.rws
-                    [step.rw_indices[21 + rw_offset + usize::from(is_create2) + copy_rw_increase]]
+                    [step.rw_indices[22 + rw_offset + usize::from(is_create2) + copy_rw_increase]]
                     .call_context_value()
                     .to_scalar()
-                    .unwrap(),
-            ),
+                    .unwrap()
+            }),
         )?;
 
         let keccak_input: Vec<u8> = if is_create2 {
@@ -722,7 +723,6 @@ mod test {
         {
             let init_code = initialization_bytecode(*is_success);
             let root_code = creater_bytecode(init_code, 23414.into(), *is_create2, *is_persistent);
-
             let caller = Account {
                 address: *CALLER_ADDRESS,
                 code: root_code.into(),
