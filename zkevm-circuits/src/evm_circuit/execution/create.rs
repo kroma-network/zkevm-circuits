@@ -1,7 +1,10 @@
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
-        param::{N_BYTES_GAS, N_BYTES_MEMORY_ADDRESS, N_BYTES_MEMORY_WORD_SIZE, N_BYTES_WORD},
+        param::{
+            N_BYTES_ACCOUNT_ADDRESS, N_BYTES_GAS, N_BYTES_MEMORY_ADDRESS, N_BYTES_MEMORY_WORD_SIZE,
+            N_BYTES_WORD,
+        },
         step::ExecutionState,
         util::{
             common_gadget::TransferGadget,
@@ -105,17 +108,17 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
         );
 
         let keccak_output = cb.query_word_rlc();
-        let new_address_rlc = cb.word_rlc::<N_BYTES_MEMORY_ADDRESS>(
+        let new_address_rlc = cb.word_rlc::<N_BYTES_ACCOUNT_ADDRESS>(
             keccak_output
                 .cells
                 .iter()
-                .take(N_BYTES_MEMORY_ADDRESS)
+                .take(N_BYTES_ACCOUNT_ADDRESS)
                 .map(Expr::expr)
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap(),
         );
-        let new_address = expr_from_bytes(&keccak_output.cells[..N_BYTES_MEMORY_ADDRESS]);
+        let new_address = expr_from_bytes(&keccak_output.cells[..N_BYTES_ACCOUNT_ADDRESS]);
         let callee_is_success = cb.query_bool();
 
         let create = ContractCreateGadget::construct(cb);
@@ -124,7 +127,7 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
         cb.stack_pop(init_code.offset_rlc());
         cb.stack_pop(init_code.length_rlc());
         cb.condition(IS_CREATE2.expr(), |cb| {
-            cb.stack_pop(create.salt_rlc());
+            cb.stack_pop(create.salt_keccak_rlc());
         });
 
         cb.stack_push(callee_is_success.expr() * new_address_rlc);
@@ -134,7 +137,7 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             cb.copy_table_lookup(
                 cb.curr.state.call_id.expr(),
                 CopyDataType::Memory.expr(),
-                create.code_hash_rlc(),
+                create.code_hash_word_rlc(cb),
                 CopyDataType::Bytecode.expr(),
                 init_code.offset(),
                 init_code.address(),
@@ -147,7 +150,7 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
         cb.condition(not::expr(init_code.has_length()), |cb| {
             cb.require_equal(
                 "Empty code",
-                create.code_hash_rlc(),
+                create.code_hash_word_rlc(cb),
                 cb.empty_code_hash_rlc(),
             );
         });
@@ -269,7 +272,7 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             (CallContextFieldTag::IsRoot, false.expr()),
             (CallContextFieldTag::IsStatic, false.expr()),
             (CallContextFieldTag::IsCreate, true.expr()),
-            (CallContextFieldTag::CodeHash, create.code_hash_rlc()),
+            (CallContextFieldTag::CodeHash, create.code_hash_word_rlc(cb)),
             (CallContextFieldTag::Value, value.expr()),
         ] {
             cb.call_context_lookup(true.expr(), Some(callee_call_id.expr()), field_tag, value);
@@ -286,7 +289,7 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
                 call_id: To(callee_call_id.expr()),
                 is_root: To(false.expr()),
                 is_create: To(true.expr()),
-                code_hash: To(create.code_hash_rlc()),
+                code_hash: To(create.code_hash_word_rlc(cb)),
                 gas_left: To(callee_gas_left),
                 reversible_write_counter: To(1.expr() + transfer.reversible_w_delta()),
                 ..StepStateTransition::new_context()
@@ -494,14 +497,13 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             stream.append(&U256::from(caller_nonce));
             stream.out().to_vec()
         };
-        let mut keccak_output = keccak256(&keccak_input);
+        let mut keccak_output = keccak256(keccak_input);
         keccak_output.reverse();
 
         self.keccak_output
             .assign(region, offset, Some(keccak_output))?;
 
-        let mut code_hash = keccak256(&values);
-        code_hash.reverse();
+        let code_hash = keccak256(&values);
         self.create.assign(
             region,
             offset,
