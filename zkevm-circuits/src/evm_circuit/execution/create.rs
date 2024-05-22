@@ -12,7 +12,7 @@ use crate::{
                 ConstraintBuilder, ReversionInfo, StepStateTransition,
                 Transition::{Delta, To},
             },
-            math_gadget::{ConstantDivisionGadget, ContractCreateGadget, LtGadget},
+            math_gadget::{ConstantDivisionGadget, ContractCreateGadget, LtGadget, LtWordGadget},
             memory_gadget::{MemoryAddressGadget, MemoryExpansionGadget},
             not, select, CachedRegion, Cell, Word,
         },
@@ -59,6 +59,8 @@ pub(crate) struct CreateGadget<F, const IS_CREATE2: bool, const S: ExecutionStat
     memory_expansion: MemoryExpansionGadget<F, 1, N_BYTES_MEMORY_WORD_SIZE>,
     gas_left: ConstantDivisionGadget<F, N_BYTES_GAS>,
     create: ContractCreateGadget<F, IS_CREATE2>,
+    caller_balance: Word<F>,
+    is_insufficient_balance: LtWordGadget<F>,
     keccak_output: Word<F>,
 }
 
@@ -180,6 +182,13 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             create.caller_nonce(),
             Some(&mut reversion_info),
         );
+        let caller_balance = cb.query_word_rlc();
+        cb.account_read(
+            create.caller_address(),
+            AccountFieldTag::Balance,
+            caller_balance.expr(),
+        );
+        let is_insufficient_balance = LtWordGadget::construct(cb, &caller_balance, &value);
 
         let mut callee_reversion_info = cb.reversion_info_write(Some(callee_call_id.expr()));
         cb.require_equal(
@@ -329,6 +338,8 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             callee_is_success,
             init_code_word_size,
             create,
+            caller_balance,
+            is_insufficient_balance,
             keccak_output,
             initialization_code_word_size_not_overflow,
         }
@@ -406,11 +417,15 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
 
         let caller_nonce = block.rws
             [step.rw_indices[9 + usize::from(is_create2) + copy_rw_increase]]
-            .account_value_pair()
+            .account_nonce_pair()
             .1
             .low_u64();
+        let caller_balance = block.rws
+            [step.rw_indices[10 + usize::from(is_create2) + copy_rw_increase]]
+            .account_balance_pair()
+            .1;
 
-        let [callee_rw_counter_end_of_reversion, callee_is_persistent] = [10, 11].map(|i| {
+        let [callee_rw_counter_end_of_reversion, callee_is_persistent] = [11, 12].map(|i| {
             let rw = block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]];
             rw.call_context_value()
         });
@@ -429,14 +444,9 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
 
         let [caller_balance_pair, callee_balance_pair] = if !value.is_zero() {
             rw_offset += 2;
-            [13, 14].map(|i| {
-                let rw = block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]];
-                debug_assert_eq!(
-                    rw.field_tag(),
-                    Some(AccountFieldTag::Balance as u64),
-                    "invalid rw {rw:?}"
-                );
-                rw.account_value_pair()
+            [14, 15].map(|i| {
+                block.rws[step.rw_indices[i + usize::from(is_create2) + copy_rw_increase]]
+                    .account_balance_pair()
             })
         } else {
             [(0.into(), 0.into()), (0.into(), 0.into())]
@@ -477,7 +487,7 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             offset,
             Value::known(
                 block.rws
-                    [step.rw_indices[21 + rw_offset + usize::from(is_create2) + copy_rw_increase]]
+                    [step.rw_indices[22 + rw_offset + usize::from(is_create2) + copy_rw_increase]]
                     .call_context_value()
                     .to_scalar()
                     .unwrap(),
@@ -512,6 +522,11 @@ impl<F: Field, const IS_CREATE2: bool, const S: ExecutionState> ExecutionGadget<
             Some(U256::from_big_endian(&code_hash)),
             Some(salt),
         )?;
+        self.caller_balance
+            .assign(region, offset, Some(caller_balance.to_le_bytes()))?;
+        self.is_insufficient_balance
+            .assign(region, offset, caller_balance, value)?;
+
         Ok(())
     }
 }
