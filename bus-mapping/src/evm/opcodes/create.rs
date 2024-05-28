@@ -103,6 +103,15 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             },
         )?;
 
+        let caller_balance = state.sdb.get_balance(&callee.caller_address);
+        state.account_read(
+            &mut exec_step,
+            callee.caller_address,
+            AccountField::Balance,
+            caller_balance,
+        );
+        let insufficient_balance = callee.value > caller_balance;
+
         // TODO: look into when this can be pushed. Could it be done in parse call?
         state.push_call(callee.clone());
 
@@ -120,24 +129,25 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
         }
 
         debug_assert!(state.sdb.get_nonce(&callee.address) == 0);
-        state.transfer(
-            &mut exec_step,
-            callee.caller_address,
-            callee.address,
-            true,
-            true,
-            callee.value,
-        )?;
-
-        state.push_op_reversible(
-            &mut exec_step,
-            AccountOp {
-                address: callee.address,
-                field: AccountField::Nonce,
-                value: 1.into(),
-                value_prev: 0.into(),
-            },
-        )?;
+        if !callee_exists && !insufficient_balance {
+            state.transfer(
+                &mut exec_step,
+                callee.caller_address,
+                callee.address,
+                true,
+                true,
+                callee.value,
+            )?;
+            state.push_op_reversible(
+                &mut exec_step,
+                AccountOp {
+                    address: callee.address,
+                    field: AccountField::Nonce,
+                    value: 1.into(),
+                    value_prev: 0.into(),
+                },
+            )?;
+        }
 
         // Per EIP-150, all but one 64th of the caller's gas is sent to the
         // initialization call.
@@ -168,6 +178,18 @@ impl<const IS_CREATE2: bool> Opcode for Create<IS_CREATE2> {
             CallContextField::Depth,
             caller.depth.to_word(),
         );
+
+        if insufficient_balance {
+            for (field, value) in [
+                (CallContextField::LastCalleeId, 0.into()),
+                (CallContextField::LastCalleeReturnDataOffset, 0.into()),
+                (CallContextField::LastCalleeReturnDataLength, 0.into()),
+            ] {
+                state.call_context_write(&mut exec_step, caller.call_id, field, value);
+            }
+            state.handle_return(geth_step)?;
+            return Ok(vec![exec_step]);
+        }
 
         for (field, value) in [
             (CallContextField::CallerId, caller.call_id.into()),

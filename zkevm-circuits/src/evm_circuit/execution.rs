@@ -331,7 +331,8 @@ pub(crate) struct ExecutionConfig<F> {
     shl_shr_gadget: Box<ShlShrGadget<F>>,
     returndatasize_gadget: Box<ReturnDataSizeGadget<F>>,
     returndatacopy_gadget: Box<ReturnDataCopyGadget<F>>,
-    create_gadget: Box<CreateGadget<F>>,
+    create_gadget: Box<CreateGadget<F, false, { ExecutionState::CREATE }>>,
+    create_gadget2: Box<CreateGadget<F, true, { ExecutionState::CREATE2 }>>,
     selfdestruct_gadget: Box<DummyGadget<F, 1, 0, { ExecutionState::SELFDESTRUCT }>>,
     signed_comparator_gadget: Box<SignedComparatorGadget<F>>,
     signextend_gadget: Box<SignextendGadget<F>>,
@@ -361,8 +362,6 @@ pub(crate) struct ExecutionConfig<F> {
     error_code_store: Box<ErrorCodeStoreGadget<F>>,
     error_oog_self_destruct:
         Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSELFDESTRUCT }>>,
-    error_insufficient_balance:
-        Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorInsufficientBalance }>>,
     error_nonce_uint_overflow:
         Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorNonceUintOverflow }>>,
     error_invalid_jump: Box<ErrorInvalidJumpGadget<F>>,
@@ -625,6 +624,7 @@ impl<F: Field> ExecutionConfig<F> {
             returndatasize_gadget: configure_gadget!(),
             returndatacopy_gadget: configure_gadget!(),
             create_gadget: configure_gadget!(),
+            create_gadget2: configure_gadget!(),
             selfdestruct_gadget: configure_gadget!(),
             shl_shr_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
@@ -651,7 +651,6 @@ impl<F: Field> ExecutionConfig<F> {
             error_oog_create2: configure_gadget!(),
             error_oog_self_destruct: configure_gadget!(),
             error_code_store: configure_gadget!(),
-            error_insufficient_balance: configure_gadget!(),
             error_invalid_jump: configure_gadget!(),
             error_invalid_opcode: configure_gadget!(),
             error_write_protection: configure_gadget!(),
@@ -1507,6 +1506,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::BLOCKHASH => assign_exec_step!(self.blockhash_gadget),
             ExecutionState::SELFBALANCE => assign_exec_step!(self.selfbalance_gadget),
             ExecutionState::CREATE => assign_exec_step!(self.create_gadget),
+            ExecutionState::CREATE2 => assign_exec_step!(self.create_gadget2),
             // dummy gadgets
             ExecutionState::EXTCODECOPY => assign_exec_step!(self.extcodecopy_gadget),
             ExecutionState::SELFDESTRUCT => assign_exec_step!(self.selfdestruct_gadget),
@@ -1561,10 +1561,6 @@ impl<F: Field> ExecutionConfig<F> {
             }
             ExecutionState::ErrorStack => {
                 assign_exec_step!(self.error_stack)
-            }
-
-            ExecutionState::ErrorInsufficientBalance => {
-                assign_exec_step!(self.error_insufficient_balance)
             }
             ExecutionState::ErrorInvalidJump => {
                 assign_exec_step!(self.error_invalid_jump)

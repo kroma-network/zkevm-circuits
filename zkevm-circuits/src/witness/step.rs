@@ -7,7 +7,7 @@ use crate::{
 };
 use bus_mapping::{
     circuit_input_builder,
-    error::{ExecError, OogError},
+    error::{ExecError, InsufficientBalanceError, OogError},
     evm::OpcodeId,
     operation,
 };
@@ -65,7 +65,11 @@ impl From<&ExecError> for ExecutionState {
             ExecError::StackOverflow | ExecError::StackUnderflow => ExecutionState::ErrorStack,
             ExecError::WriteProtection => ExecutionState::ErrorWriteProtection,
             ExecError::Depth => ExecutionState::ErrorDepth,
-            ExecError::InsufficientBalance => ExecutionState::ErrorInsufficientBalance,
+            ExecError::InsufficientBalance(insuff_balance_err) => match insuff_balance_err {
+                InsufficientBalanceError::Call => ExecutionState::CALL_OP,
+                InsufficientBalanceError::Create => ExecutionState::CREATE,
+                InsufficientBalanceError::Create2 => ExecutionState::CREATE2,
+            },
             ExecError::ContractAddressCollision => ExecutionState::ErrorContractAddressCollision,
             ExecError::NonceUintOverflow => ExecutionState::ErrorNonceUintOverflow,
             ExecError::InvalidCreationCode => ExecutionState::ErrorInvalidCreationCode,
@@ -192,11 +196,11 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
                     OpcodeId::RETURN | OpcodeId::REVERT => ExecutionState::RETURN_REVERT,
                     OpcodeId::RETURNDATASIZE => ExecutionState::RETURNDATASIZE,
                     OpcodeId::RETURNDATACOPY => ExecutionState::RETURNDATACOPY,
-                    OpcodeId::CREATE | OpcodeId::CREATE2 => ExecutionState::CREATE,
+                    OpcodeId::CREATE => ExecutionState::CREATE,
+                    OpcodeId::CREATE2 => ExecutionState::CREATE2,
                     OpcodeId::EXTCODECOPY => ExecutionState::EXTCODECOPY,
                     // dummy ops
                     OpcodeId::SELFDESTRUCT => dummy!(ExecutionState::SELFDESTRUCT),
-                    OpcodeId::INVALID(_) => ExecutionState::ErrorInvalidOpcode,
                     _ => unimplemented!("unimplemented opcode {:?}", op),
                 }
             }
