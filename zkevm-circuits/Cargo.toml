@@ -33,9 +33,9 @@ serde.workspace = true
 serde_json.workspace = true
 
 hash-circuit.workspace = true
-mpt-circuits = { package = "halo2-mpt-circuits", git = "https://github.com/scroll-tech/mpt-circuit.git", branch = "v0.7", default-features=false }
-misc-precompiled-circuit = { package = "misc-precompiled-circuit", git = "https://github.com/scroll-tech/misc-precompiled-circuit.git", branch = "main" }
-halo2_gadgets = { git = "https://github.com/scroll-tech/halo2.git", branch = "v1.1", features = ["unstable"] }
+mpt-circuits = { package = "halo2-mpt-circuits", git = "https://github.com/kroma-network/mpt-circuit.git", branch = "scroll-halo2-v1.1-with-tachyon", default-features=false }
+misc-precompiled-circuit = { package = "misc-precompiled-circuit", git = "https://github.com/kroma-network/misc-precompiled-circuit.git", branch = "scroll-halo2-v1.1-with-tachyon" }
+halo2_gadgets = { git = "https://github.com/kroma-network/halo2.git", branch = "scroll-halo2-v1.1-with-tachyon", features = ["unstable"] }
 
 num-bigint.workspace = true
 subtle.workspace = true
