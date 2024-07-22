@@ -6,6 +6,7 @@ use crate::{
 };
 use aggregator::{AggregationCircuit, BatchHash, ChunkInfo, MAX_AGG_SNARKS};
 use anyhow::{anyhow, Result};
+use halo2_proofs::rng::SerializableRng;
 use rand::Rng;
 use snark_verifier_sdk::Snark;
 use std::env;
@@ -15,7 +16,7 @@ impl Prover {
         &mut self,
         id: &str,
         degree: u32,
-        mut rng: impl Rng + Send,
+        mut rng: impl Rng + SerializableRng + Send + Clone,
         chunk_hashes: &[ChunkInfo],
         previous_snarks: &[Snark],
     ) -> Result<Snark> {

@@ -6,6 +6,7 @@ use crate::{
 };
 use aggregator::CompressionCircuit;
 use anyhow::{anyhow, Result};
+use halo2_proofs::rng::SerializableRng;
 use rand::Rng;
 use snark_verifier_sdk::Snark;
 use std::env;
@@ -16,7 +17,7 @@ impl Prover {
         id: &str,
         has_accumulator: bool,
         degree: u32,
-        mut rng: impl Rng + Send,
+        mut rng: impl Rng + SerializableRng + Send + Clone,
         prev_snark: Snark,
     ) -> Result<Snark> {
         env::set_var("COMPRESSION_CONFIG", layer_config_path(id));

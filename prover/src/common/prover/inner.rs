@@ -6,15 +6,20 @@ use crate::{
     zkevm::circuit::{SuperCircuit, TargetCircuit},
 };
 use anyhow::Result;
+use halo2_proofs::rng::SerializableRng;
 use rand::Rng;
-use snark_verifier_sdk::{gen_snark_shplonk, Snark};
+#[cfg(not(feature = "tachyon"))]
+use snark_verifier_sdk::gen_snark_shplonk;
+#[cfg(feature = "tachyon")]
+use snark_verifier_sdk::gen_snark_shplonk_tachyon;
+use snark_verifier_sdk::Snark;
 use zkevm_circuits::evm_circuit::witness::Block;
 
 impl Prover {
     pub fn gen_inner_snark<C: TargetCircuit>(
         &mut self,
         id: &str,
-        mut rng: impl Rng + Send,
+        mut rng: impl Rng + SerializableRng + Send + Clone,
         witness_block: &Block,
     ) -> Result<Snark> {
         log::info!(
@@ -33,6 +38,9 @@ impl Prover {
             "gen_inner_snark vk transcript_repr {:?}",
             pk.get_vk().transcript_repr()
         );
+        #[cfg(feature = "tachyon")]
+        let snark = gen_snark_shplonk_tachyon(params, pk, circuit, &mut rng, None::<String>)?;
+        #[cfg(not(feature = "tachyon"))]
         let snark = gen_snark_shplonk(params, pk, circuit, &mut rng, None::<String>)?;
 
         Ok(snark)

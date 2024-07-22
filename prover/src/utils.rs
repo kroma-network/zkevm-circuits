@@ -7,7 +7,10 @@ use anyhow::{bail, Result};
 use chrono::Utc;
 use eth_types::l2_types::BlockTrace;
 use git_version::git_version;
-use halo2_proofs::{halo2curves::bn256::Bn256, poly::kzg::commitment::ParamsKZG, SerdeFormat};
+use halo2_proofs::{
+    halo2curves::bn256::Bn256, poly::kzg::commitment::ParamsKZG, rng::SerializableRng,
+    xor_shift_rng::XORShiftRng, SerdeFormat,
+};
 use log::LevelFilter;
 use log4rs::{
     append::{
@@ -17,7 +20,6 @@ use log4rs::{
     config::{Appender, Config, Root},
 };
 use rand::{Rng, SeedableRng};
-use rand_xorshift::XorShiftRng;
 use std::fmt::Debug;
 use std::{
     fs::{self, metadata, File},
@@ -220,9 +222,9 @@ pub fn param_path_for_degree(params_dir: &str, degree: u32) -> String {
     format!("{params_dir}/params{degree}")
 }
 
-pub fn gen_rng() -> impl Rng + Send {
+pub fn gen_rng() -> impl Rng + SerializableRng + Send + Clone {
     let seed = [0u8; 16];
-    XorShiftRng::from_seed(seed)
+    XORShiftRng::from_seed(seed)
 }
 
 pub fn short_git_version() -> String {

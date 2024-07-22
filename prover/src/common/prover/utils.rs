@@ -5,16 +5,21 @@ use halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::{keygen_pk2, Circuit, ProvingKey},
     poly::{commitment::Params, kzg::commitment::ParamsKZG},
+    rng::SerializableRng,
 };
 use rand::Rng;
-use snark_verifier_sdk::{gen_snark_shplonk, CircuitExt, Snark};
+#[cfg(not(feature = "tachyon"))]
+use snark_verifier_sdk::gen_snark_shplonk;
+#[cfg(feature = "tachyon")]
+use snark_verifier_sdk::gen_snark_shplonk_tachyon;
+use snark_verifier_sdk::{CircuitExt, Snark};
 
 impl Prover {
     pub fn gen_snark<C: CircuitExt<Fr>>(
         &mut self,
         id: &str,
         degree: u32,
-        rng: &mut (impl Rng + Send),
+        rng: &mut (impl Rng + SerializableRng + Send + Clone),
         circuit: C,
         desc: &str,
     ) -> Result<Snark> {
@@ -28,6 +33,9 @@ impl Prover {
             desc,
             pk.get_vk().transcript_repr()
         );
+        #[cfg(feature = "tachyon")]
+        let snark = gen_snark_shplonk_tachyon(params, pk, circuit, rng, None::<String>)?;
+        #[cfg(not(feature = "tachyon"))]
         let snark = gen_snark_shplonk(params, pk, circuit, rng, None::<String>)?;
         Ok(snark)
     }
